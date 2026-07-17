@@ -2,6 +2,9 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "nextjs",
   "buildCommand": "npm run vercel-build",
+  "env": {
+    "APP_URL": "https://confirmly-alpha.vercel.app"
+  },
   "crons": [
     {
       "path": "/api/payments/reconcile",
