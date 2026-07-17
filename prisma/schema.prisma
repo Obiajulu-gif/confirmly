@@ -1,0 +1,383 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  // Only used by `prisma migrate dev` (local development). Production
+  // `migrate deploy` never touches the shadow database.
+  shadowDatabaseUrl = env("SHADOW_DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum MerchantUserRole {
+  OWNER
+  STAFF
+}
+
+enum ConversationState {
+  NEW
+  COLLECTING_ORDER
+  NEEDS_CLARIFICATION
+  AWAITING_CONFIRMATION
+  PAYMENT_PENDING
+  PAID
+  FULFILLING
+  COMPLETED
+  CANCELLED
+  HUMAN_REQUIRED
+  HUMAN_ACTIVE
+}
+
+enum AutomationMode {
+  AUTO
+  HUMAN
+}
+
+enum MessageDirection {
+  INBOUND
+  OUTBOUND
+}
+
+enum MessageType {
+  TEXT
+  INTERACTIVE
+  BUTTON_REPLY
+  LIST_REPLY
+  IMAGE
+  DOCUMENT
+  TEMPLATE
+  STATUS
+  UNSUPPORTED
+}
+
+enum MessageStatus {
+  RECEIVED
+  QUEUED
+  SENT
+  DELIVERED
+  READ
+  FAILED
+}
+
+enum OrderState {
+  DRAFT
+  CONFIRMED
+  PAYMENT_PENDING
+  PAID
+  NEEDS_ATTENTION
+  FULFILLING
+  COMPLETED
+  CANCELLED
+}
+
+enum PaymentProvider {
+  MONNIFY
+  DEMO
+}
+
+enum PaymentState {
+  CREATED
+  PENDING
+  PAID
+  FAILED
+  EXPIRED
+  PARTIALLY_PAID
+  OVERPAID
+  REVERSED
+}
+
+enum WebhookProvider {
+  WHATSAPP
+  MONNIFY
+}
+
+enum WebhookEventState {
+  RECEIVED
+  PROCESSED
+  IGNORED
+  FAILED
+}
+
+enum AuditActor {
+  SYSTEM
+  CUSTOMER
+  MERCHANT
+  AI
+  PROVIDER
+}
+
+// ---------------------------------------------------------------------------
+// Models
+// ---------------------------------------------------------------------------
+
+model Merchant {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  email       String
+  logoUrl     String?
+  phoneNumber String?
+  currency    String   @default("NGN")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  users         MerchantUser[]
+  products      Product[]
+  deliveryZones DeliveryZone[]
+  customers     Customer[]
+  conversations Conversation[]
+  messages      WhatsAppMessage[]
+  orders        Order[]
+  auditEvents   AuditEvent[]
+}
+
+model MerchantUser {
+  id           String           @id @default(cuid())
+  merchantId   String
+  merchant     Merchant         @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  email        String           @unique
+  passwordHash String
+  role         MerchantUserRole @default(OWNER)
+  lastLoginAt  DateTime?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  @@index([merchantId])
+}
+
+model Product {
+  id            String   @id @default(cuid())
+  merchantId    String
+  merchant      Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  name          String
+  description   String?
+  category      String?
+  priceKobo     Int
+  aliases       String[] @default([])
+  stockQuantity Int      @default(0)
+  active        Boolean  @default(true)
+  imageUrl      String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  variants   ProductVariant[]
+  orderItems OrderItem[]
+
+  @@index([merchantId, active])
+}
+
+model ProductVariant {
+  id                  String   @id @default(cuid())
+  productId           String
+  product             Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  size                String?
+  colour              String?
+  sku                 String?
+  priceAdjustmentKobo Int      @default(0)
+  stockQuantity       Int      @default(0)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@unique([productId, size, colour])
+  @@index([productId])
+}
+
+model DeliveryZone {
+  id         String   @id @default(cuid())
+  merchantId String
+  merchant   Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  name       String
+  aliases    String[] @default([])
+  feeKobo    Int
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([merchantId, name])
+  @@index([merchantId, active])
+}
+
+model Customer {
+  id             String   @id @default(cuid())
+  merchantId     String
+  merchant       Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  waId           String
+  phoneNumber    String
+  name           String?
+  email          String?
+  defaultAddress String?
+  optedIn        Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  conversations Conversation[]
+  messages      WhatsAppMessage[]
+  orders        Order[]
+
+  @@unique([merchantId, waId])
+  @@index([merchantId])
+}
+
+model Conversation {
+  id                String            @id @default(cuid())
+  merchantId        String
+  merchant          Merchant          @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  customerId        String
+  customer          Customer          @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  channel           String            @default("whatsapp")
+  state             ConversationState @default(NEW)
+  automationMode    AutomationMode    @default(AUTO)
+  draft             Json?
+  pendingQuestion   String?
+  lastInboundAt     DateTime?
+  lastOutboundAt    DateTime?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  messages    WhatsAppMessage[]
+  orders      Order[]
+  auditEvents AuditEvent[]
+
+  @@unique([merchantId, customerId, channel])
+  @@index([merchantId, state])
+}
+
+model WhatsAppMessage {
+  id                String           @id @default(cuid())
+  providerMessageId String           @unique
+  merchantId        String
+  merchant          Merchant         @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  customerId        String?
+  customer          Customer?        @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  conversationId    String?
+  conversation      Conversation?    @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  direction         MessageDirection
+  type              MessageType
+  textBody          String?
+  payload           Json?
+  status            MessageStatus    @default(RECEIVED)
+  providerTimestamp DateTime?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  @@index([merchantId, createdAt])
+  @@index([conversationId, createdAt])
+}
+
+model Order {
+  id              String     @id @default(cuid())
+  reference       String     @unique
+  merchantId      String
+  merchant        Merchant   @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  customerId      String
+  customer        Customer   @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  conversationId  String?
+  conversation    Conversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  state           OrderState @default(DRAFT)
+  subtotalKobo    Int
+  deliveryFeeKobo Int        @default(0)
+  discountKobo    Int        @default(0)
+  totalKobo       Int
+  deliveryMethod  String?
+  deliveryAddress String?
+  deliveryZone    String?
+  notes           String?
+  confirmedAt     DateTime?
+  paidAt          DateTime?
+  fulfilledAt     DateTime?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  items       OrderItem[]
+  payment     Payment?
+  receipt     Receipt?
+  auditEvents AuditEvent[]
+
+  @@index([merchantId, state, createdAt])
+  @@index([merchantId, createdAt])
+}
+
+model OrderItem {
+  id                  String  @id @default(cuid())
+  orderId             String
+  order               Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId           String?
+  product             Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+  // Immutable snapshots taken at confirmation time.
+  productNameSnapshot String
+  unitPriceKoboSnapshot Int
+  quantity            Int
+  variantSnapshot     String?
+  lineTotalKobo       Int
+
+  @@index([orderId])
+}
+
+model Payment {
+  id                   String          @id @default(cuid())
+  orderId              String          @unique
+  order                Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  provider             PaymentProvider @default(MONNIFY)
+  state                PaymentState    @default(CREATED)
+  invoiceReference     String          @unique
+  paymentReference     String?         @unique
+  transactionReference String?         @unique
+  attempt              Int             @default(1)
+  expectedAmountKobo   Int
+  paidAmountKobo       Int             @default(0)
+  method               String?
+  checkoutUrl          String?
+  virtualAccount       Json?
+  sanitizedResponse    Json?
+  verifiedAt           DateTime?
+  createdAt            DateTime        @default(now())
+  updatedAt            DateTime        @updatedAt
+
+  @@index([state])
+}
+
+model WebhookEvent {
+  id               String            @id @default(cuid())
+  provider         WebhookProvider
+  providerEventKey String            @unique
+  eventType        String
+  payload          Json
+  state            WebhookEventState @default(RECEIVED)
+  attempts         Int               @default(0)
+  errorSummary     String?
+  processedAt      DateTime?
+  createdAt        DateTime          @default(now())
+
+  @@index([provider, state, createdAt])
+}
+
+model Receipt {
+  id        String    @id @default(cuid())
+  orderId   String    @unique
+  order     Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  token     String    @unique
+  issuedAt  DateTime  @default(now())
+  revokedAt DateTime?
+}
+
+model AuditEvent {
+  id             String        @id @default(cuid())
+  merchantId     String
+  merchant       Merchant      @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  orderId        String?
+  order          Order?        @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  conversationId String?
+  conversation   Conversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  event          String
+  actor          AuditActor    @default(SYSTEM)
+  metadata       Json?
+  createdAt      DateTime      @default(now())
+
+  @@index([merchantId, createdAt])
+  @@index([orderId, createdAt])
+}
