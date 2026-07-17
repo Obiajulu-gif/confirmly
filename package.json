@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "prisma generate && next build",
+    "vercel-build": "prisma generate && prisma migrate deploy && prisma db seed && next build",
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
@@ -16,6 +17,7 @@
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
     "db:seed": "prisma db seed",
+    "db:bootstrap": "prisma migrate deploy && prisma db seed",
     "secrets:import": "node scripts/import-local-secrets.mjs",
     "secrets:scan": "node scripts/verify-no-secrets.mjs",
     "vercel:env": "node scripts/sync-vercel-env.mjs",
@@ -54,6 +56,6 @@
     "vitest": "^3.2.4"
   },
   "engines": {
-    "node": ">=20.9.0"
+    "node": "22.x"
   }
 }
