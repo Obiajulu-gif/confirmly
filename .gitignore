@@ -57,3 +57,7 @@ prisma/*.db-journal
 
 # Local agent tooling
 .claude/
+
+.vercel
+.env*
+!.env.example
