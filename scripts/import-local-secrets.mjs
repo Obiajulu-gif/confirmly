@@ -44,6 +44,8 @@ const IGNORED_LABELS = [
   /^whatsapp\s*number\s*$/i, // display number, not an API credential
   /providus/i,
   /mnfy/i,
+  /confirmly\s*api\s*keys?/i, // document title, not a credential label
+  /^monnify\s*api\s*key\s*$/i, // section heading with no value of its own
 ];
 
 /** Fallback classification from the shape of the value itself. */
@@ -84,12 +86,14 @@ function parseSourceFile(text) {
     }
   }
 
-  // Second pass: classify any bare high-entropy values missed above.
+  // Second pass: value-shape detection. A value whose shape unambiguously
+  // identifies a credential OVERRIDES a label-derived guess — labels in
+  // free-form files are unreliable.
   for (const raw of lines) {
     const value = raw.trim();
     if (!value) continue;
     const key = classifyValue(value);
-    if (key && !found[key]) found[key] = value;
+    if (key) found[key] = value;
   }
   return found;
 }
