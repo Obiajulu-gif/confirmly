@@ -1,0 +1,27 @@
+import { spawnSync } from "node:child_process";
+
+function run(command, args) {
+  const result = spawnSync(command, args, {
+    stdio: "inherit",
+    shell: process.platform === "win32",
+    env: process.env,
+  });
+  if (result.error) throw result.error;
+  if (result.status !== 0) process.exit(result.status ?? 1);
+}
+
+const npmCommand = process.platform === "win32" ? "npx.cmd" : "npx";
+
+run(npmCommand, ["prisma", "generate"]);
+
+if (process.env.DATABASE_URL?.trim()) {
+  console.log("DATABASE_URL is configured; applying migrations and idempotent seed data.");
+  run(npmCommand, ["prisma", "migrate", "deploy"]);
+  run(npmCommand, ["prisma", "db", "seed"]);
+} else {
+  console.warn(
+    "DATABASE_URL is not configured for this deployment environment; skipping migrations and seed."
+  );
+}
+
+run(npmCommand, ["next", "build"]);
