@@ -21,6 +21,7 @@ import {
   SCREENSHOT_POLICY_TEXT,
 } from "@/lib/orders/summary";
 import {
+  CheckoutBlockedError,
   createPaymentForOrder,
   verifyAndApplyPayment,
   sendPaidNotification,
@@ -39,6 +40,9 @@ const COMMAND_CANCEL = /^(cancel|cancel order)[.!]?$/i;
 const COMMAND_HELP = /^(help|menu)[.!?]?$/i;
 const COMMAND_CHECK_PAYMENT = /^(check payment|payment status)[.!?]?$/i;
 const COMMAND_RESUME = /^(resume|start over)[.!?]?$/i;
+// Store selection (one shared WhatsApp number serves every merchant).
+const COMMAND_STORE = /^(?:start|store)\s+([a-z0-9-]{2,24})[.!]?$/i;
+const COMMAND_STORE_LIST = /^(stores|shops|switch|change (store|shop))[.!?]?$/i;
 
 interface EngineContext {
   merchantId: string;
@@ -46,12 +50,189 @@ interface EngineContext {
   conversation: Conversation;
 }
 
+/**
+ * Entry point for every inbound WhatsApp message. Resolves which merchant the
+ * customer is talking to (via their WaSession and START/STORE commands) and
+ * only then enters the merchant-scoped conversation flow — catalogues are
+ * never mixed across stores.
+ */
 export async function processInboundMessage(
+  message: ParsedInboundMessage
+): Promise<void> {
+  const session = await prisma.waSession.upsert({
+    where: { waId: message.from },
+    update: message.profileName ? { profileName: message.profileName } : {},
+    create: { waId: message.from, profileName: message.profileName },
+  });
+
+  const text = message.text?.trim() ?? "";
+
+  // Deterministic store selection — before anything merchant-scoped.
+  const storeMatch = text.match(COMMAND_STORE);
+  const storeInteractiveId = message.interactiveId?.startsWith("store:")
+    ? message.interactiveId.slice("store:".length)
+    : null;
+  if (storeMatch?.[1] || storeInteractiveId) {
+    const merchant = storeInteractiveId
+      ? await prisma.merchant.findFirst({
+          where: { id: storeInteractiveId, active: true },
+        })
+      : await prisma.merchant.findFirst({
+          where: {
+            storeCode: storeMatch![1]!.replace(/-/g, "").toUpperCase(),
+            active: true,
+          },
+        });
+    if (!merchant) {
+      await sendUnscoped(message.from, {
+        kind: "text",
+        text: "That store code doesn't match any shop here. Reply \"stores\" to see every store and its code.",
+      });
+      await sendStoreList(message.from);
+      return;
+    }
+    await selectStore(session.id, merchant.id, message);
+    return;
+  }
+
+  if (COMMAND_STORE_LIST.test(text)) {
+    await sendStoreList(message.from);
+    return;
+  }
+
+  // No active store yet: the customer must choose before ordering.
+  const activeMerchant = session.activeMerchantId
+    ? await prisma.merchant.findFirst({
+        where: { id: session.activeMerchantId, active: true },
+      })
+    : null;
+  if (!activeMerchant) {
+    if (session.activeMerchantId) {
+      await prisma.waSession.update({
+        where: { id: session.id },
+        data: { activeMerchantId: null },
+      });
+    }
+    await sendUnscoped(message.from, {
+      kind: "text",
+      text: "Welcome to Confirmly. Pick a store to shop from — reply with its code (e.g. START ADASTYLES) or choose below.",
+    });
+    await sendStoreList(message.from);
+    return;
+  }
+
+  await processScopedMessage(activeMerchant.id, message);
+}
+
+/** Sets the active store and greets the customer inside that store. */
+async function selectStore(
+  sessionId: string,
   merchantId: string,
   message: ParsedInboundMessage
 ): Promise<void> {
-  // 1. Upsert customer + conversation. A name captured during onboarding is
-  //    authoritative — the WhatsApp profile name only fills a blank.
+  await prisma.waSession.update({
+    where: { id: sessionId },
+    data: { activeMerchantId: merchantId },
+  });
+  const merchant = await prisma.merchant.findUniqueOrThrow({
+    where: { id: merchantId },
+  });
+  const customer = await upsertCustomer(merchantId, message);
+  const conversation = await upsertConversation(merchantId, customer.id, message);
+  await storeInboundMessage(merchantId, customer.id, conversation.id, message).catch(
+    () => {}
+  );
+  await recordAudit({
+    merchantId,
+    conversationId: conversation.id,
+    event: "Store selected",
+    actor: "CUSTOMER",
+    metadata: { storeCode: merchant.storeCode },
+  });
+  const products = await prisma.product.findMany({
+    where: { merchantId, active: true },
+    orderBy: { name: "asc" },
+    take: 4,
+  });
+  const teaser = products.length
+    ? `Popular items: ${products.map((p) => p.name).join(", ")}.`
+    : "";
+  await sendToCustomer({
+    merchantId,
+    customer,
+    conversationId: conversation.id,
+    kind: "text",
+    text: `You're now shopping with *${merchant.name}*. ${teaser}\n\nJust tell me what you'd like in plain words. Reply "stores" anytime to switch shops, or "help" for options.`,
+  });
+}
+
+/** Interactive list of active stores (sent before any store is selected). */
+async function sendStoreList(waId: string): Promise<void> {
+  const merchants = await prisma.merchant.findMany({
+    where: { active: true },
+    orderBy: { createdAt: "asc" },
+    take: 10,
+  });
+  if (!merchants.length) {
+    await sendUnscoped(waId, {
+      kind: "text",
+      text: "No stores are live yet — please check back soon.",
+    });
+    return;
+  }
+  await sendUnscoped(waId, {
+    kind: "list",
+    text: "Which store would you like to shop from?",
+    listButtonLabel: "Choose store",
+    rows: merchants.map((m) => ({
+      id: `store:${m.id}`,
+      title: m.name.slice(0, 24),
+      description: `Code: ${m.storeCode}`,
+    })),
+  });
+}
+
+/**
+ * Outbound send before a store is selected (no merchant to attribute the
+ * message to — it is not persisted as a WhatsAppMessage, only delivered).
+ */
+async function sendUnscoped(
+  waId: string,
+  input: {
+    kind: "text" | "list";
+    text: string;
+    listButtonLabel?: string;
+    rows?: Array<{ id: string; title: string; description?: string }>;
+  }
+): Promise<void> {
+  const { isDemoMode } = await import("@/lib/env");
+  if (isDemoMode()) {
+    logger.info("demo mode: unscoped outbound suppressed", { kind: input.kind });
+    return;
+  }
+  try {
+    const client = await import("@/lib/whatsapp/client");
+    if (input.kind === "list" && input.rows?.length) {
+      await client.sendList(
+        waId,
+        input.text,
+        input.listButtonLabel ?? "Choose",
+        input.rows
+      );
+    } else {
+      await client.sendText(waId, input.text);
+    }
+  } catch (err) {
+    logger.warn("unscoped outbound failed", {
+      reason: err instanceof Error ? err.message : "unknown",
+    });
+  }
+}
+
+async function upsertCustomer(
+  merchantId: string,
+  message: ParsedInboundMessage
+): Promise<Customer> {
   let customer = await prisma.customer.upsert({
     where: { merchantId_waId: { merchantId, waId: message.from } },
     update: {},
@@ -68,51 +249,78 @@ export async function processInboundMessage(
       data: { name: message.profileName },
     });
   }
-  const conversation = await prisma.conversation.upsert({
+  return customer;
+}
+
+async function upsertConversation(
+  merchantId: string,
+  customerId: string,
+  message: ParsedInboundMessage
+): Promise<Conversation> {
+  return prisma.conversation.upsert({
     where: {
       merchantId_customerId_channel: {
         merchantId,
-        customerId: customer.id,
+        customerId,
         channel: "whatsapp",
       },
     },
     update: { lastInboundAt: message.timestamp },
     create: {
       merchantId,
-      customerId: customer.id,
+      customerId,
       channel: "whatsapp",
       state: "NEW",
       lastInboundAt: message.timestamp,
     },
   });
+}
+
+async function storeInboundMessage(
+  merchantId: string,
+  customerId: string,
+  conversationId: string,
+  message: ParsedInboundMessage
+): Promise<void> {
+  await prisma.whatsAppMessage.create({
+    data: {
+      providerMessageId: message.providerMessageId,
+      merchantId,
+      customerId,
+      conversationId,
+      direction: "INBOUND",
+      type:
+        message.kind === "text"
+          ? "TEXT"
+          : message.kind === "unsupported"
+            ? "UNSUPPORTED"
+            : message.kind === "button_reply"
+              ? "BUTTON_REPLY"
+              : "LIST_REPLY",
+      textBody: message.text,
+      status: "RECEIVED",
+      providerTimestamp: message.timestamp,
+      payload: {
+        kind: message.kind,
+        interactiveId: message.interactiveId,
+        rawType: message.rawType,
+      },
+    },
+  });
+}
+
+async function processScopedMessage(
+  merchantId: string,
+  message: ParsedInboundMessage
+): Promise<void> {
+  // 1. Upsert customer + conversation. A name captured during onboarding is
+  //    authoritative — the WhatsApp profile name only fills a blank.
+  const customer = await upsertCustomer(merchantId, message);
+  const conversation = await upsertConversation(merchantId, customer.id, message);
 
   // 2. Store inbound message — unique provider id is our duplicate guard.
   try {
-    await prisma.whatsAppMessage.create({
-      data: {
-        providerMessageId: message.providerMessageId,
-        merchantId,
-        customerId: customer.id,
-        conversationId: conversation.id,
-        direction: "INBOUND",
-        type:
-          message.kind === "text"
-            ? "TEXT"
-            : message.kind === "unsupported"
-              ? "UNSUPPORTED"
-              : message.kind === "button_reply"
-                ? "BUTTON_REPLY"
-                : "LIST_REPLY",
-        textBody: message.text,
-        status: "RECEIVED",
-        providerTimestamp: message.timestamp,
-        payload: {
-          kind: message.kind,
-          interactiveId: message.interactiveId,
-          rawType: message.rawType,
-        },
-      },
-    });
+    await storeInboundMessage(merchantId, customer.id, conversation.id, message);
   } catch (err) {
     if (isUniqueViolation(err)) {
       logger.info("duplicate inbound message ignored", {
@@ -214,6 +422,30 @@ async function handleText(ctx: EngineContext, text: string): Promise<void> {
   });
 
   switch (intent.intent) {
+    case "SELECT_MERCHANT": {
+      const code = intent.merchantCode?.replace(/-/g, "").toUpperCase();
+      const target = code
+        ? await prisma.merchant.findFirst({
+            where: { storeCode: code, active: true },
+          })
+        : null;
+      if (!target) {
+        await reply(
+          ctx,
+          'To switch shops, send the store code (e.g. "START ADASTYLES") or reply "stores" to see every shop.'
+        );
+        return;
+      }
+      await prisma.waSession.update({
+        where: { waId: ctx.customer.waId },
+        data: { activeMerchantId: target.id },
+      });
+      await reply(
+        ctx,
+        `You're now shopping with *${target.name}*. Just tell me what you'd like.`
+      );
+      return;
+    }
     case "HUMAN_HELP":
       await reply(
         ctx,
@@ -914,6 +1146,11 @@ async function confirmDraftOrder(ctx: EngineContext, draft: Draft): Promise<void
     });
     await setConversation(ctx, { state: "PAYMENT_PENDING", draft: EMPTY_DRAFT });
   } catch (err) {
+    if (err instanceof CheckoutBlockedError) {
+      await reply(ctx, err.message);
+      await handover(ctx, "settlement profile inactive — checkout blocked");
+      return;
+    }
     logger.error("payment creation failed", {
       orderId: order.id,
       reason: err instanceof Error ? err.message : "unknown",

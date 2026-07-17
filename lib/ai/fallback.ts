@@ -35,6 +35,7 @@ export function fallbackExtract(message: string): OrderIntent {
 
   const base: OrderIntent = {
     intent: "OTHER",
+    merchantCode: null,
     items: [],
     deliveryMethod: null,
     deliveryAddress: null,
@@ -44,6 +45,14 @@ export function fallbackExtract(message: string): OrderIntent {
     missingFields: [],
   };
 
+  const storeMatch = lower.match(/^(?:start|store)\s+([a-z0-9-]{3,24})$/);
+  if (storeMatch && storeMatch[1]) {
+    return {
+      ...base,
+      intent: "SELECT_MERCHANT",
+      merchantCode: storeMatch[1].toUpperCase(),
+    };
+  }
   if (HUMAN_RE.test(lower)) return { ...base, intent: "HUMAN_HELP" };
   if (CANCEL_RE.test(lower)) return { ...base, intent: "CANCEL_ORDER" };
   if (PAYMENT_RE.test(lower)) return { ...base, intent: "PAYMENT_QUESTION" };

@@ -15,6 +15,7 @@ const envSchema = z.object({
   APP_URL: z.string().url().default("http://localhost:3000"),
   DATABASE_URL: z.string().min(1).optional(),
   AUTH_SECRET: z.string().min(16).optional(),
+  ENCRYPTION_KEY: z.string().min(16).optional(),
   RECEIPT_TOKEN_SECRET: z.string().min(16).optional(),
   DEMO_MERCHANT_EMAIL: z.string().email().optional(),
   DEMO_MERCHANT_PASSWORD: z.string().min(8).optional(),
@@ -45,6 +46,13 @@ const envSchema = z.object({
   MONNIFY_API_KEY: z.string().min(1).optional(),
   MONNIFY_SECRET_KEY: z.string().min(1).optional(),
   MONNIFY_CONTRACT_CODE: z.string().min(1).optional(),
+  /** Route checkouts through merchant subaccounts (requires the Monnify
+   *  Sub Account feature on the platform account). */
+  MONNIFY_SUBACCOUNT_ENABLED: z
+    .string()
+    .transform((v) => v === "true" || v === "1")
+    .default("false"),
+  MONNIFY_PLATFORM_FEE_PERCENT: z.coerce.number().min(0).max(50).default(0),
 
   DEMO_MODE: z
     .string()

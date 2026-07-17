@@ -165,6 +165,8 @@ const defaults = {
   NVIDIA_BASE_URL: "https://integrate.api.nvidia.com/v1",
   NVIDIA_ORDER_MODEL: "nvidia/nemotron-3-nano-30b-a3b",
   MONNIFY_BASE_URL: "https://sandbox.monnify.com",
+  MONNIFY_SUBACCOUNT_ENABLED: "false",
+  MONNIFY_PLATFORM_FEE_PERCENT: "0",
   DEMO_MERCHANT_EMAIL: "demo@confirmly.local",
   DEMO_MODE: "false",
 };
@@ -173,6 +175,7 @@ for (const [key, value] of Object.entries(defaults)) {
 }
 for (const key of [
   "AUTH_SECRET",
+  "ENCRYPTION_KEY",
   "RECEIPT_TOKEN_SECRET",
   "WHATSAPP_VERIFY_TOKEN",
   "DEMO_MERCHANT_PASSWORD",
@@ -187,6 +190,7 @@ const CANONICAL_ORDER = [
   "APP_URL",
   "DATABASE_URL",
   "AUTH_SECRET",
+  "ENCRYPTION_KEY",
   "RECEIPT_TOKEN_SECRET",
   "DEMO_MERCHANT_EMAIL",
   "DEMO_MERCHANT_PASSWORD",
@@ -205,6 +209,8 @@ const CANONICAL_ORDER = [
   "MONNIFY_API_KEY",
   "MONNIFY_SECRET_KEY",
   "MONNIFY_CONTRACT_CODE",
+  "MONNIFY_SUBACCOUNT_ENABLED",
+  "MONNIFY_PLATFORM_FEE_PERCENT",
   "SENTRY_DSN",
   "INNGEST_EVENT_KEY",
   "INNGEST_SIGNING_KEY",

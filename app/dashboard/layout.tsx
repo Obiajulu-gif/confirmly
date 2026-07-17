@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { getSession } from "@/lib/auth";
+import { getMerchantSession, getSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { isDemoMode } from "@/lib/env";
 import { ConfirmlyLogo } from "@/components/logo";
@@ -12,8 +12,10 @@ export default async function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const session = await getSession();
-  if (!session) redirect("/login?next=/dashboard");
+  const authed = await getSession();
+  if (!authed) redirect("/login?next=/dashboard");
+  const session = await getMerchantSession();
+  if (!session) redirect("/onboarding");
   const merchant = await prisma.merchant.findUnique({
     where: { id: session.merchantId },
   });

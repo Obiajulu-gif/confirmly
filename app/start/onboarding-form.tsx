@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import { Check, MessageCircle } from "lucide-react";
 import { startOrderAction } from "./actions";
 import { INITIAL_ONBOARDING_STATE, type OnboardingState } from "./state";
 
@@ -15,9 +16,11 @@ const inputClass =
 export function OnboardingForm({
   zones,
   merchantName,
+  storeCode,
 }: {
   zones: Zone[];
   merchantName: string;
+  storeCode: string;
 }) {
   const [state, formAction, pending] = useActionState<OnboardingState, FormData>(
     startOrderAction,
@@ -36,6 +39,11 @@ export function OnboardingForm({
 
   return (
     <form action={formAction} className="relative">
+      <input type="hidden" name="storeCode" value={storeCode} />
+      <p className="mb-6 inline-flex items-center gap-2 rounded-full border border-brand-500/30 bg-brand-500/10 px-3 py-1 text-xs font-semibold text-brand-300">
+        Ordering from {merchantName}
+      </p>
+
       {/* progress */}
       <div className="mb-8 flex items-center gap-2" aria-hidden="true">
         {[0, 1].map((i) => (
@@ -48,10 +56,10 @@ export function OnboardingForm({
         ))}
       </div>
 
-      {/* step 1 — who you are */}
+      {/* step 1 */}
       <fieldset className={step === 0 ? "block" : "hidden"}>
         <legend className="text-2xl font-extrabold tracking-tight text-white">
-          First, let&apos;s meet you 👋
+          First, let&apos;s meet you
         </legend>
         <p className="mt-2 text-sm text-white/55">
           {merchantName} will use this to recognise you on WhatsApp — no more
@@ -83,7 +91,7 @@ export function OnboardingForm({
               className={`mt-1.5 ${inputClass}`}
             />
             <span className="mt-1.5 block text-xs font-normal text-white/40">
-              We normalise it automatically — 0803… becomes +234 803….
+              We normalise it automatically — 0803 becomes +234 803.
             </span>
           </label>
         </div>
@@ -93,14 +101,14 @@ export function OnboardingForm({
           onClick={() => setStep(1)}
           className="cta-glow mt-8 w-full rounded-2xl bg-brand-500 px-6 py-3.5 font-bold text-night-900 transition hover:bg-brand-400 disabled:cursor-not-allowed disabled:opacity-40"
         >
-          Continue →
+          Continue
         </button>
       </fieldset>
 
-      {/* step 2 — delivery details */}
+      {/* step 2 */}
       <fieldset className={step === 1 ? "block" : "hidden"}>
         <legend className="text-2xl font-extrabold tracking-tight text-white">
-          Where do orders go? 🛵
+          Where do orders go?
         </legend>
         <p className="mt-2 text-sm text-white/55">
           Optional — but if you set it now, the assistant won&apos;t need to
@@ -134,7 +142,8 @@ export function OnboardingForm({
             <input type="hidden" name="area" value={area} />
           </div>
           <label className="block text-sm font-medium text-white/80">
-            Street address <span className="font-normal text-white/40">(optional)</span>
+            Street address{" "}
+            <span className="font-normal text-white/40">(optional)</span>
             <input
               name="address"
               maxLength={200}
@@ -145,7 +154,10 @@ export function OnboardingForm({
         </div>
 
         {state.error ? (
-          <p role="alert" className="mt-4 rounded-xl bg-red-500/15 px-4 py-3 text-sm text-red-300 ring-1 ring-red-500/30">
+          <p
+            role="alert"
+            className="mt-4 rounded-xl bg-red-500/15 px-4 py-3 text-sm text-red-300 ring-1 ring-red-500/30"
+          >
             {state.error}
           </p>
         ) : null}
@@ -156,14 +168,14 @@ export function OnboardingForm({
             onClick={() => setStep(0)}
             className="rounded-2xl border border-white/15 px-6 py-3.5 font-semibold text-white/75 transition hover:border-white/35"
           >
-            ← Back
+            Back
           </button>
           <button
             type="submit"
             disabled={pending}
             className="cta-glow flex-1 rounded-2xl bg-brand-500 px-6 py-3.5 font-bold text-night-900 transition hover:bg-brand-400 disabled:opacity-60"
           >
-            {pending ? "Saving…" : "Save & open WhatsApp"}
+            {pending ? "Saving" : "Save and open WhatsApp"}
           </button>
         </div>
       </fieldset>
@@ -174,11 +186,12 @@ export function OnboardingForm({
 function SuccessPanel({ state }: { state: OnboardingState }) {
   return (
     <div className="anim-fade-up text-center">
-      <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-brand-500/20 text-3xl ring-2 ring-brand-400/50">
-        ✓
+      <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-brand-500/20 ring-2 ring-brand-400/50">
+        <Check className="h-7 w-7 text-brand-300" aria-hidden />
       </div>
       <h2 className="mt-5 text-2xl font-extrabold tracking-tight text-white">
-        You&apos;re all set{state.customerName ? `, ${state.customerName.split(" ")[0]}` : ""}!
+        You&apos;re all set
+        {state.customerName ? `, ${state.customerName.split(" ")[0]}` : ""}
       </h2>
       <p className="mx-auto mt-2 max-w-sm text-sm text-white/55">
         {state.merchantName} now knows you
@@ -193,15 +206,13 @@ function SuccessPanel({ state }: { state: OnboardingState }) {
           rel="noopener noreferrer"
           className="cta-glow mt-7 inline-flex w-full items-center justify-center gap-2.5 rounded-2xl bg-[#25D366] px-6 py-4 text-lg font-bold text-night-900 transition hover:brightness-110"
         >
-          <svg viewBox="0 0 24 24" className="h-6 w-6 fill-current" aria-hidden="true">
-            <path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2Zm5.4 14.1c-.2.7-1.3 1.3-1.9 1.4-.5.1-1.1.2-3.3-.7-2.8-1.1-4.6-4-4.7-4.2-.1-.2-1.1-1.5-1.1-2.9s.7-2 1-2.3c.2-.3.5-.3.7-.3h.5c.2 0 .4 0 .6.4l.9 2.1c.1.2.1.4 0 .6l-.4.6-.5.5c-.2.2-.3.4-.1.7.2.3.9 1.5 2 2.4 1.4 1.2 2.5 1.6 2.9 1.7.3.1.5.1.7-.1l1-1.1c.2-.3.5-.3.7-.2l2.2 1c.3.2.5.3.6.4 0 .1 0 .7-.2 1Z" />
-          </svg>
-          Open WhatsApp & start ordering
+          <MessageCircle className="h-5 w-5" aria-hidden />
+          Open WhatsApp and start ordering
         </a>
       ) : (
         <p className="mt-7 rounded-xl bg-amber-500/15 px-4 py-3 text-sm text-amber-300 ring-1 ring-amber-500/30">
-          The shop&apos;s WhatsApp number isn&apos;t configured yet — please
-          check back shortly.
+          The shared WhatsApp number isn&apos;t configured yet — please check
+          back shortly.
         </p>
       )}
 
@@ -210,9 +221,9 @@ function SuccessPanel({ state }: { state: OnboardingState }) {
           Try saying
         </p>
         <ul className="mt-3 space-y-2 text-sm text-white/70">
-          <li>“2 black polo shirts, large, deliver to Yaba”</li>
-          <li>“Abeg give me one hoodie and one tote bag”</li>
-          <li>“check payment” · “human” · “help”</li>
+          <li>&quot;2 black polo shirts, large, deliver to Yaba&quot;</li>
+          <li>&quot;Abeg give me one hoodie and one tote bag&quot;</li>
+          <li>&quot;check payment&quot; · &quot;stores&quot; · &quot;human&quot;</li>
         </ul>
       </div>
 

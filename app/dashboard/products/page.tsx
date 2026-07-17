@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { getSession } from "@/lib/auth";
+import { getMerchantSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { formatNaira } from "@/lib/money";
 import { Badge, Card, EmptyState } from "@/components/ui";
@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 export const metadata = { title: "Products" };
 
 export default async function ProductsPage() {
-  const session = await getSession();
+  const session = await getMerchantSession();
   if (!session) redirect("/login");
 
   const [products, zones] = await Promise.all([

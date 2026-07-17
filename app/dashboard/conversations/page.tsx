@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { getSession } from "@/lib/auth";
+import { getMerchantSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { Badge, Card, EmptyState, stateTone } from "@/components/ui";
 
@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 export const metadata = { title: "Conversations" };
 
 export default async function ConversationsPage() {
-  const session = await getSession();
+  const session = await getMerchantSession();
   if (!session) redirect("/login");
 
   const conversations = await prisma.conversation.findMany({

@@ -45,8 +45,10 @@ export async function loginAction(
     };
   }
 
+  let hasMerchant = false;
   try {
-    const { token } = await authenticate(email, password);
+    const { token, payload } = await authenticate(email, password);
+    hasMerchant = payload.merchantId !== null;
     const store = await cookies();
     store.set(SESSION_COOKIE, token, sessionCookieOptions());
   } catch (err) {
@@ -55,6 +57,7 @@ export async function loginAction(
     }
     return { error: "Sign-in is temporarily unavailable. Try again shortly." };
   }
+  if (!hasMerchant) redirect("/onboarding");
   redirect(next.startsWith("/dashboard") || next === "/" ? next : "/dashboard");
 }
 

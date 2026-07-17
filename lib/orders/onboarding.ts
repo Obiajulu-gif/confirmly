@@ -32,6 +32,8 @@ export interface OnboardingInput {
   phone: string;
   area?: string | null;
   address?: string | null;
+  /** Store the customer is onboarding for (multi-merchant). */
+  storeCode?: string | null;
 }
 
 export interface OnboardingResult {
@@ -59,12 +61,28 @@ export async function saveCustomerProfile(
     throw new OnboardingError("Please tell us your name.");
   }
 
-  const merchant = await prisma.merchant.findFirst({
-    orderBy: { createdAt: "asc" },
-  });
+  const merchant = input.storeCode
+    ? await prisma.merchant.findFirst({
+        where: {
+          storeCode: input.storeCode.replace(/-/g, "").toUpperCase(),
+          active: true,
+        },
+      })
+    : await prisma.merchant.findFirst({
+        where: { active: true },
+        orderBy: { createdAt: "asc" },
+      });
   if (!merchant) {
-    throw new OnboardingError("No shop is configured yet. Please try later.");
+    throw new OnboardingError("That store could not be found. Please try later.");
   }
+
+  // Pre-select this store for their WhatsApp session so the first message
+  // lands directly in the right shop.
+  await prisma.waSession.upsert({
+    where: { waId },
+    update: { activeMerchantId: merchant.id },
+    create: { waId, activeMerchantId: merchant.id, profileName: name },
+  });
 
   // Validate the chosen area against real delivery zones (DB decides).
   let knownZone: string | null = null;
@@ -111,22 +129,17 @@ export async function saveCustomerProfile(
   return {
     waId,
     merchantName: merchant.name,
-    waLink: buildWaLink(merchant.phoneNumber, merchant.name, name),
+    waLink: buildWaLink(merchant.storeCode),
     knownZone,
   };
 }
 
-/** Builds the wa.me deep link that opens the chat with a friendly opener. */
-export function buildWaLink(
-  merchantPhone: string | null,
-  merchantName: string,
-  customerName: string
-): string | null {
-  const business = env().WHATSAPP_PUBLIC_NUMBER ?? merchantPhone ?? "";
-  const digits = business.replace(/\D/g, "");
+/**
+ * wa.me deep link that opens the shared business number with the store
+ * selection command prefilled — deterministic routing into the right shop.
+ */
+export function buildWaLink(storeCode: string): string | null {
+  const digits = (env().WHATSAPP_PUBLIC_NUMBER ?? "").replace(/\D/g, "");
   if (digits.length < 7) return null;
-  const text = encodeURIComponent(
-    `Hi ${merchantName}! I'm ${customerName} — I'd like to place an order. 🛍️`
-  );
-  return `https://wa.me/${digits}?text=${text}`;
+  return `https://wa.me/${digits}?text=${encodeURIComponent(`START ${storeCode}`)}`;
 }

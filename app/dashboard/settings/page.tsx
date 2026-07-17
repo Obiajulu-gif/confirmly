@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { getSession } from "@/lib/auth";
+import { getMerchantSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { env, integrationStatus, isDemoMode } from "@/lib/env";
 import { nvidiaHealthCheck } from "@/lib/ai/nvidia";
@@ -15,7 +15,7 @@ export const dynamic = "force-dynamic";
 export const metadata = { title: "Settings" };
 
 export default async function SettingsPage() {
-  const session = await getSession();
+  const session = await getMerchantSession();
   if (!session) redirect("/login");
 
   const merchant = await prisma.merchant.findUniqueOrThrow({

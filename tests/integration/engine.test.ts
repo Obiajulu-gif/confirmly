@@ -60,10 +60,21 @@ beforeAll(async () => {
     data: {
       name: "Engine Test Shop",
       slug: `engine-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      storeCode: `ENG${Date.now().toString(36).toUpperCase()}${Math.random().toString(36).slice(2, 5).toUpperCase()}`,
       email: "engine@example.com",
     },
   });
   merchantId = merchant.id;
+
+  // Multi-merchant routing: point both test customers' WhatsApp sessions at
+  // this store so scoped conversation flows run directly.
+  for (const waId of ["2348011112222", "2348022223333"]) {
+    await prisma.waSession.upsert({
+      where: { waId },
+      update: { activeMerchantId: merchant.id },
+      create: { waId, activeMerchantId: merchant.id },
+    });
+  }
 
   const polo = await prisma.product.create({
     data: {
@@ -97,6 +108,9 @@ afterAll(async () => {
   process.env.DEMO_MODE = "false";
   resetEnvCache();
   // No $disconnect here — the client is shared across test files.
+  await prisma.waSession
+    .deleteMany({ where: { waId: { in: ["2348011112222", "2348022223333", "2348033334444"] } } })
+    .catch(() => {});
   await prisma.merchant.delete({ where: { id: merchantId } }).catch(() => {});
 });
 
@@ -104,6 +118,7 @@ describe("conversation engine", () => {
   it("builds a fully matched draft and sends the NGN 26,500 summary", async () => {
     const { processInboundMessage } = await import("@/lib/orders/engine");
     nextIntent = {
+      merchantCode: null,
       intent: "PLACE_ORDER",
       items: [{ searchTerm: "polo", quantity: 2, size: "large", colour: "black" }],
       deliveryMethod: "DELIVERY",
@@ -115,13 +130,12 @@ describe("conversation engine", () => {
     };
     outboundLog.length = 0;
     await processInboundMessage(
-      merchantId,
       inbound("I need two black polo shirts, large size, delivered to Yaba.")
     );
     nextIntent = null;
 
     const conversation = await prisma.conversation.findFirstOrThrow({
-      where: { merchantId },
+      where: { merchantId, customer: { waId: "2348011112222" } },
     });
     expect(conversation.state).toBe("AWAITING_CONFIRMATION");
 
@@ -137,9 +151,9 @@ describe("conversation engine", () => {
     const { processInboundMessage } = await import("@/lib/orders/engine");
     const confirm = inbound("", { interactiveId: "confirm_order" });
 
-    await processInboundMessage(merchantId, confirm);
+    await processInboundMessage(confirm);
     // Same provider message id delivered again (Meta retry):
-    await processInboundMessage(merchantId, confirm);
+    await processInboundMessage(confirm);
 
     const orders = await prisma.order.findMany({ where: { merchantId } });
     expect(orders).toHaveLength(1);
@@ -165,6 +179,7 @@ describe("conversation engine", () => {
   it("an invented product is rejected: no order line, a clarification is asked", async () => {
     const { processInboundMessage } = await import("@/lib/orders/engine");
     nextIntent = {
+      merchantCode: null,
       intent: "PLACE_ORDER",
       items: [{ searchTerm: "gold wristwatch", quantity: 1, size: null, colour: null }],
       deliveryMethod: null,
@@ -175,24 +190,98 @@ describe("conversation engine", () => {
       missingFields: [],
     };
     outboundLog.length = 0;
-    await processInboundMessage(merchantId, inbound("one gold wristwatch"));
+    await processInboundMessage(inbound("one gold wristwatch"));
     nextIntent = null;
 
     const reply = outboundLog.at(-1);
     expect(reply?.text).toContain("couldn't find");
     const conversation = await prisma.conversation.findFirstOrThrow({
-      where: { merchantId },
+      where: { merchantId, customer: { waId: "2348011112222" } },
     });
     expect(conversation.state).toBe("NEEDS_CLARIFICATION");
     // Still exactly one order (from the earlier test) — nothing invented.
     expect(await prisma.order.count({ where: { merchantId } })).toBe(1);
   });
 
+  it("START <code> selects a store and catalogues never mix", async () => {
+    const { processInboundMessage } = await import("@/lib/orders/engine");
+    const waId = "2348033334444";
+    const otherStoreCode = `OTH${Date.now().toString(36).toUpperCase()}`;
+    const other = await prisma.merchant.create({
+      data: {
+        name: "Other Gadget Shop",
+        slug: `other-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        storeCode: otherStoreCode,
+        email: "other@example.com",
+      },
+    });
+    await prisma.product.create({
+      data: {
+        merchantId: other.id,
+        name: "Gadget Gizmo",
+        priceKobo: 900_000,
+        aliases: ["gadget", "gizmo"],
+        stockQuantity: 5,
+        active: true,
+      },
+    });
+
+    try {
+      // Deterministic selection — no session existed for this number.
+      await processInboundMessage({
+        providerMessageId: `wamid.STORE-${Date.now()}`,
+        from: waId,
+        profileName: "Switcher",
+        timestamp: new Date(),
+        kind: "text",
+        text: `START ${otherStoreCode}`,
+        interactiveId: null,
+        rawType: "text",
+      });
+      const session = await prisma.waSession.findUniqueOrThrow({
+        where: { waId },
+      });
+      expect(session.activeMerchantId).toBe(other.id);
+
+      // The engine-shop's polo is NOT in this store's catalogue: asking for
+      // it must clarify, never leak the other merchant's product or price.
+      nextIntent = {
+        merchantCode: null,
+        intent: "PLACE_ORDER",
+        items: [{ searchTerm: "polo", quantity: 1, size: null, colour: null }],
+        deliveryMethod: null,
+        deliveryAddress: null,
+        deliveryArea: null,
+        customerName: null,
+        notes: null,
+        missingFields: [],
+      };
+      outboundLog.length = 0;
+      await processInboundMessage({
+        providerMessageId: `wamid.STORE2-${Date.now()}`,
+        from: waId,
+        profileName: "Switcher",
+        timestamp: new Date(),
+        kind: "text",
+        text: "one polo please",
+        interactiveId: null,
+        rawType: "text",
+      });
+      nextIntent = null;
+      const reply = outboundLog.at(-1);
+      expect(reply?.text).toContain("couldn't find");
+      expect(reply?.text).not.toContain("Classic Polo Shirt");
+      expect(await prisma.order.count({ where: { merchantId: other.id } })).toBe(0);
+    } finally {
+      await prisma.merchant.delete({ where: { id: other.id } }).catch(() => {});
+    }
+  });
+
   it("deterministic 'human' command hands the chat over without AI", async () => {
     const { processInboundMessage } = await import("@/lib/orders/engine");
-    await processInboundMessage(merchantId, inbound("human"));
+    await processInboundMessage(inbound("human"));
     const conversation = await prisma.conversation.findFirstOrThrow({
-      where: { merchantId },
+      where: { merchantId, customer: { waId: "2348011112222" } },
     });
     expect(conversation.automationMode).toBe("HUMAN");
     expect(conversation.state).toBe("HUMAN_REQUIRED");
@@ -211,6 +300,7 @@ describe("conversation engine", () => {
       },
     });
     nextIntent = {
+      merchantCode: null,
       intent: "PLACE_ORDER",
       items: [{ searchTerm: "polo", quantity: 1, size: "M", colour: "white" }],
       deliveryMethod: null,
@@ -221,7 +311,7 @@ describe("conversation engine", () => {
       missingFields: [],
     };
     outboundLog.length = 0;
-    await processInboundMessage(merchantId, {
+    await processInboundMessage({
       providerMessageId: `wamid.PREFILL-${Date.now()}`,
       from: waId,
       profileName: "WhatsApp Display Name",
@@ -254,10 +344,10 @@ describe("conversation engine", () => {
   it("the bot stays silent while a human is active", async () => {
     const { processInboundMessage } = await import("@/lib/orders/engine");
     outboundLog.length = 0;
-    await processInboundMessage(merchantId, inbound("hello, anyone there?"));
+    await processInboundMessage(inbound("hello, anyone there?"));
     expect(outboundLog).toHaveLength(0);
     const conversation = await prisma.conversation.findFirstOrThrow({
-      where: { merchantId },
+      where: { merchantId, customer: { waId: "2348011112222" } },
     });
     expect(conversation.state).toBe("HUMAN_ACTIVE");
   });

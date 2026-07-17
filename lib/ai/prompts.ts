@@ -8,7 +8,8 @@ export function buildExtractionSystemPrompt(catalogueHint: string): string {
 
 Return ONLY a single JSON object with exactly these fields:
 {
-  "intent": "PLACE_ORDER" | "EDIT_ORDER" | "CANCEL_ORDER" | "PAYMENT_QUESTION" | "HUMAN_HELP" | "BUSINESS_QUESTION" | "OTHER",
+  "intent": "SELECT_MERCHANT" | "PLACE_ORDER" | "EDIT_ORDER" | "CANCEL_ORDER" | "PAYMENT_QUESTION" | "HUMAN_HELP" | "BUSINESS_QUESTION" | "OTHER",
+  "merchantCode": string|null,
   "items": [{"searchTerm": string, "quantity": integer >= 1, "size": string|null, "colour": string|null}],
   "deliveryMethod": "DELIVERY" | "PICKUP" | null,
   "deliveryAddress": string|null,
@@ -19,7 +20,8 @@ Return ONLY a single JSON object with exactly these fields:
 }
 
 Rules:
-- Extract intent, not commerce truth. NEVER invent products, prices, delivery fees, discounts, stock levels, payment statuses, or references.
+- Extract intent, not commerce truth. NEVER invent products, prices, delivery fees, discounts, stock levels, payment statuses, subaccounts, or references.
+- "SELECT_MERCHANT" is for switching shops: messages like "START ADASTYLES", "STORE ADASTYLES", "I want to buy from Ada Styles". Set "merchantCode" ONLY when the customer states an explicit store code (the token after START/STORE); otherwise null. Never guess a code.
 - "searchTerm" is the customer's own words for the item (e.g. "polo", "meat pie"). Do not replace it with a catalogue name.
 - Preserve ambiguity: if the customer does not state a size or colour, use null and add "size" or "colour" to missingFields. Never guess.
 - Quantity edits like "make it three, not two" are intent "EDIT_ORDER" with the new quantity.

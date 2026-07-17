@@ -31,16 +31,45 @@ async function login(page: import("@playwright/test").Page) {
   await expect(page).toHaveURL(/\/dashboard/, { timeout: 30_000 });
 }
 
-test("landing page shows the headline and CTAs", async ({ page }) => {
+test("landing page shows the headline and CTAs without emoji", async ({
+  page,
+}) => {
   await page.goto("/");
   await expect(
-    page.getByRole("heading", { name: "From chat to confirmed payment." })
+    page.getByRole("heading", {
+      name: "Turn WhatsApp orders into verified payments.",
+    })
   ).toBeVisible();
   await expect(
-    page.getByRole("link", { name: "Open merchant dashboard" }).first()
+    page.getByRole("link", { name: "Create business account" }).first()
   ).toBeVisible();
   await expect(
-    page.getByRole("link", { name: "See how it works" })
+    page.getByRole("link", { name: "View product flow" })
+  ).toBeVisible();
+
+  // Fintech rule: the landing page contains no emoji.
+  const text = await page.evaluate(() => document.body.innerText);
+  const emoji = text.match(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{FE0F}\u{2B00}-\u{2BFF}]/gu);
+  expect(emoji ?? []).toEqual([]);
+});
+
+test("merchant signup creates an account and lands on onboarding", async ({
+  page,
+}) => {
+  const unique = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
+  await page.goto("/signup");
+  await page.getByLabel("Full name").fill("Playwright Merchant");
+  await page.getByLabel("Work email").fill(`e2e-${unique}@example.com`);
+  await page.getByLabel("Password", { exact: true }).fill("playwright-pass-1");
+  await page.getByLabel("Confirm password").fill("playwright-pass-1");
+  await page.getByRole("checkbox").check();
+  await page.getByRole("button", { name: "Create business account" }).click();
+  await expect(page).toHaveURL(/\/onboarding/, { timeout: 30_000 });
+  await expect(
+    page.getByRole("heading", { name: "Set up your business" })
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Tell us about your business" })
   ).toBeVisible();
 });
 

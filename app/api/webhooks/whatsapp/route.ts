@@ -82,12 +82,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ received: true });
   }
 
-  const merchant = await prisma.merchant.findFirst({ orderBy: { createdAt: "asc" } });
-  if (!merchant) {
-    logger.error("whatsapp webhook: no merchant provisioned");
-    return NextResponse.json({ received: true });
-  }
-
   // Record sanitized events for auditability (idempotent on the event key).
   for (const message of webhook.messages) {
     try {
@@ -109,7 +103,8 @@ export async function POST(request: NextRequest) {
   defer(async () => {
     for (const message of webhook.messages) {
       try {
-        await processInboundMessage(merchant.id, message);
+        // Merchant resolution happens inside the engine (WaSession + store codes).
+        await processInboundMessage(message);
         await prisma.webhookEvent.updateMany({
           where: {
             providerEventKey: webhookEventKey("wa", ["msg", message.providerMessageId]),

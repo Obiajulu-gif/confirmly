@@ -49,7 +49,7 @@ export async function findReceiptByToken(token: string) {
           items: true,
           merchant: true,
           customer: true,
-          payment: true,
+          payment: { include: { settlement: true } },
         },
       },
     },

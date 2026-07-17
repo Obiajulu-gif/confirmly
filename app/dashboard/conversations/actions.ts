@@ -2,13 +2,13 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { getSession } from "@/lib/auth";
+import { getMerchantSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { AUDIT, recordAudit } from "@/lib/orders/audit";
 import { sendToCustomer } from "@/lib/orders/outbound";
 
 export async function toggleAutomationAction(formData: FormData): Promise<void> {
-  const session = await getSession();
+  const session = await getMerchantSession();
   if (!session) return;
   const id = String(formData.get("conversationId") ?? "");
   const conversation = await prisma.conversation.findFirst({
@@ -48,7 +48,7 @@ export async function sendMerchantReplyAction(
   _prev: ReplyState,
   formData: FormData
 ): Promise<ReplyState> {
-  const session = await getSession();
+  const session = await getMerchantSession();
   if (!session) return { error: "unauthorized", ok: false };
   const parsed = replySchema.safeParse({
     conversationId: formData.get("conversationId"),

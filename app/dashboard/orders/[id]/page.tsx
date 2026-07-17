@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { getSession } from "@/lib/auth";
+import { getMerchantSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { formatNaira } from "@/lib/money";
 import { maskReference } from "@/lib/receipts";
@@ -15,7 +15,7 @@ export default async function OrderDetailsPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const session = await getSession();
+  const session = await getMerchantSession();
   if (!session) redirect("/login");
   const { id } = await params;
 

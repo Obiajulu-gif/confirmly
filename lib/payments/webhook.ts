@@ -31,6 +31,13 @@ const monnifyWebhookSchema = z.object({
       product: z
         .object({ reference: z.string().optional(), type: z.string().optional() })
         .optional(),
+      // Settlement-completion events
+      settlementReference: z.string().optional(),
+      amountSettled: z.union([z.number(), z.string()]).optional(),
+      settlementTime: z.string().optional(),
+      transactionsReferences: z
+        .array(z.object({ transactionReference: z.string().optional() }))
+        .optional(),
     })
     .passthrough(),
 });
@@ -58,6 +65,7 @@ export async function registerMonnifyEvent(
   }
   const { eventType, eventData } = parsed.data;
   const reference =
+    eventData.settlementReference ??
     eventData.transactionReference ??
     eventData.paymentReference ??
     eventData.product?.reference;
@@ -82,6 +90,10 @@ export async function registerMonnifyEvent(
           paymentMethod: eventData.paymentMethod,
           currency: eventData.currency,
           productReference: eventData.product?.reference,
+          settlementReference: eventData.settlementReference,
+          amountSettled: eventData.amountSettled,
+          settlementTime: eventData.settlementTime,
+          transactionsReferences: eventData.transactionsReferences,
         },
         state: "RECEIVED",
       },
@@ -107,7 +119,40 @@ export async function processMonnifyEvent(eventKey: string): Promise<void> {
     transactionReference?: string;
     paymentReference?: string;
     productReference?: string;
+    settlementReference?: string;
+    amountSettled?: number | string;
+    settlementTime?: string;
+    transactionsReferences?: Array<{ transactionReference?: string }>;
   };
+
+  // Settlement-completion events update Settlement rows — they never touch
+  // payment state.
+  if (/settlement/i.test(event.eventType)) {
+    try {
+      const { applySettlementEvent } = await import("@/lib/monnify/settlements");
+      const updated = await applySettlementEvent(payload);
+      await prisma.webhookEvent.update({
+        where: { providerEventKey: eventKey },
+        data: {
+          state: updated > 0 ? "PROCESSED" : "IGNORED",
+          attempts: { increment: 1 },
+          processedAt: new Date(),
+          errorSummary: updated > 0 ? null : "no matching settlements",
+        },
+      });
+    } catch (err) {
+      await prisma.webhookEvent.update({
+        where: { providerEventKey: eventKey },
+        data: {
+          state: "FAILED",
+          attempts: { increment: 1 },
+          errorSummary:
+            err instanceof Error ? err.message.slice(0, 300) : "unknown",
+        },
+      });
+    }
+    return;
+  }
 
   try {
     const payment = await findPayment(payload);

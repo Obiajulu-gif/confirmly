@@ -2,104 +2,21 @@ import "server-only";
 import { requireEnv } from "@/lib/env";
 import { logger } from "@/lib/logger";
 import { koboToNairaAmount } from "@/lib/money";
+import {
+  authedRequest,
+  getAccessToken,
+  clearTokenCache,
+  MonnifyError,
+} from "@/lib/monnify/auth";
+import type { IncomeSplit } from "@/lib/monnify/checkout";
+
+export { getAccessToken, clearTokenCache, MonnifyError };
 
 /**
- * Monnify sandbox client. Server-side only — the bearer token, API key and
- * secret never reach the browser.
+ * Payment creation + verification against the Monnify sandbox. Server-side
+ * only. When an incomeSplitConfig is provided it is attached verbatim to the
+ * provider request — a split is NEVER silently dropped or retried without.
  */
-
-export class MonnifyError extends Error {
-  constructor(
-    message: string,
-    public readonly status: number | null,
-    public readonly responseCode: string | null = null
-  ) {
-    super(message);
-    this.name = "MonnifyError";
-  }
-}
-
-interface MonnifyEnvelope<T> {
-  requestSuccessful: boolean;
-  responseMessage: string;
-  responseCode: string;
-  responseBody: T;
-}
-
-// --- Auth token cache -------------------------------------------------------
-
-let cachedToken: { token: string; expiresAt: number } | null = null;
-
-export function clearTokenCache() {
-  cachedToken = null;
-}
-
-export async function getAccessToken(): Promise<string> {
-  if (cachedToken && Date.now() < cachedToken.expiresAt) {
-    return cachedToken.token;
-  }
-  const e = requireEnv("MONNIFY_API_KEY", "MONNIFY_SECRET_KEY");
-  const basic = Buffer.from(
-    `${e.MONNIFY_API_KEY}:${e.MONNIFY_SECRET_KEY}`
-  ).toString("base64");
-
-  const response = await fetch(`${e.MONNIFY_BASE_URL}/api/v1/auth/login`, {
-    method: "POST",
-    headers: { Authorization: `Basic ${basic}` },
-    signal: AbortSignal.timeout(15_000),
-  });
-  if (!response.ok) {
-    throw new MonnifyError(`auth failed: HTTP ${response.status}`, response.status);
-  }
-  const data = (await response.json()) as MonnifyEnvelope<{
-    accessToken: string;
-    expiresIn: number;
-  }>;
-  if (!data.requestSuccessful || !data.responseBody?.accessToken) {
-    throw new MonnifyError("auth failed: no token", response.status, data.responseCode);
-  }
-  // Cache slightly under the documented lifetime.
-  const ttlMs = Math.max((data.responseBody.expiresIn - 60) * 1000, 30_000);
-  cachedToken = {
-    token: data.responseBody.accessToken,
-    expiresAt: Date.now() + ttlMs,
-  };
-  return cachedToken.token;
-}
-
-async function authedRequest<T>(
-  path: string,
-  init: { method?: string; body?: unknown } = {}
-): Promise<MonnifyEnvelope<T>> {
-  const e = requireEnv("MONNIFY_API_KEY", "MONNIFY_SECRET_KEY");
-  const token = await getAccessToken();
-  const response = await fetch(`${e.MONNIFY_BASE_URL}${path}`, {
-    method: init.method ?? "GET",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-    body: init.body !== undefined ? JSON.stringify(init.body) : undefined,
-    signal: AbortSignal.timeout(20_000),
-  });
-  let data: MonnifyEnvelope<T>;
-  try {
-    data = (await response.json()) as MonnifyEnvelope<T>;
-  } catch {
-    throw new MonnifyError(
-      `invalid JSON from Monnify: HTTP ${response.status}`,
-      response.status
-    );
-  }
-  if (!response.ok || !data.requestSuccessful) {
-    throw new MonnifyError(
-      data.responseMessage || `HTTP ${response.status}`,
-      response.status,
-      data.responseCode ?? null
-    );
-  }
-  return data;
-}
 
 // --- Payment creation ---------------------------------------------------------
 
@@ -107,14 +24,12 @@ export interface CreatedPayment {
   mode: "invoice" | "transaction";
   checkoutUrl: string | null;
   transactionReference: string | null;
-  /** Virtual account details when the invoice flow provides them. */
   virtualAccount: {
     accountNumber?: string;
     accountName?: string;
     bankName?: string;
     expiresOn?: string;
   } | null;
-  /** Sanitized response payload safe to persist. */
   sanitizedResponse: Record<string, unknown>;
 }
 
@@ -125,6 +40,8 @@ export interface CreatePaymentInput {
   customerEmail: string;
   description: string;
   redirectUrl: string;
+  /** Merchant routing — validated upstream, totals exactly 100. */
+  incomeSplitConfig?: IncomeSplit[];
 }
 
 interface InvoiceResponseBody {
@@ -143,11 +60,6 @@ interface InitTransactionResponseBody {
   checkoutUrl?: string;
 }
 
-/**
- * Creates a payment request for a confirmed order. Prefers the dynamic
- * invoice endpoint (checkout link + dedicated transfer account); falls back
- * to Initialize Transaction + hosted checkout when invoices are unavailable.
- */
 export async function createPayment(
   input: CreatePaymentInput
 ): Promise<CreatedPayment> {
@@ -155,6 +67,9 @@ export async function createPayment(
   const amount = koboToNairaAmount(input.amountKobo);
   const expiry = new Date(Date.now() + 24 * 60 * 60 * 1000);
   const expiryDate = expiry.toISOString().slice(0, 19).replace("T", " ");
+  const split = input.incomeSplitConfig?.length
+    ? { incomeSplitConfig: input.incomeSplitConfig }
+    : {};
 
   try {
     const data = await authedRequest<InvoiceResponseBody>(
@@ -172,6 +87,7 @@ export async function createPayment(
           expiryDate,
           paymentMethods: [],
           redirectUrl: input.redirectUrl,
+          ...split,
         },
       }
     );
@@ -195,9 +111,11 @@ export async function createPayment(
         bankName: body.bankName,
         expiryDate: body.expiryDate,
         responseCode: data.responseCode,
+        splitAttached: Boolean(input.incomeSplitConfig?.length),
       },
     };
   } catch (err) {
+    // The fallback path keeps the SAME split config — never dropped.
     logger.warn("monnify invoice creation failed, falling back to init-transaction", {
       reason: err instanceof Error ? err.message : "unknown",
     });
@@ -217,6 +135,7 @@ export async function createPayment(
         contractCode: e.MONNIFY_CONTRACT_CODE,
         redirectUrl: input.redirectUrl,
         paymentMethods: ["CARD", "ACCOUNT_TRANSFER", "USSD"],
+        ...split,
       },
     }
   );
@@ -232,6 +151,7 @@ export async function createPayment(
       transactionReference: body.transactionReference,
       hasCheckoutUrl: Boolean(body.checkoutUrl),
       responseCode: data.responseCode,
+      splitAttached: Boolean(input.incomeSplitConfig?.length),
     },
   };
 }
@@ -239,7 +159,7 @@ export async function createPayment(
 // --- Verification ---------------------------------------------------------------
 
 export interface VerifiedTransaction {
-  paymentStatus: string; // PAID | PENDING | FAILED | EXPIRED | ...
+  paymentStatus: string;
   amountPaidNaira: number;
   totalPayableNaira: number;
   currencyCode: string | null;

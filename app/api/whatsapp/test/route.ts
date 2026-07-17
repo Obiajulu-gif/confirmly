@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { getSession } from "@/lib/auth";
+import { getMerchantSession } from "@/lib/auth";
 import { rateLimit } from "@/lib/rate-limit";
 import { sendTemplate, sendText, WhatsAppSendError } from "@/lib/whatsapp/client";
 import { logger } from "@/lib/logger";
@@ -20,7 +20,7 @@ const bodySchema = z.object({
  * recipients added as verified test numbers in the Meta dashboard.
  */
 export async function POST(request: NextRequest) {
-  const session = await getSession();
+  const session = await getMerchantSession();
   if (!session) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }

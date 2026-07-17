@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { getSession } from "@/lib/auth";
+import { getMerchantSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { integrationStatus } from "@/lib/env";
 import { formatNaira } from "@/lib/money";
@@ -10,15 +10,22 @@ export const dynamic = "force-dynamic";
 export const metadata = { title: "Overview" };
 
 export default async function OverviewPage() {
-  const session = await getSession();
+  const session = await getMerchantSession();
   if (!session) redirect("/login");
   const merchantId = session.merchantId;
 
   const startOfDay = new Date();
   startOfDay.setHours(0, 0, 0, 0);
 
-  const [ordersToday, paidAgg, pendingCount, attentionOrders, recentEvents] =
-    await Promise.all([
+  const [
+    ordersToday,
+    paidAgg,
+    settlementPendingAgg,
+    settledAgg,
+    pendingCount,
+    attentionOrders,
+    recentEvents,
+  ] = await Promise.all([
       prisma.order.count({
         where: { merchantId, createdAt: { gte: startOfDay } },
       }),
@@ -26,6 +33,14 @@ export default async function OverviewPage() {
         where: { merchantId, state: { in: ["PAID", "FULFILLING", "COMPLETED"] } },
         _sum: { totalKobo: true },
         _count: true,
+      }),
+      prisma.settlement.aggregate({
+        where: { merchantId, state: "PENDING" },
+        _sum: { netAmountKobo: true },
+      }),
+      prisma.settlement.aggregate({
+        where: { merchantId, state: "SETTLED" },
+        _sum: { netAmountKobo: true },
       }),
       prisma.order.count({
         where: { merchantId, state: "PAYMENT_PENDING" },
@@ -72,18 +87,28 @@ export default async function OverviewPage() {
         </Link>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <StatCard label="Orders today" value={String(ordersToday)} />
         <StatCard
-          label="Paid revenue"
+          label="Verified revenue"
           value={formatNaira(paidAgg._sum.totalKobo ?? 0)}
           sub={`${paidAgg._count} paid order${paidAgg._count === 1 ? "" : "s"}`}
         />
         <StatCard label="Pending payments" value={String(pendingCount)} />
         <StatCard
-          label="Needs attention"
+          label="Settlement pending"
+          value={formatNaira(settlementPendingAgg._sum.netAmountKobo ?? 0)}
+          sub="verified, awaiting Monnify settlement"
+        />
+        <StatCard
+          label="Settled amount"
+          value={formatNaira(settledAgg._sum.netAmountKobo ?? 0)}
+          sub="confirmed by settlement events"
+        />
+        <StatCard
+          label="Action required"
           value={String(attentionOrders.length)}
-          sub="payment exceptions & human handovers"
+          sub="payment exceptions and human handovers"
         />
       </div>
 

@@ -1,37 +1,96 @@
 import Link from "next/link";
+import {
+  ArrowDown,
+  ArrowRight,
+  BadgeCheck,
+  Banknote,
+  FileWarning,
+  Landmark,
+  ListChecks,
+  Lock,
+  MessageSquareText,
+  QrCode,
+  Receipt,
+  ScanLine,
+  ShieldCheck,
+  Store,
+  Users,
+} from "lucide-react";
 import { ConfirmlyLogo, ConfirmlyMark } from "@/components/logo";
 import { PhoneDemo } from "@/components/phone-demo";
 import { Reveal } from "@/components/reveal";
 
+const flowStrip = [
+  "WhatsApp order",
+  "structured order",
+  "Monnify checkout",
+  "payment verified",
+  "receipt issued",
+];
+
+const problems = [
+  {
+    icon: MessageSquareText,
+    title: "Scattered orders",
+    body: "Order details buried across dozens of chats — quantities, sizes and addresses lost in the scroll.",
+  },
+  {
+    icon: FileWarning,
+    title: "Fake screenshots",
+    body: "Edited payment screenshots pass for proof, and goods leave before money ever arrives.",
+  },
+  {
+    icon: ListChecks,
+    title: "Wrong totals",
+    body: "Mental arithmetic across items, variants and delivery fees produces expensive mistakes.",
+  },
+  {
+    icon: Banknote,
+    title: "Unmatched transfers",
+    body: "Bank alerts with no reference — hours lost matching payments to orders by hand.",
+  },
+  {
+    icon: Receipt,
+    title: "Manual receipts",
+    body: "Typed receipts carry no proof and settle no dispute.",
+  },
+  {
+    icon: ScanLine,
+    title: "Missing audit trails",
+    body: "When a dispute lands there is no record of who agreed to what, when.",
+  },
+];
+
 const steps = [
   {
     n: "01",
-    title: "Chat like always",
-    body: "Your customer sends a normal WhatsApp message — English, Pidgin, voice-of-the-street. No app to download, no forms.",
+    title: "Register your business",
+    body: "Sign up, register the business, and add a settlement bank account. Monnify validates the account name and issues a dedicated subaccount.",
     visual: (
-      <div className="rounded-2xl rounded-br-md bg-[#d7fbe4] px-4 py-3 text-sm text-ink-900 shadow-lg">
-        I need two black polo shirts, large size, delivered to Yaba 🙏
+      <div className="space-y-2 font-mono text-xs">
+        <div className="rounded-xl border border-brand-500/30 bg-brand-500/10 px-4 py-2.5 text-brand-300">
+          Account name resolved: ADA STYLES LTD
+        </div>
+        <div className="rounded-xl border border-brand-500/30 bg-brand-500/10 px-4 py-2.5 text-brand-300">
+          Subaccount created: MFY_SUB_…
+        </div>
       </div>
     ),
   },
   {
     n: "02",
-    title: "AI structures the order",
-    body: "NVIDIA NIM turns free text into structured intent, matched against your real catalogue with a confidence policy. It never invents products or prices.",
+    title: "Customers chat like always",
+    body: "A customer picks your store with its code, then orders in plain language — English, Nigerian English, or Pidgin. No app to download.",
     visual: (
-      <pre className="overflow-x-auto rounded-2xl border border-brand-500/25 bg-night-900/80 px-4 py-3 font-mono text-xs leading-relaxed text-brand-300">
-        {`{ "intent": "PLACE_ORDER",
-  "items": [{ "searchTerm": "polo",
-    "quantity": 2, "size": "L",
-    "colour": "black" }],
-  "deliveryArea": "Yaba" }`}
-      </pre>
+      <div className="rounded-2xl rounded-br-md bg-[#d7fbe4] px-4 py-3 text-sm text-ink-900 shadow-lg">
+        START ADASTYLES — I need two black polo shirts, large, to Yaba
+      </div>
     ),
   },
   {
     n: "03",
-    title: "Server does the maths",
-    body: "Prices and delivery fees come from your database, in integer kobo, on the server. One clear summary, one explicit confirmation — nothing moves without it.",
+    title: "Confirmly structures the order",
+    body: "NVIDIA NIM extracts intent, your catalogue supplies every price, and the server does the maths in integer kobo. One summary, one explicit confirmation.",
     visual: (
       <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-5 py-4 font-mono text-sm text-white/80">
         <div className="flex justify-between gap-8">
@@ -51,91 +110,76 @@ const steps = [
   },
   {
     n: "04",
-    title: "Monnify verifies payment",
-    body: "A secure payment link lands in chat. The webhook is signature-checked, then the transaction is re-verified server-to-server. Only that can mark an order paid.",
+    title: "Monnify collects and verifies",
+    body: "The customer pays a Monnify-generated checkout — never your personal account. The webhook is signature-checked, then the transaction is re-verified server-to-server.",
     visual: (
       <div className="space-y-2 font-mono text-xs">
-        <div className="flex items-center gap-2 rounded-xl border border-brand-500/30 bg-brand-500/10 px-4 py-2.5 text-brand-300">
-          🔏 monnify-signature · HMAC-SHA512 ✓
+        <div className="rounded-xl border border-brand-500/30 bg-brand-500/10 px-4 py-2.5 text-brand-300">
+          monnify-signature · HMAC-SHA512 valid
         </div>
-        <div className="flex items-center gap-2 rounded-xl border border-brand-500/30 bg-brand-500/10 px-4 py-2.5 text-brand-300">
-          🔁 GET /v2/transactions/… → PAID ✓
+        <div className="rounded-xl border border-brand-500/30 bg-brand-500/10 px-4 py-2.5 text-brand-300">
+          GET /v2/transactions/… → PAID
         </div>
-        <div className="flex items-center gap-2 rounded-xl border border-red-400/30 bg-red-500/10 px-4 py-2.5 text-red-300">
-          📸 screenshot.jpg → REJECTED ✗
+        <div className="rounded-xl border border-red-400/30 bg-red-500/10 px-4 py-2.5 text-red-300">
+          screenshot.jpg → REJECTED
         </div>
       </div>
     ),
   },
   {
     n: "05",
-    title: "Receipt, sealed",
-    body: "A verifiable receipt with a QR code goes to the customer, your dashboard timeline updates instantly, and anyone can check it — VALID or NOT VALID.",
+    title: "Settlement routed to you",
+    body: "Every checkout carries your subaccount in its income split, so Monnify settles your share straight to your registered bank account — tracked separately from payment verification.",
     visual: (
-      <div className="flex items-center gap-4 rounded-2xl bg-white px-5 py-4 text-ink-900 shadow-xl">
-        <div className="grid grid-cols-4 gap-0.5" aria-hidden="true">
-          {[1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1].map((on, i) => (
-            <span
-              key={i}
-              className={`h-2 w-2 rounded-[2px] ${on ? "bg-ink-900" : "bg-ink-900/15"}`}
-            />
-          ))}
+      <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-5 py-4 font-mono text-xs text-white/80">
+        <div className="flex justify-between gap-6">
+          <span>splitPercentage</span>
+          <span className="text-brand-300">100</span>
         </div>
-        <div>
-          <p className="text-xs font-bold uppercase tracking-wide text-brand-700">
-            Valid Confirmly receipt
-          </p>
-          <p className="font-mono text-sm font-semibold">
-            CFY-8K2MHQ4T · ₦26,500
-          </p>
+        <div className="flex justify-between gap-6">
+          <span>payment</span>
+          <span className="text-brand-300">VERIFIED</span>
+        </div>
+        <div className="flex justify-between gap-6">
+          <span>settlement</span>
+          <span className="text-amber-300">PENDING</span>
         </div>
       </div>
     ),
   },
 ];
 
-const features = [
+const trust = [
   {
-    icon: "🛡️",
-    title: "No more screenshot 'payments'",
-    body: "Payment claims and screenshots are never trusted. Every kobo is confirmed against Monnify's servers before an order moves.",
+    icon: FileWarning,
+    title: "Screenshots never count as proof",
+    body: "Only a server-verified Monnify transaction can mark an order paid. Claims and images are checked against the provider, not believed.",
   },
   {
-    icon: "🎯",
-    title: "One question at a time",
-    body: "Ambiguous order? Confirmly asks exactly one focused question — size, colour, or area — never a wall of forms.",
+    icon: Store,
+    title: "Your catalogue controls prices",
+    body: "The AI extracts intent only. Every price, fee and total comes from your database, calculated server-side in integer kobo.",
   },
   {
-    icon: "🙋",
-    title: "Human takeover, anytime",
-    body: "Type “human” and the bot steps aside instantly. Merchants can pause automation per conversation from the dashboard.",
+    icon: ShieldCheck,
+    title: "Monnify verified server-side",
+    body: "Signed webhooks, idempotent events, and a second server-to-server verification before any state changes.",
   },
   {
-    icon: "🧾",
+    icon: Lock,
+    title: "Settlement details protected",
+    body: "Bank account numbers are encrypted at rest, shown only masked, and never displayed as a checkout destination.",
+  },
+  {
+    icon: ScanLine,
+    title: "Every event auditable",
+    body: "From first message to settlement, each step lands in a chronological, dispute-ready timeline.",
+  },
+  {
+    icon: QrCode,
     title: "Receipts anyone can verify",
-    body: "Every receipt carries a high-entropy token and QR code. Scan it — VALID or NOT VALID, no arguments.",
+    body: "High-entropy tokens and QR codes resolve to VALID, REVOKED, or NOT FOUND — no arguments.",
   },
-  {
-    icon: "🗂️",
-    title: "Dispute-ready audit trail",
-    body: "From first message to receipt delivery, every step is recorded in a chronological, tamper-evident timeline.",
-  },
-  {
-    icon: "🇳🇬",
-    title: "Speaks Nigerian",
-    body: "“Abeg give me three polo, bring am come Yaba” parses perfectly — but products and prices only ever come from your catalogue.",
-  },
-];
-
-const ticker = [
-  "Signed webhooks",
-  "Server-verified payments",
-  "Integer-kobo money math",
-  "Idempotent events",
-  "QR receipts",
-  "Human handover",
-  "Catalogue-grounded AI",
-  "Audit timelines",
 ];
 
 export default function LandingPage() {
@@ -147,24 +191,34 @@ export default function LandingPage() {
           <Link href="/" aria-label="Confirmly home">
             <ConfirmlyLogo tone="dark" />
           </Link>
-          <nav className="flex items-center gap-2 sm:gap-3">
-            <Link
-              href="#how-it-works"
-              className="hidden rounded-lg px-3 py-2 text-sm font-medium text-white/70 transition hover:text-white sm:block"
-            >
-              How it works
-            </Link>
+          <nav className="flex items-center gap-1 sm:gap-2">
+            {(
+              [
+                ["#product", "Product"],
+                ["#how-it-works", "How it works"],
+                ["#for-merchants", "For merchants"],
+                ["#security", "Security"],
+              ] as const
+            ).map(([href, label]) => (
+              <Link
+                key={href}
+                href={href}
+                className="hidden rounded-lg px-3 py-2 text-sm font-medium text-white/70 transition hover:text-white lg:block"
+              >
+                {label}
+              </Link>
+            ))}
             <Link
               href="/login"
               className="hidden rounded-lg px-3 py-2 text-sm font-medium text-white/70 transition hover:text-white sm:block"
             >
-              Merchant login
+              Login
             </Link>
             <Link
-              href="/start"
+              href="/signup"
               className="cta-glow rounded-xl bg-brand-500 px-4 py-2 text-sm font-semibold text-night-900 transition hover:bg-brand-400"
             >
-              Order on WhatsApp
+              Create business account
             </Link>
           </nav>
         </div>
@@ -172,8 +226,7 @@ export default function LandingPage() {
 
       <main className="flex-1">
         {/* ------------------------------------------------ hero */}
-        <section className="relative overflow-hidden">
-          {/* ambient orbs + grid */}
+        <section id="product" className="relative overflow-hidden">
           <div className="pointer-events-none absolute inset-0">
             <div className="night-grid absolute inset-0" />
             <div className="absolute -left-40 -top-40 h-[480px] w-[480px] orb animate-orb" />
@@ -190,25 +243,24 @@ export default function LandingPage() {
                 style={{ "--d": "0.05s" } as React.CSSProperties}
               >
                 <span className="h-1.5 w-1.5 rounded-full bg-brand-400 [animation:glow-pulse_2.2s_ease-in-out_infinite]" />
-                WhatsApp × Monnify × NVIDIA NIM
+                Multi-merchant · WhatsApp × Monnify × NVIDIA NIM
               </p>
 
               <h1
-                className="anim-fade-up mt-6 text-[2.6rem] font-extrabold leading-[1.05] tracking-tight sm:text-6xl lg:text-[4.2rem]"
+                className="anim-fade-up mt-6 text-[2.5rem] font-extrabold leading-[1.05] tracking-tight sm:text-6xl lg:text-[3.9rem]"
                 style={{ "--d": "0.15s" } as React.CSSProperties}
               >
-                From chat to{" "}
-                <span className="text-gradient">confirmed payment.</span>
+                Turn WhatsApp orders into{" "}
+                <span className="text-gradient">verified payments.</span>
               </h1>
 
               <p
                 className="anim-fade-up mt-6 max-w-xl text-lg leading-relaxed text-white/60"
                 style={{ "--d": "0.3s" } as React.CSSProperties}
               >
-                Confirmly turns WhatsApp conversations into structured,
-                payment-ready orders, verifies every payment through Monnify,
-                and seals it with a receipt anyone can verify — so you never
-                fulfil an unpaid order again.
+                Confirmly helps merchants structure customer orders, collect
+                payments through Monnify, and issue trusted receipts without
+                leaving the sales flow they already use.
               </p>
 
               <div
@@ -216,60 +268,39 @@ export default function LandingPage() {
                 style={{ "--d": "0.45s" } as React.CSSProperties}
               >
                 <Link
-                  href="/start"
+                  href="/signup"
                   className="cta-glow inline-flex items-center justify-center gap-2 rounded-2xl bg-brand-500 px-7 py-3.5 text-base font-bold text-night-900 transition hover:bg-brand-400"
                 >
-                  <svg viewBox="0 0 24 24" className="h-5 w-5 fill-current" aria-hidden="true">
-                    <path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2Zm5.4 14.1c-.2.7-1.3 1.3-1.9 1.4-.5.1-1.1.2-3.3-.7-2.8-1.1-4.6-4-4.7-4.2-.1-.2-1.1-1.5-1.1-2.9s.7-2 1-2.3c.2-.3.5-.3.7-.3h.5c.2 0 .4 0 .6.4l.9 2.1c.1.2.1.4 0 .6l-.4.6-.5.5c-.2.2-.3.4-.1.7.2.3.9 1.5 2 2.4 1.4 1.2 2.5 1.6 2.9 1.7.3.1.5.1.7-.1l1-1.1c.2-.3.5-.3.7-.2l2.2 1c.3.2.5.3.6.4 0 .1 0 .7-.2 1Z" />
-                  </svg>
-                  Start an order on WhatsApp
+                  Create business account
+                  <ArrowRight className="h-4.5 w-4.5" aria-hidden />
                 </Link>
-                <Link
-                  href="/dashboard"
-                  className="inline-flex items-center justify-center rounded-2xl border border-white/15 px-7 py-3.5 text-base font-semibold text-white/85 transition hover:border-brand-400/50 hover:text-white"
-                >
-                  Open merchant dashboard
-                </Link>
-              </div>
-
-              <div
-                className="anim-fade-up mt-4"
-                style={{ "--d": "0.55s" } as React.CSSProperties}
-              >
                 <Link
                   href="#how-it-works"
-                  className="text-sm font-medium text-white/50 underline-offset-4 transition hover:text-brand-300 hover:underline"
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/15 px-7 py-3.5 text-base font-semibold text-white/85 transition hover:border-brand-400/50 hover:text-white"
                 >
-                  See how it works <span aria-hidden="true">↓</span>
+                  View product flow
+                  <ArrowDown className="h-4 w-4" aria-hidden />
                 </Link>
               </div>
 
-              {/* stats */}
-              <dl
-                className="anim-fade-up mt-12 grid max-w-md grid-cols-3 gap-4"
-                style={{ "--d": "0.7s" } as React.CSSProperties}
+              {/* flow strip */}
+              <div
+                className="anim-fade-up mt-10 flex flex-wrap items-center gap-2 text-[13px] font-medium text-white/55"
+                style={{ "--d": "0.6s" } as React.CSSProperties}
               >
-                {[
-                  ["0", "screenshots trusted"],
-                  ["1", "question at a time"],
-                  ["100%", "server-verified"],
-                ].map(([value, label]) => (
-                  <div
-                    key={label}
-                    className="rounded-2xl border border-white/10 bg-white/[0.03] p-4"
-                  >
-                    <dt className="text-2xl font-extrabold text-brand-300">
-                      {value}
-                    </dt>
-                    <dd className="mt-1 text-[11px] uppercase tracking-wide text-white/45">
-                      {label}
-                    </dd>
-                  </div>
+                {flowStrip.map((item, i) => (
+                  <span key={item} className="flex items-center gap-2">
+                    <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5">
+                      {item}
+                    </span>
+                    {i < flowStrip.length - 1 ? (
+                      <ArrowRight className="h-3.5 w-3.5 text-brand-400" aria-hidden />
+                    ) : null}
+                  </span>
                 ))}
-              </dl>
+              </div>
             </div>
 
-            {/* phone */}
             <div
               className="anim-fade-up relative"
               style={{ "--d": "0.5s" } as React.CSSProperties}
@@ -277,21 +308,36 @@ export default function LandingPage() {
               <PhoneDemo />
             </div>
           </div>
+        </section>
 
-          {/* ticker */}
-          <div className="relative border-y border-white/5 bg-white/[0.02] py-3.5">
-            <div className="overflow-hidden [mask-image:linear-gradient(90deg,transparent,black_12%,black_88%,transparent)]">
-              <div className="flex w-max animate-marquee gap-10 whitespace-nowrap">
-                {[...ticker, ...ticker].map((item, i) => (
-                  <span
-                    key={i}
-                    className="flex items-center gap-2.5 text-sm font-medium text-white/45"
-                  >
-                    <span className="text-brand-400">✦</span>
-                    {item}
-                  </span>
-                ))}
-              </div>
+        {/* ------------------------------------------------ problems */}
+        <section className="border-y border-white/5 bg-white/[0.02] py-20">
+          <div className="mx-auto w-full max-w-6xl px-4 sm:px-6">
+            <Reveal>
+              <p className="text-xs font-bold uppercase tracking-[0.25em] text-brand-400">
+                The problem
+              </p>
+              <h2 className="mt-3 max-w-2xl text-3xl font-extrabold tracking-tight sm:text-4xl">
+                Selling on WhatsApp works. Managing it doesn&apos;t.
+              </h2>
+            </Reveal>
+            <div className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+              {problems.map((p, i) => {
+                const Icon = p.icon;
+                return (
+                  <Reveal key={p.title} delay={(i % 3) * 0.08}>
+                    <div className="lift-card glass-card h-full rounded-2xl p-6">
+                      <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-red-500/10 text-red-300">
+                        <Icon className="h-5 w-5" aria-hidden />
+                      </span>
+                      <h3 className="mt-4 font-bold">{p.title}</h3>
+                      <p className="mt-2 text-sm leading-relaxed text-white/55">
+                        {p.body}
+                      </p>
+                    </div>
+                  </Reveal>
+                );
+              })}
             </div>
           </div>
         </section>
@@ -301,10 +347,10 @@ export default function LandingPage() {
           <div className="mx-auto w-full max-w-4xl px-4 sm:px-6">
             <Reveal>
               <p className="text-xs font-bold uppercase tracking-[0.25em] text-brand-400">
-                The flow
+                How it works
               </p>
               <h2 className="mt-3 max-w-2xl text-3xl font-extrabold tracking-tight sm:text-5xl">
-                Five steps from a casual message to verified money.
+                From registration to settlement, verified at every step.
               </h2>
               <p className="mt-4 max-w-xl text-white/55">
                 Keep scrolling — each step stacks on the last, exactly like the
@@ -336,7 +382,6 @@ export default function LandingPage() {
                       </div>
                       <div className="sm:justify-self-end">{step.visual}</div>
                     </div>
-                    {/* stacked-edge indicator */}
                     <div
                       className="mt-8 flex items-center gap-1.5"
                       aria-hidden="true"
@@ -357,35 +402,93 @@ export default function LandingPage() {
           </div>
         </section>
 
-        {/* ------------------------------------------------ features */}
-        <section className="relative py-10 pb-24">
+        {/* ------------------------------------------------ for merchants */}
+        <section id="for-merchants" className="relative py-10 pb-24">
           <div className="orb pointer-events-none absolute inset-x-0 top-0 mx-auto h-[400px] max-w-4xl" />
           <div className="relative mx-auto w-full max-w-6xl px-4 sm:px-6">
             <Reveal>
               <p className="text-xs font-bold uppercase tracking-[0.25em] text-brand-400">
-                Built for the real market
+                For merchants
               </p>
-              <h2 className="mt-3 max-w-2xl text-3xl font-extrabold tracking-tight sm:text-5xl">
-                Commerce the way Nigeria actually does it.
+              <h2 className="mt-3 max-w-2xl text-3xl font-extrabold tracking-tight sm:text-4xl">
+                A back office for the shop you run from your phone.
               </h2>
             </Reveal>
-            <div className="mt-14 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-              {features.map((f, i) => (
-                <Reveal key={f.title} delay={(i % 3) * 0.1}>
-                  <div className="lift-card glass-card h-full rounded-2xl p-6">
-                    <span className="text-2xl">{f.icon}</span>
-                    <h3 className="mt-4 font-bold">{f.title}</h3>
-                    <p className="mt-2 text-sm leading-relaxed text-white/55">
-                      {f.body}
-                    </p>
-                  </div>
-                </Reveal>
-              ))}
+            <div className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+              {[
+                {
+                  icon: Store,
+                  title: "Catalogue and variants",
+                  body: "Products, aliases, sizes, colours, stock and delivery zones — the single source of truth for every order.",
+                },
+                {
+                  icon: Landmark,
+                  title: "Settlement account",
+                  body: "Validated bank account, dedicated Monnify subaccount, masked everywhere, replaceable only with reauthentication.",
+                },
+                {
+                  icon: Users,
+                  title: "Conversations",
+                  body: "Full transcripts with one-tap human takeover and resume. The bot steps aside the moment you type.",
+                },
+                {
+                  icon: BadgeCheck,
+                  title: "Payments and settlements",
+                  body: "Verified revenue, pending settlements and settled amounts — tracked separately, honestly.",
+                },
+              ].map((f, i) => {
+                const Icon = f.icon;
+                return (
+                  <Reveal key={f.title} delay={(i % 4) * 0.08}>
+                    <div className="lift-card glass-card h-full rounded-2xl p-6">
+                      <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-500/15 text-brand-300">
+                        <Icon className="h-5 w-5" aria-hidden />
+                      </span>
+                      <h3 className="mt-4 font-bold">{f.title}</h3>
+                      <p className="mt-2 text-sm leading-relaxed text-white/55">
+                        {f.body}
+                      </p>
+                    </div>
+                  </Reveal>
+                );
+              })}
             </div>
           </div>
         </section>
 
-        {/* ------------------------------------------------ security banner */}
+        {/* ------------------------------------------------ security / trust */}
+        <section id="security" className="border-t border-white/5 py-24">
+          <div className="mx-auto w-full max-w-6xl px-4 sm:px-6">
+            <Reveal>
+              <p className="text-xs font-bold uppercase tracking-[0.25em] text-brand-400">
+                Security
+              </p>
+              <h2 className="mt-3 max-w-2xl text-3xl font-extrabold tracking-tight sm:text-4xl">
+                Trust, engineered in.
+              </h2>
+            </Reveal>
+            <div className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+              {trust.map((t, i) => {
+                const Icon = t.icon;
+                return (
+                  <Reveal key={t.title} delay={(i % 3) * 0.08}>
+                    <div className="lift-card glass-card h-full rounded-2xl p-6">
+                      <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-500/15 text-brand-300">
+                        <Icon className="h-5 w-5" aria-hidden />
+                      </span>
+                      <h3 className="mt-4 font-bold">{t.title}</h3>
+                      <p className="mt-2 text-sm leading-relaxed text-white/55">
+                        {t.body}
+                      </p>
+                    </div>
+                  </Reveal>
+                );
+              })}
+            </div>
+          </div>
+        </section>
+
+        {/* ------------------------------------------------ final CTA */}
         <section className="mx-auto w-full max-w-6xl px-4 pb-24 sm:px-6">
           <Reveal>
             <div className="relative overflow-hidden rounded-3xl border border-brand-500/25 bg-gradient-to-br from-night-700 via-night-800 to-night-900 px-6 py-14 text-center sm:px-12">
@@ -393,25 +496,20 @@ export default function LandingPage() {
               <div className="relative">
                 <ConfirmlyMark className="mx-auto h-14 w-14" />
                 <h2 className="mx-auto mt-6 max-w-2xl text-3xl font-extrabold tracking-tight sm:text-4xl">
-                  A screenshot is not a receipt.
+                  Start selling with clearer orders and verified payments.
                 </h2>
-                <p className="mx-auto mt-4 max-w-xl text-white/60">
-                  Confirmly checks every payment against Monnify&apos;s servers
-                  before your order moves. Signed webhooks, idempotent events,
-                  verifiable receipts — trust, engineered in.
-                </p>
                 <div className="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row">
                   <Link
-                    href="/start"
+                    href="/signup"
                     className="cta-glow inline-flex items-center justify-center rounded-2xl bg-brand-500 px-7 py-3.5 text-base font-bold text-night-900 transition hover:bg-brand-400"
                   >
-                    Try a live order
+                    Create business account
                   </Link>
                   <Link
-                    href="/dashboard"
+                    href="/start"
                     className="inline-flex items-center justify-center rounded-2xl border border-white/15 px-7 py-3.5 text-base font-semibold text-white/85 transition hover:border-brand-400/50 hover:text-white"
                   >
-                    Open merchant dashboard
+                    Order from a store on WhatsApp
                   </Link>
                 </div>
               </div>
@@ -425,8 +523,8 @@ export default function LandingPage() {
         <div className="mx-auto flex w-full max-w-6xl flex-col items-center justify-between gap-5 px-4 text-sm text-white/40 sm:flex-row sm:px-6">
           <ConfirmlyLogo tone="dark" className="opacity-90" />
           <span>
-            © {new Date().getFullYear()} Confirmly · Payments verified by
-            Monnify · Orders understood by NVIDIA NIM
+            © {new Date().getFullYear()} Confirmly · Payments by Monnify ·
+            Orders understood by NVIDIA NIM
           </span>
         </div>
       </footer>

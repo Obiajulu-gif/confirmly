@@ -1,9 +1,10 @@
+import { Lock, Send, ShieldCheck } from "lucide-react";
 import { ConfirmlyMark } from "@/components/logo";
 
 /**
  * Animated phone mockup for the hero — a WhatsApp-style conversation that
  * plays through the Confirmly order flow with staggered CSS animations.
- * Pure CSS/SVG: no images, no client JS.
+ * Pure CSS/SVG: no images, no client JS, no emoji.
  */
 
 function Bubble({
@@ -75,7 +76,7 @@ export function PhoneDemo() {
             }}
           >
             <Bubble side="out" delay={0.4}>
-              I need two black polo shirts, large size, delivered to Yaba 🙏
+              I need two black polo shirts, large size, delivered to Yaba
             </Bubble>
 
             <Bubble side="in" delay={1.3}>
@@ -111,11 +112,13 @@ export function PhoneDemo() {
               ))}
             </div>
 
-            <Bubble side="out" delay={3.0}>Confirm order ✅</Bubble>
+            <Bubble side="out" delay={3.0}>Confirm order</Bubble>
 
             <Bubble side="in" delay={3.9}>
-              🔐 Pay securely with <b>Monnify</b>:
-              <br />
+              <span className="flex items-center gap-1 font-semibold">
+                <Lock className="h-3 w-3" aria-hidden /> Pay securely with
+                Monnify:
+              </span>
               <span className="font-mono text-[10px] text-brand-700 underline">
                 monnify.com/checkout/CFY-8K2M…
               </span>
@@ -138,7 +141,7 @@ export function PhoneDemo() {
             </div>
 
             <Bubble side="in" delay={6.0} tone="success">
-              <b>Payment verified ✓</b>
+              <b>Payment verified</b>
               <br />
               ₦26,500 confirmed by Monnify — never by screenshot.
               <br />
@@ -151,8 +154,8 @@ export function PhoneDemo() {
           {/* input bar */}
           <div className="flex items-center gap-2 border-t border-white/10 bg-night-700 px-3 py-2.5">
             <div className="h-7 flex-1 rounded-full bg-white/10" />
-            <div className="flex h-7 w-7 items-center justify-center rounded-full bg-brand-500 text-[10px] text-white">
-              ➤
+            <div className="flex h-7 w-7 items-center justify-center rounded-full bg-brand-500 text-night-900">
+              <Send className="h-3.5 w-3.5" aria-hidden />
             </div>
           </div>
         </div>
@@ -160,16 +163,17 @@ export function PhoneDemo() {
 
       {/* floating badges around the phone */}
       <div
-        className="anim-fade-up absolute -left-20 top-24 hidden rounded-xl border border-white/10 bg-night-700/90 px-3 py-2 text-[11px] text-white shadow-xl backdrop-blur sm:block animate-float-slow"
+        className="anim-fade-up absolute -left-20 top-24 hidden items-center gap-1.5 rounded-xl border border-white/10 bg-night-700/90 px-3 py-2 text-[11px] text-white shadow-xl backdrop-blur sm:flex animate-float-slow"
         style={{ "--d": "1.8s", "--tilt": "-3deg" } as React.CSSProperties}
       >
-        <span className="text-brand-300">✓</span> Webhook signature valid
+        <ShieldCheck className="h-3.5 w-3.5 text-brand-300" aria-hidden />
+        Webhook signature valid
       </div>
       <div
-        className="anim-fade-up absolute -right-16 bottom-28 hidden rounded-xl border border-white/10 bg-night-700/90 px-3 py-2 text-[11px] text-white shadow-xl backdrop-blur sm:block animate-float"
+        className="anim-fade-up absolute -right-16 bottom-28 hidden items-center gap-1.5 rounded-xl border border-white/10 bg-night-700/90 px-3 py-2 text-[11px] text-white shadow-xl backdrop-blur sm:flex animate-float"
         style={{ "--d": "2.6s", "--tilt": "2deg" } as React.CSSProperties}
       >
-        <span className="text-brand-300">₦</span> Server-verified · PAID
+        <span className="font-bold text-brand-300">₦</span> Server-verified · PAID
       </div>
     </div>
   );

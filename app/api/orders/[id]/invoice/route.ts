@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { getSession } from "@/lib/auth";
+import { getMerchantSession } from "@/lib/auth";
 import { createPaymentForOrder } from "@/lib/payments/service";
 import { sendToCustomer } from "@/lib/orders/outbound";
 import { buildPaymentLinkText } from "@/lib/orders/summary";
@@ -17,7 +17,7 @@ export async function POST(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await getSession();
+  const session = await getMerchantSession();
   if (!session) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }

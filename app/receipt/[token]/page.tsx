@@ -87,7 +87,7 @@ export default async function ReceiptPage({
                 {order.payment?.method ?? "—"}
               </p>
             </div>
-            <div className="col-span-2">
+            <div>
               <p className="text-xs uppercase tracking-wide text-ink-500">
                 Provider reference
               </p>
@@ -96,6 +96,18 @@ export default async function ReceiptPage({
                   order.payment?.transactionReference ??
                     order.payment?.invoiceReference
                 )}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs uppercase tracking-wide text-ink-500">
+                Settlement
+              </p>
+              <p className="font-semibold text-ink-900">
+                {order.payment?.settlement?.state === "SETTLED"
+                  ? "Settled"
+                  : order.payment?.settlement
+                    ? "Pending"
+                    : "—"}
               </p>
             </div>
           </div>

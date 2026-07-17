@@ -13,6 +13,7 @@ const schema = z.object({
   phone: z.string().min(7).max(24),
   area: z.string().max(60).optional().or(z.literal("")),
   address: z.string().max(200).optional().or(z.literal("")),
+  storeCode: z.string().max(24).optional().or(z.literal("")),
 });
 
 export async function startOrderAction(
@@ -24,6 +25,7 @@ export async function startOrderAction(
     phone: formData.get("phone"),
     area: formData.get("area") ?? "",
     address: formData.get("address") ?? "",
+    storeCode: formData.get("storeCode") ?? "",
   });
   if (!parsed.success) {
     return {
@@ -49,6 +51,7 @@ export async function startOrderAction(
       phone: parsed.data.phone,
       area: parsed.data.area || null,
       address: parsed.data.address || null,
+      storeCode: parsed.data.storeCode || null,
     });
     return {
       ok: true,

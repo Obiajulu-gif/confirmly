@@ -10,6 +10,7 @@ import {
   queryTransactionByPaymentReference,
   type VerifiedTransaction,
 } from "@/lib/monnify/client";
+import { buildIncomeSplitConfig, type IncomeSplit } from "@/lib/monnify/checkout";
 import { AUDIT, recordAudit } from "@/lib/orders/audit";
 import { issueReceipt, receiptUrl } from "@/lib/receipts";
 import type { Payment, PaymentState, Prisma } from "@prisma/client";
@@ -22,6 +23,14 @@ import type { Payment, PaymentState, Prisma } from "@prisma/client";
  */
 
 // --- Payment creation -----------------------------------------------------------
+
+/** Raised when the merchant's settlement profile blocks checkout. */
+export class CheckoutBlockedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "CheckoutBlockedError";
+  }
+}
 
 export async function createPaymentForOrder(orderId: string): Promise<{
   payment: Payment;
@@ -65,6 +74,33 @@ export async function createPaymentForOrder(orderId: string): Promise<{
     return { payment, checkoutUrl: payment.checkoutUrl, virtualAccount: null };
   }
 
+  // Merchant routing decision — the subaccount code is loaded from the
+  // ORDER-OWNED merchant's payment profile, never from any client input.
+  const profile = await prisma.merchantPaymentProfile.findFirst({
+    where: { merchantId: order.merchantId, active: true },
+    orderBy: { createdAt: "desc" },
+  });
+  let incomeSplitConfig: IncomeSplit[] | undefined;
+  let routedToPlatform = false;
+  if (env().MONNIFY_SUBACCOUNT_ENABLED) {
+    if (profile?.subaccountStatus === "ACTIVE" && profile.subAccountCode) {
+      incomeSplitConfig = buildIncomeSplitConfig(
+        profile.subAccountCode,
+        profile.splitPercentage
+      );
+    } else {
+      // Never fall back silently to the platform account when merchant
+      // routing is expected — block the checkout instead.
+      throw new CheckoutBlockedError(
+        "This shop's settlement account isn't active yet, so checkout is paused. The merchant has been notified."
+      );
+    }
+  } else {
+    // Subaccount feature disabled: platform-account routing, clearly flagged
+    // and surfaced with a warning in the dashboard.
+    routedToPlatform = true;
+  }
+
   const created = await monnifyCreatePayment({
     invoiceReference,
     amountKobo: order.totalKobo,
@@ -72,6 +108,7 @@ export async function createPaymentForOrder(orderId: string): Promise<{
     customerEmail: order.customer.email ?? `${order.customer.waId}@customers.confirmly.local`,
     description: `Order ${order.reference} — ${order.merchant.name}`,
     redirectUrl: `${env().APP_URL}/pay/${order.reference}`,
+    incomeSplitConfig,
   });
 
   const payment = await upsertPaymentRow(order.id, {
@@ -86,6 +123,9 @@ export async function createPaymentForOrder(orderId: string): Promise<{
       | Prisma.InputJsonValue
       | undefined,
     sanitizedResponse: created.sanitizedResponse as Prisma.InputJsonValue,
+    subAccountCodeSnapshot: incomeSplitConfig?.[0]?.subAccountCode ?? null,
+    splitPercentageSnapshot: incomeSplitConfig?.[0]?.splitPercentage ?? null,
+    routedToPlatform,
   });
 
   await prisma.order.update({
@@ -120,6 +160,9 @@ async function upsertPaymentRow(
     checkoutUrl?: string | null;
     virtualAccount?: Prisma.InputJsonValue;
     sanitizedResponse?: Prisma.InputJsonValue;
+    subAccountCodeSnapshot?: string | null;
+    splitPercentageSnapshot?: number | null;
+    routedToPlatform?: boolean;
   }
 ): Promise<Payment> {
   const existing = await prisma.payment.findUnique({ where: { orderId } });
@@ -138,6 +181,9 @@ async function upsertPaymentRow(
         checkoutUrl: data.checkoutUrl ?? null,
         virtualAccount: data.virtualAccount,
         sanitizedResponse: data.sanitizedResponse,
+        subAccountCodeSnapshot: data.subAccountCodeSnapshot ?? null,
+        splitPercentageSnapshot: data.splitPercentageSnapshot ?? null,
+        routedToPlatform: data.routedToPlatform ?? false,
         verifiedAt: null,
         paidAmountKobo: 0,
         method: null,
@@ -156,6 +202,9 @@ async function upsertPaymentRow(
       checkoutUrl: data.checkoutUrl ?? null,
       virtualAccount: data.virtualAccount,
       sanitizedResponse: data.sanitizedResponse,
+      subAccountCodeSnapshot: data.subAccountCodeSnapshot ?? null,
+      splitPercentageSnapshot: data.splitPercentageSnapshot ?? null,
+      routedToPlatform: data.routedToPlatform ?? false,
     },
   });
 }
@@ -245,6 +294,36 @@ export async function applyVerifiedTransaction(
       });
       const { receipt } = await issueReceipt(payment.orderId, tx);
       receiptToken = receipt.token;
+
+      // Payment verification and settlement are separate facts: verified
+      // money creates a PENDING settlement; only a settlement event or
+      // reconciliation may mark it SETTLED.
+      const activeProfile = await tx.merchantPaymentProfile.findFirst({
+        where: { merchantId: payment.order.merchantId, active: true },
+      });
+      await tx.settlement.upsert({
+        where: { paymentId: payment.id },
+        update: {},
+        create: {
+          paymentId: payment.id,
+          merchantId: payment.order.merchantId,
+          grossAmountKobo: paidKobo || payment.expectedAmountKobo,
+          feeKobo: 0,
+          netAmountKobo: paidKobo || payment.expectedAmountKobo,
+          state: "PENDING",
+          destinationMasked: payment.routedToPlatform
+            ? "platform account"
+            : (activeProfile?.accountNumberMasked ?? null),
+        },
+      });
+      await recordAudit({
+        tx,
+        merchantId: payment.order.merchantId,
+        orderId: payment.orderId,
+        conversationId: payment.order.conversationId,
+        event: "Settlement pending",
+        actor: "SYSTEM",
+      });
       await recordAudit({
         tx,
         merchantId: payment.order.merchantId,

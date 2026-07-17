@@ -32,7 +32,7 @@ export function TestSendWidget() {
       };
       setResult(
         response.ok
-          ? `Sent ✓ (id ${data.providerMessageId?.slice(0, 18)}…). ${data.note ?? ""}`
+          ? `Sent (id ${data.providerMessageId?.slice(0, 18)}…). ${data.note ?? ""}`
           : `Failed: ${data.error ?? response.statusText}`
       );
     } catch {
@@ -95,7 +95,7 @@ export function DemoResetWidget() {
     };
     setResult(
       response.ok
-        ? `Demo data reset ✓ — paid example: ${data.paidOrderReference}`
+        ? `Demo data reset — paid example: ${data.paidOrderReference}`
         : `Failed: ${data.error ?? response.statusText}`
     );
     setBusy(false);

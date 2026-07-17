@@ -8,6 +8,7 @@ import { z } from "zod";
 
 export const orderIntentSchema = z.object({
   intent: z.enum([
+    "SELECT_MERCHANT",
     "PLACE_ORDER",
     "EDIT_ORDER",
     "CANCEL_ORDER",
@@ -16,6 +17,8 @@ export const orderIntentSchema = z.object({
     "BUSINESS_QUESTION",
     "OTHER",
   ]),
+  /** Store code when the customer asks to switch shops (e.g. ADASTYLES). */
+  merchantCode: z.string().max(24).nullable().catch(null).default(null),
   items: z.array(
     z.object({
       searchTerm: z.string().min(1).max(120),
@@ -36,6 +39,7 @@ export type OrderIntent = z.infer<typeof orderIntentSchema>;
 
 export const EMPTY_INTENT: OrderIntent = {
   intent: "OTHER",
+  merchantCode: null,
   items: [],
   deliveryMethod: null,
   deliveryAddress: null,

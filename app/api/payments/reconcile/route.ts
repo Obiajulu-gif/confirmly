@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSession } from "@/lib/auth";
+import { getMerchantSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { reconcilePendingPayments } from "@/lib/payments/service";
+import { reconcileSettlements } from "@/lib/monnify/settlements";
 import { AUDIT, recordAudit } from "@/lib/orders/audit";
 
 export const runtime = "nodejs";
@@ -13,7 +14,7 @@ export const maxDuration = 60;
  * merchant or by the Vercel cron (Authorization: Bearer CRON_SECRET).
  */
 async function authorize(request: NextRequest): Promise<string | null> {
-  const session = await getSession();
+  const session = await getMerchantSession();
   if (session) return session.merchantId;
   const cronSecret = process.env.CRON_SECRET;
   const header = request.headers.get("authorization");
@@ -32,13 +33,19 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
   const result = await reconcilePendingPayments(2);
+  // Settlement reconciliation is a separate fact-check against Monnify.
+  const settlements = await reconcileSettlements().catch(() => ({
+    checked: 0,
+    settled: 0,
+    capability: "ERROR" as const,
+  }));
   await recordAudit({
     merchantId,
     event: AUDIT.RECONCILIATION_RUN,
     actor: "SYSTEM",
-    metadata: result,
+    metadata: { ...result, settlements },
   });
-  return NextResponse.json({ ok: true, ...result });
+  return NextResponse.json({ ok: true, ...result, settlements });
 }
 
 /** Vercel cron uses GET. */

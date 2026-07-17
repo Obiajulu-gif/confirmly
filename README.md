@@ -2,11 +2,51 @@
 
 **Turn WhatsApp orders into verified payments.**
 
-Confirmly converts WhatsApp conversations into structured, payment-ready
-orders, verifies payment through **Monnify**, and sends a trusted digital
-receipt — so small merchants never fulfil an unpaid order again.
+Confirmly is a **multi-merchant** WhatsApp commerce platform: merchants sign
+up, register a business, add a validated settlement bank account (with a
+dedicated Monnify subaccount), and take structured WhatsApp orders that are
+paid through Monnify, verified server-side, receipted, and settled to their
+own bank account.
 
 > From chat to confirmed payment.
+
+## Settlement architecture
+
+```text
+Merchant settlement bank account
+  → Monnify account-name validation (resolved name, never free-typed)
+  → Monnify subaccount creation (idempotent) → store subAccountCode
+  → customer confirms order
+  → initialize Monnify checkout / dynamic transfer account
+  → attach merchant subAccountCode via incomeSplitConfig (split = exactly 100)
+  → customer pays the Monnify-generated account
+  → verify payment server-to-server
+  → Monnify settles the merchant share to the registered bank account
+```
+
+**Checkout account vs settlement account.** The account a customer pays is a
+temporary Monnify-generated checkout account. The merchant's own bank account
+is only ever a *settlement destination* — encrypted at rest, displayed
+masked, and never shown as a payment target.
+
+**Payment ≠ settlement.** A verified payment creates a `PENDING` settlement;
+only a Monnify settlement event or reconciliation marks it `SETTLED`.
+
+**Subaccount activation.** Confirmly runs one Monnify platform account; each
+merchant gets a subaccount. If the Monnify *Sub Account* feature is not
+enabled on the sandbox account, profiles are marked `ACTIVATION_REQUIRED`,
+merchant-routed checkout is paused (`MONNIFY_SUBACCOUNT_ENABLED=true`) or
+payments fall back to the platform account **with a visible dashboard
+warning** (`MONNIFY_SUBACCOUNT_ENABLED=false`, the default). The split config
+is never dropped silently.
+
+## Merchant onboarding
+
+`/signup` → `/onboarding`: business profile → settlement account (Monnify
+name enquiry → explicit confirmation → subaccount) → starter catalogue and
+delivery zones → WhatsApp store code. One shared WhatsApp number serves every
+store: customers send `START <STORECODE>` (or pick from a list) before
+ordering, and catalogues are never mixed.
 
 ## The problem
 

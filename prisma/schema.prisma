@@ -16,6 +16,26 @@ enum MerchantUserRole {
   STAFF
 }
 
+enum PaymentProfileStatus {
+  PENDING_VALIDATION
+  VALIDATED
+  VALIDATION_FAILED
+}
+
+enum SubaccountStatus {
+  NOT_CREATED
+  ACTIVE
+  ACTIVATION_REQUIRED
+  FAILED
+  REPLACED
+}
+
+enum SettlementState {
+  PENDING
+  SETTLED
+  FAILED
+}
+
 enum ConversationState {
   NEW
   COLLECTING_ORDER
@@ -112,39 +132,109 @@ enum AuditActor {
 // Models
 // ---------------------------------------------------------------------------
 
-model Merchant {
-  id          String   @id @default(cuid())
-  name        String
-  slug        String   @unique
-  email       String
-  logoUrl     String?
-  phoneNumber String?
-  currency    String   @default("NGN")
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+model User {
+  id           String    @id @default(cuid())
+  name         String
+  email        String    @unique
+  passwordHash String
+  lastLoginAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
-  users         MerchantUser[]
-  products      Product[]
-  deliveryZones DeliveryZone[]
-  customers     Customer[]
-  conversations Conversation[]
-  messages      WhatsAppMessage[]
-  orders        Order[]
-  auditEvents   AuditEvent[]
+  memberships MerchantMembership[]
+  resetTokens PasswordResetToken[]
 }
 
-model MerchantUser {
-  id           String           @id @default(cuid())
-  merchantId   String
-  merchant     Merchant         @relation(fields: [merchantId], references: [id], onDelete: Cascade)
-  email        String           @unique
-  passwordHash String
-  role         MerchantUserRole @default(OWNER)
-  lastLoginAt  DateTime?
-  createdAt    DateTime         @default(now())
-  updatedAt    DateTime         @updatedAt
+model MerchantMembership {
+  id         String           @id @default(cuid())
+  userId     String
+  user       User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  merchantId String
+  merchant   Merchant         @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  role       MerchantUserRole @default(OWNER)
+  createdAt  DateTime         @default(now())
 
+  @@unique([userId, merchantId])
   @@index([merchantId])
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+}
+
+model Merchant {
+  id           String    @id @default(cuid())
+  name         String
+  slug         String    @unique
+  /** WhatsApp store code customers type to select this shop (e.g. ADASTYLES). */
+  storeCode    String    @unique
+  email        String
+  category     String?
+  description  String?
+  supportEmail String?
+  logoUrl      String?
+  phoneNumber  String?
+  address      String?
+  stateRegion  String?
+  country      String    @default("Nigeria")
+  currency     String    @default("NGN")
+  active       Boolean   @default(true)
+  onboardedAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  memberships     MerchantMembership[]
+  paymentProfiles MerchantPaymentProfile[]
+  products        Product[]
+  deliveryZones   DeliveryZone[]
+  customers       Customer[]
+  conversations   Conversation[]
+  messages        WhatsAppMessage[]
+  orders          Order[]
+  settlements     Settlement[]
+  auditEvents     AuditEvent[]
+}
+
+model MerchantPaymentProfile {
+  id                  String               @id @default(cuid())
+  merchantId          String
+  merchant            Merchant             @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  bankCode            String
+  bankName            String
+  /** AES-256-GCM ciphertext — never stored or shown in plaintext. */
+  accountNumberEnc    String
+  accountNumberMasked String
+  /** Name resolved by Monnify account enquiry — never free-typed. */
+  accountName         String?
+  validationStatus    PaymentProfileStatus @default(PENDING_VALIDATION)
+  subAccountCode      String?              @unique
+  subaccountStatus    SubaccountStatus     @default(NOT_CREATED)
+  splitPercentage     Int                  @default(100)
+  active              Boolean              @default(false)
+  lastValidatedAt     DateTime?
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+
+  @@index([merchantId, active])
+}
+
+/** Maps a WhatsApp user to their currently selected store (one shared
+ *  business number serves every merchant in the hackathon build). */
+model WaSession {
+  id               String   @id @default(cuid())
+  waId             String   @unique
+  activeMerchantId String?
+  profileName      String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 }
 
 model Product {
@@ -330,12 +420,38 @@ model Payment {
   method               String?
   checkoutUrl          String?
   virtualAccount       Json?
+  /** Merchant subaccount used at checkout — snapshot, never recomputed. */
+  subAccountCodeSnapshot   String?
+  splitPercentageSnapshot  Int?
+  /** True when the checkout fell back to the platform default account. */
+  routedToPlatform     Boolean         @default(false)
   sanitizedResponse    Json?
   verifiedAt           DateTime?
   createdAt            DateTime        @default(now())
   updatedAt            DateTime        @updatedAt
 
+  settlement Settlement?
+
   @@index([state])
+}
+
+model Settlement {
+  id                String          @id @default(cuid())
+  paymentId         String          @unique
+  payment           Payment         @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  merchantId        String
+  merchant          Merchant        @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  grossAmountKobo   Int
+  feeKobo           Int             @default(0)
+  netAmountKobo     Int
+  reference         String?         @unique
+  state             SettlementState @default(PENDING)
+  destinationMasked String?
+  settledAt         DateTime?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  @@index([merchantId, state])
 }
 
 model WebhookEvent {

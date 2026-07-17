@@ -74,6 +74,7 @@ beforeAll(async () => {
     data: {
       name: "Test Merchant",
       slug: `test-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      storeCode: `TST${Date.now().toString(36).toUpperCase()}${Math.random().toString(36).slice(2, 5).toUpperCase()}`,
       email: "test@example.com",
     },
   });
@@ -112,6 +113,15 @@ describe("verified transaction application", () => {
     expect(updated.paidAt).not.toBeNull();
     expect(updated.receipt).not.toBeNull();
     expect(updated.payment?.verifiedAt).not.toBeNull();
+
+    // Verified payment and settlement are separate facts: verification
+    // creates a PENDING settlement — never a SETTLED one.
+    const settlement = await prisma.settlement.findUnique({
+      where: { paymentId: order.payment!.id },
+    });
+    expect(settlement).not.toBeNull();
+    expect(settlement?.state).toBe("PENDING");
+    expect(settlement?.grossAmountKobo).toBe(2_650_000);
   });
 
   it("re-applying the same verified state never duplicates the receipt (idempotent webhooks)", async () => {
@@ -224,6 +234,7 @@ describe("tenant isolation", () => {
       data: {
         name: "Other",
         slug: `other-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        storeCode: `OTR${Date.now().toString(36).toUpperCase()}${Math.random().toString(36).slice(2, 5).toUpperCase()}`,
         email: "other@example.com",
       },
     });

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getSession } from "@/lib/auth";
+import { getMerchantSession } from "@/lib/auth";
 import { resetDemoData } from "@/lib/demo";
 import { recordAudit } from "@/lib/orders/audit";
 
@@ -7,7 +7,7 @@ export const runtime = "nodejs";
 
 /** Protected demo reset: wipes tagged demo orders and seeds fresh fixtures. */
 export async function POST() {
-  const session = await getSession();
+  const session = await getMerchantSession();
   if (!session) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }

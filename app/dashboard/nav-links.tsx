@@ -2,13 +2,26 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import {
+  Activity,
+  CreditCard,
+  Landmark,
+  LayoutDashboard,
+  MessagesSquare,
+  Package,
+  Receipt,
+  Settings,
+} from "lucide-react";
 
 const links = [
-  { href: "/dashboard", label: "Overview", icon: "◈", exact: true },
-  { href: "/dashboard/orders", label: "Orders", icon: "🧾" },
-  { href: "/dashboard/products", label: "Products", icon: "🛍️" },
-  { href: "/dashboard/conversations", label: "Conversations", icon: "💬" },
-  { href: "/dashboard/settings", label: "Settings", icon: "⚙️" },
+  { href: "/dashboard", label: "Overview", icon: LayoutDashboard, exact: true },
+  { href: "/dashboard/orders", label: "Orders", icon: Receipt },
+  { href: "/dashboard/payments", label: "Payments", icon: CreditCard },
+  { href: "/dashboard/products", label: "Products", icon: Package },
+  { href: "/dashboard/conversations", label: "Conversations", icon: MessagesSquare },
+  { href: "/dashboard/settlement", label: "Settlement account", icon: Landmark },
+  { href: "/dashboard/health", label: "Integration health", icon: Activity },
+  { href: "/dashboard/settings", label: "Settings", icon: Settings },
 ];
 
 export function NavLinks() {
@@ -19,6 +32,7 @@ export function NavLinks() {
       className="relative flex gap-1 overflow-x-auto px-3 pb-3 lg:flex-col lg:px-3 lg:pb-0"
     >
       {links.map((link) => {
+        const Icon = link.icon;
         const active = link.exact
           ? pathname === link.href
           : pathname.startsWith(link.href);
@@ -33,12 +47,10 @@ export function NavLinks() {
                 : "text-white/60 hover:bg-white/[0.05] hover:text-white"
             }`}
           >
-            <span
+            <Icon
               aria-hidden="true"
-              className={`text-xs transition ${active ? "opacity-100" : "opacity-50 group-hover:opacity-90"}`}
-            >
-              {link.icon}
-            </span>
+              className={`h-4 w-4 transition ${active ? "opacity-100" : "opacity-50 group-hover:opacity-90"}`}
+            />
             {link.label}
           </Link>
         );

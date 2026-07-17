@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { getSession } from "@/lib/auth";
+import { getMerchantSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { nairaAmountToKobo } from "@/lib/money";
 
@@ -32,7 +32,7 @@ export async function createProductAction(
   _prev: ProductFormState,
   formData: FormData
 ): Promise<ProductFormState> {
-  const session = await getSession();
+  const session = await getMerchantSession();
   if (!session) return { error: "unauthorized", ok: false };
   const parsed = productSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) {
@@ -62,7 +62,7 @@ export async function updateProductAction(
   _prev: ProductFormState,
   formData: FormData
 ): Promise<ProductFormState> {
-  const session = await getSession();
+  const session = await getMerchantSession();
   if (!session) return { error: "unauthorized", ok: false };
   const id = String(formData.get("id") ?? "");
   const parsed = productSchema.safeParse(Object.fromEntries(formData));
@@ -90,7 +90,7 @@ export async function updateProductAction(
 }
 
 export async function toggleProductActiveAction(formData: FormData): Promise<void> {
-  const session = await getSession();
+  const session = await getMerchantSession();
   if (!session) return;
   const id = String(formData.get("id") ?? "");
   const product = await prisma.product.findFirst({
@@ -110,7 +110,7 @@ const zoneSchema = z.object({
 });
 
 export async function updateZoneFeeAction(formData: FormData): Promise<void> {
-  const session = await getSession();
+  const session = await getMerchantSession();
   if (!session) return;
   const parsed = zoneSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return;

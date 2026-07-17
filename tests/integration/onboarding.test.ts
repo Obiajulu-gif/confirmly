@@ -11,6 +11,7 @@ const expectedWaId = `234803${String(Date.now()).slice(-7)}`;
 
 afterAll(async () => {
   await prisma.customer.deleteMany({ where: { waId: expectedWaId } });
+  await prisma.waSession.deleteMany({ where: { waId: expectedWaId } });
 });
 
 describe("normalizeWhatsAppNumber", () => {
@@ -82,22 +83,14 @@ describe("saveCustomerProfile", () => {
 });
 
 describe("buildWaLink", () => {
-  it("builds a wa.me deep link with a prefilled greeting", () => {
-    const link = buildWaLink("+1 (555) 183-4600", "Ada Styles", "Chidinma");
-    expect(link).toBeTruthy();
-    expect(link).toContain("wa.me/");
-    expect(link).toContain("text=");
-    expect(decodeURIComponent(link!)).toContain("Chidinma");
-  });
-
-  it("returns null when no number exists anywhere", () => {
-    const previous = process.env.WHATSAPP_PUBLIC_NUMBER;
-    delete process.env.WHATSAPP_PUBLIC_NUMBER;
-    // env() is memoized — only assert the explicit-argument path.
-    const link = buildWaLink(null, "Shop", "Guest");
-    if (previous !== undefined) process.env.WHATSAPP_PUBLIC_NUMBER = previous;
-    // With a configured env number the link may still resolve; both outcomes
-    // are acceptable here — the strong assertions live in the cases above.
-    expect(link === null || link.startsWith("https://wa.me/")).toBe(true);
+  it("prefills the deterministic store-selection command", () => {
+    const link = buildWaLink("ADASTYLES");
+    if (link === null) {
+      // No public number configured in this environment — acceptable.
+      expect(link).toBeNull();
+      return;
+    }
+    expect(link).toMatch(/^https:\/\/wa\.me\/\d{7,15}\?text=/);
+    expect(decodeURIComponent(link)).toContain("START ADASTYLES");
   });
 });

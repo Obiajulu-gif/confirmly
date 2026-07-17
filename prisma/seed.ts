@@ -23,13 +23,19 @@ const naira = (n: number) => n * 100; // NGN → kobo
 async function main() {
   const merchant = await prisma.merchant.upsert({
     where: { slug: "ada-styles" },
-    update: {},
+    update: { storeCode: "ADASTYLES" },
     create: {
       name: "Ada Styles",
       slug: "ada-styles",
+      storeCode: "ADASTYLES",
       email: "hello@adastyles.example",
+      category: "Fashion",
+      description: "Everyday fashion staples, delivered across Lagos.",
       phoneNumber: "+2348000000000",
+      stateRegion: "Lagos",
+      country: "Nigeria",
       currency: "NGN",
+      onboardedAt: new Date(),
     },
   });
 
@@ -37,15 +43,21 @@ async function main() {
   const email = process.env.DEMO_MERCHANT_EMAIL;
   const password = process.env.DEMO_MERCHANT_PASSWORD;
   if (email && password) {
-    await prisma.merchantUser.upsert({
+    const user = await prisma.user.upsert({
       where: { email },
       update: { passwordHash: hashSync(password, 12) },
       create: {
-        merchantId: merchant.id,
+        name: "Demo Owner",
         email,
         passwordHash: hashSync(password, 12),
-        role: "OWNER",
       },
+    });
+    await prisma.merchantMembership.upsert({
+      where: {
+        userId_merchantId: { userId: user.id, merchantId: merchant.id },
+      },
+      update: {},
+      create: { userId: user.id, merchantId: merchant.id, role: "OWNER" },
     });
     console.log(`Seeded merchant user: ${email}`);
   } else {
