@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useActionState } from "react";
 import { loginAction, type LoginState } from "./actions";
 import { Button, Input } from "@/components/ui";
@@ -21,23 +22,39 @@ export function LoginForm({ next }: { next?: string }) {
         required
         placeholder="you@example.com"
       />
-      <Input
-        id="password"
-        name="password"
-        type="password"
-        label="Password"
-        autoComplete="current-password"
-        required
-        placeholder="••••••••"
-      />
+      <div>
+        <Input
+          id="password"
+          name="password"
+          type="password"
+          label="Password"
+          autoComplete="current-password"
+          required
+          placeholder="At least 8 characters"
+        />
+        <div className="mt-2 text-right">
+          <Link
+            href="/forgot-password"
+            className="text-xs font-semibold text-brand-700 hover:underline"
+          >
+            Forgot password?
+          </Link>
+        </div>
+      </div>
       {state.error ? (
         <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
           {state.error}
         </p>
       ) : null}
       <Button type="submit" disabled={pending} className="w-full">
-        {pending ? "Signing in…" : "Sign in"}
+        {pending ? "Signing in" : "Sign in"}
       </Button>
+      <p className="text-center text-sm text-ink-500">
+        New to Confirmly?{" "}
+        <Link href="/signup" className="font-semibold text-brand-700 hover:underline">
+          Create a business account
+        </Link>
+      </p>
     </form>
   );
 }
