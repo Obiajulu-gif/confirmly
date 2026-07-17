@@ -36,8 +36,9 @@ function harvestEnvFile(file) {
   if (!existsSync(file)) return;
   for (const line of readFileSync(file, "utf8").split(/\r?\n/)) {
     const m = line.match(/^([A-Z][A-Z0-9_]*)=(.+)$/);
-    if (m && SECRET_KEYS.includes(m[1]) && m[2].length >= 8) {
-      secrets.set(m[2], m[1]);
+    const value = m ? m[2].trim().replace(/^"(.*)"$/, "$1") : "";
+    if (m && SECRET_KEYS.includes(m[1]) && value.length >= 8) {
+      secrets.set(value, m[1]);
     }
   }
 }
@@ -50,9 +51,11 @@ const sourceFile =
 if (existsSync(sourceFile)) {
   for (const raw of readFileSync(sourceFile, "utf8").split(/\r?\n/)) {
     const v = raw.trim();
-    if (v.length >= 16 && /^[A-Za-z0-9+/_=.-]+$/.test(v) && !v.startsWith("http")) {
-      if (!secrets.has(v)) secrets.set(v, "credentials-file value");
-    }
+    if (v.length < 16 || !/^[A-Za-z0-9+/_=.-]+$/.test(v)) continue;
+    if (v.startsWith("http")) continue;
+    // Lines shaped like ENV_VAR_NAMES are labels, not secret values.
+    if (/^[A-Z][A-Z0-9_]*$/.test(v)) continue;
+    if (!secrets.has(v)) secrets.set(v, "credentials-file value");
   }
 }
 
