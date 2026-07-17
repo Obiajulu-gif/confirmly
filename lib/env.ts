@@ -79,6 +79,29 @@ export function env(): Env {
   return cached;
 }
 
+/**
+ * Canonical public application origin.
+ *
+ * APP_URL remains the explicit override. On Vercel, fall back to the stable
+ * production/project URL instead of ever generating localhost payment,
+ * receipt or password-reset links when APP_URL was omitted.
+ */
+export function appUrl(): string {
+  const configured = env().APP_URL.replace(/\/$/, "");
+  const isLocal = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(configured);
+  const vercelHost =
+    process.env.VERCEL_PROJECT_PRODUCTION_URL?.trim() ||
+    process.env.VERCEL_URL?.trim();
+
+  if (isLocal && vercelHost) {
+    const withProtocol = /^https?:\/\//i.test(vercelHost)
+      ? vercelHost
+      : `https://${vercelHost}`;
+    return withProtocol.replace(/\/$/, "");
+  }
+  return configured;
+}
+
 /** Test helper — clears the memoized env. */
 export function resetEnvCache() {
   cached = null;
