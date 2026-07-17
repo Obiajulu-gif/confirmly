@@ -53,7 +53,15 @@ let cached: Env | null = null;
 
 export function env(): Env {
   if (!cached) {
-    cached = envSchema.parse(process.env);
+    // Trim every value — dashboard/CLI tooling can smuggle in stray
+    // whitespace or CRLF that would otherwise fail strict validation.
+    const trimmed = Object.fromEntries(
+      Object.entries(process.env).map(([key, value]) => [
+        key,
+        typeof value === "string" ? value.trim() : value,
+      ])
+    );
+    cached = envSchema.parse(trimmed);
   }
   return cached;
 }
