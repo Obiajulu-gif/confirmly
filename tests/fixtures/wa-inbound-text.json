@@ -1,0 +1,37 @@
+﻿{
+  "object": "whatsapp_business_account",
+  "entry": [
+    {
+      "id": "222222222222222",
+      "changes": [
+        {
+          "field": "messages",
+          "value": {
+            "messaging_product": "whatsapp",
+            "metadata": {
+              "display_phone_number": "15551834600",
+              "phone_number_id": "111111111111111"
+            },
+            "contacts": [
+              {
+                "profile": { "name": "Test Customer" },
+                "wa_id": "2348099999999"
+              }
+            ],
+            "messages": [
+              {
+                "from": "2348099999999",
+                "id": "wamid.TEST123",
+                "timestamp": "1737000000",
+                "text": {
+                  "body": "I need two black polo shirts, large size, delivered to Yaba."
+                },
+                "type": "text"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
