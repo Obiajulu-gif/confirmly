@@ -54,3 +54,6 @@ prisma/*.db-journal
 # Editor
 .vscode/
 .idea/
+
+# Local agent tooling
+.claude/
