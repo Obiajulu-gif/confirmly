@@ -19,7 +19,15 @@ async function check(name, fn) {
 
 await check("landing page renders", async () => {
   const r = await fetch(`${base}/`);
-  return r.ok && (await r.text()).includes("From chat to confirmed payment");
+  if (!r.ok) return false;
+  // The headline spans styled elements — check both fragments.
+  const html = await r.text();
+  return html.includes("From chat to") && html.includes("confirmed payment.");
+});
+
+await check("onboarding page renders", async () => {
+  const r = await fetch(`${base}/start`);
+  return r.ok && (await r.text()).includes("let&#x27;s meet you");
 });
 
 await check("health endpoint ok + database connected", async () => {
