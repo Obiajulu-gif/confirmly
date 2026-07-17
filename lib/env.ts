@@ -28,6 +28,11 @@ const envSchema = z.object({
     .string()
     .regex(/^v\d+\.\d+$/)
     .default("v23.0"),
+  /** Public display number customers chat with (not a secret). */
+  WHATSAPP_PUBLIC_NUMBER: z
+    .string()
+    .regex(/^\+?[\d\s().-]{7,20}$/)
+    .optional(),
 
   NVIDIA_API_KEY: z.string().min(1).optional(),
   NVIDIA_BASE_URL: z

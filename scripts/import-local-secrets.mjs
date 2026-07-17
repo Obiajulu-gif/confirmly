@@ -21,6 +21,7 @@ const ENV_LOCAL = path.join(process.cwd(), ".env.local");
 
 /** Label → canonical env var. Checked in order; first match wins. */
 const LABEL_MAP = [
+  [/^whatsapp\s*number\s*$/i, "WHATSAPP_PUBLIC_NUMBER"],
   [/whatsapp\s*business\s*account\s*id/i, "WHATSAPP_BUSINESS_ACCOUNT_ID"],
   [/phone\s*number\s*id/i, "WHATSAPP_PHONE_NUMBER_ID"],
   [/access\s*token/i, "WHATSAPP_ACCESS_TOKEN"],
@@ -41,7 +42,6 @@ const LABEL_MAP = [
 /** Labels that must be ignored (documented as NOT env config). */
 const IGNORED_LABELS = [
   /wallet\s*account/i, // wallet account number is NOT the contract code
-  /^whatsapp\s*number\s*$/i, // display number, not an API credential
   /providus/i,
   /mnfy/i,
   /confirmly\s*api\s*keys?/i, // document title, not a credential label
@@ -193,6 +193,7 @@ const CANONICAL_ORDER = [
   "WHATSAPP_ACCESS_TOKEN",
   "WHATSAPP_PHONE_NUMBER_ID",
   "WHATSAPP_BUSINESS_ACCOUNT_ID",
+  "WHATSAPP_PUBLIC_NUMBER",
   "WHATSAPP_APP_ID",
   "WHATSAPP_APP_SECRET",
   "WHATSAPP_VERIFY_TOKEN",

@@ -198,6 +198,59 @@ describe("conversation engine", () => {
     expect(conversation.state).toBe("HUMAN_REQUIRED");
   });
 
+  it("prefills delivery from an onboarded customer's saved profile", async () => {
+    const { processInboundMessage } = await import("@/lib/orders/engine");
+    const waId = "2348022223333";
+    await prisma.customer.create({
+      data: {
+        merchantId,
+        waId,
+        phoneNumber: waId,
+        name: "Onboarded Ada",
+        defaultAddress: "5 Test Close, Yaba",
+      },
+    });
+    nextIntent = {
+      intent: "PLACE_ORDER",
+      items: [{ searchTerm: "polo", quantity: 1, size: "M", colour: "white" }],
+      deliveryMethod: null,
+      deliveryAddress: null,
+      deliveryArea: null,
+      customerName: null,
+      notes: null,
+      missingFields: [],
+    };
+    outboundLog.length = 0;
+    await processInboundMessage(merchantId, {
+      providerMessageId: `wamid.PREFILL-${Date.now()}`,
+      from: waId,
+      profileName: "WhatsApp Display Name",
+      timestamp: new Date(),
+      kind: "text",
+      text: "one white polo size M",
+      interactiveId: null,
+      rawType: "text",
+    });
+    nextIntent = null;
+
+    // Straight to the confirmation summary — no delivery question asked.
+    const summary = outboundLog.at(-1);
+    expect(summary?.kind).toBe("buttons");
+    expect(summary?.text).toContain("Yaba");
+    expect(summary?.text).toContain("5 Test Close");
+
+    const conversation = await prisma.conversation.findFirstOrThrow({
+      where: { merchantId, customer: { waId } },
+    });
+    expect(conversation.state).toBe("AWAITING_CONFIRMATION");
+
+    // The onboarding name survives the WhatsApp profile name.
+    const customer = await prisma.customer.findFirstOrThrow({
+      where: { merchantId, waId },
+    });
+    expect(customer.name).toBe("Onboarded Ada");
+  });
+
   it("the bot stays silent while a human is active", async () => {
     const { processInboundMessage } = await import("@/lib/orders/engine");
     outboundLog.length = 0;

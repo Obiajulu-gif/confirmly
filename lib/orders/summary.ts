@@ -1,5 +1,10 @@
 import { formatNaira } from "@/lib/money";
 
+/**
+ * WhatsApp message builders. Uses WhatsApp text styling (*bold*, _italic_)
+ * and emoji so replies read like a polished product, not a bot dump.
+ */
+
 export interface SummaryLine {
   name: string;
   variant: string | null;
@@ -9,25 +14,33 @@ export interface SummaryLine {
 
 export interface SummaryInput {
   lines: SummaryLine[];
-  deliveryLabel: string; // e.g. "Delivery to Yaba" or "Pickup"
+  deliveryLabel: string; // e.g. "Delivery to Yaba" or "Pickup (no delivery fee)"
   deliveryFeeKobo: number;
   totalKobo: number;
+  deliveryAddress?: string | null;
 }
+
+const RULE = "━━━━━━━━━━━━";
 
 /** Builds the WhatsApp order-summary text shown before confirmation. */
 export function buildOrderSummaryText(input: SummaryInput): string {
-  const parts: string[] = ["I found this order:", ""];
+  const parts: string[] = ["🧾 *Here's your order:*", ""];
   for (const line of input.lines) {
-    parts.push(`${line.quantity} × ${line.name}`);
-    if (line.variant) parts.push(line.variant);
-    parts.push(formatNaira(line.lineTotalKobo));
+    parts.push(`*${line.quantity} × ${line.name}*`);
+    if (line.variant) parts.push(`    ${line.variant}`);
+    parts.push(`    ${formatNaira(line.lineTotalKobo)}`);
     parts.push("");
   }
-  parts.push(input.deliveryLabel);
-  parts.push(formatNaira(input.deliveryFeeKobo));
+  const isPickup = input.deliveryLabel.toLowerCase().startsWith("pickup");
+  parts.push(`${isPickup ? "🏬" : "🛵"} ${input.deliveryLabel}`);
+  if (!isPickup && input.deliveryAddress) {
+    parts.push(`    📍 ${input.deliveryAddress}`);
+  }
+  parts.push(`    ${formatNaira(input.deliveryFeeKobo)}`);
+  parts.push(RULE);
+  parts.push(`💰 *TOTAL: ${formatNaira(input.totalKobo)}*`);
   parts.push("");
-  parts.push("TOTAL");
-  parts.push(formatNaira(input.totalKobo));
+  parts.push("Everything correct? Tap a button below 👇");
   return parts.join("\n");
 }
 
@@ -37,35 +50,40 @@ export function buildPaymentLinkText(
   checkoutUrl: string
 ): string {
   return [
-    `Your order ${reference} is confirmed. ✅`,
+    `✅ Order *${reference}* is confirmed!`,
     "",
-    `Total due: ${formatNaira(totalKobo)}`,
+    `💰 Total due: *${formatNaira(totalKobo)}*`,
     "",
-    "Pay securely with Monnify here:",
+    "🔐 Pay securely with Monnify:",
     checkoutUrl,
     "",
-    "Your order is fulfilled once the payment is confirmed by our payment provider. A screenshot is not required — we verify automatically.",
+    "_We verify every payment automatically with Monnify — no screenshots needed. Your receipt lands here the moment it's confirmed._",
   ].join("\n");
 }
 
 export function buildReceiptText(receiptUrl: string, reference: string): string {
   return [
-    `Payment confirmed for order ${reference}. 🎉`,
+    `🎉 *Payment confirmed* for order *${reference}*!`,
     "",
-    "Here is your verifiable receipt:",
+    "🧾 Here's your verifiable receipt — scan its QR code any time:",
     receiptUrl,
     "",
-    "Thank you for shopping with us!",
+    "Thank you for shopping with us! 💚",
   ].join("\n");
 }
 
-export const SCREENSHOT_POLICY_TEXT =
-  "We don't accept screenshots or payment claims as confirmation — payments are verified automatically and securely with Monnify. I'm checking your payment status now…";
+export const SCREENSHOT_POLICY_TEXT = [
+  "🛡️ Quick heads-up: we don't accept screenshots or payment claims — every payment is verified *directly with Monnify*, automatically.",
+  "",
+  "Checking your payment status now…",
+].join("\n");
 
 export const HELP_TEXT = [
-  "Here's what I can do:",
-  "• Send me your order in plain words (e.g. \"2 black polo shirts, large, deliver to Yaba\")",
-  "• \"check payment\" — I'll check your latest order's payment status",
-  "• \"cancel\" — cancel the current order",
-  "• \"human\" or \"talk to seller\" — hand this chat to a person",
+  "👋 *Here's what I can do:*",
+  "",
+  "🛍️ Send your order in plain words",
+  '    _e.g. "2 black polo shirts, large, deliver to Yaba"_',
+  "💳 *check payment* — live payment status",
+  "❌ *cancel* — cancel the current order",
+  "🙋 *human* — hand this chat to a person",
 ].join("\n");

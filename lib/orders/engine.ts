@@ -50,10 +50,11 @@ export async function processInboundMessage(
   merchantId: string,
   message: ParsedInboundMessage
 ): Promise<void> {
-  // 1. Upsert customer + conversation.
-  const customer = await prisma.customer.upsert({
+  // 1. Upsert customer + conversation. A name captured during onboarding is
+  //    authoritative — the WhatsApp profile name only fills a blank.
+  let customer = await prisma.customer.upsert({
     where: { merchantId_waId: { merchantId, waId: message.from } },
-    update: message.profileName ? { name: message.profileName } : {},
+    update: {},
     create: {
       merchantId,
       waId: message.from,
@@ -61,6 +62,12 @@ export async function processInboundMessage(
       name: message.profileName,
     },
   });
+  if (!customer.name && message.profileName) {
+    customer = await prisma.customer.update({
+      where: { id: customer.id },
+      data: { name: message.profileName },
+    });
+  }
   const conversation = await prisma.conversation.upsert({
     where: {
       merchantId_customerId_channel: {
@@ -364,6 +371,28 @@ async function recalcAndRespond(
     resolveVariant(item, product);
   }
 
+  // A saved onboarding profile answers the delivery question before we ask:
+  // if the customer's default address matches a known zone, prefill it (the
+  // summary still shows it, so they can change it before confirming).
+  if (
+    !draft.deliveryMethod &&
+    !draft.deliveryArea &&
+    !draft.deliveryZoneId &&
+    ctx.customer.defaultAddress
+  ) {
+    const profileZone = matchAgainst(ctx.customer.defaultAddress, zones, (z) => [
+      z.name,
+      ...z.aliases,
+    ]);
+    if (profileZone.best && profileZone.status !== "none") {
+      draft.deliveryMethod = "DELIVERY";
+      draft.deliveryArea = profileZone.best.item.name;
+      if (!draft.deliveryAddress) {
+        draft.deliveryAddress = ctx.customer.defaultAddress;
+      }
+    }
+  }
+
   // Match delivery zone.
   if (draft.deliveryMethod === "PICKUP") {
     const pickup = zones.find((z) => z.name.toLowerCase() === "pickup");
@@ -518,6 +547,7 @@ async function recalcAndRespond(
         : `Delivery to ${draft.deliveryZoneName}`,
     deliveryFeeKobo: totals.deliveryFeeKobo,
     totalKobo: totals.totalKobo,
+    deliveryAddress: draft.deliveryAddress,
   });
 
   await setConversation(ctx, { state: "AWAITING_CONFIRMATION", draft });
@@ -833,6 +863,22 @@ async function confirmDraftOrder(ctx: EngineContext, draft: Draft): Promise<void
     actor: "CUSTOMER",
     metadata: { totalKobo: totals.totalKobo },
   });
+
+  // Remember delivery details for next time — future orders skip the
+  // delivery question automatically.
+  if (draft.deliveryMethod === "DELIVERY" && draft.deliveryZoneName) {
+    const zoneName = draft.deliveryZoneName;
+    const address = draft.deliveryAddress?.trim();
+    const remembered = (
+      address && address.toLowerCase().includes(zoneName.toLowerCase())
+        ? address
+        : [address, zoneName].filter(Boolean).join(", ")
+    ).slice(0, 200);
+    await prisma.customer.update({
+      where: { id: ctx.customer.id },
+      data: { defaultAddress: remembered },
+    });
+  }
 
   // Create the Monnify payment request and send the link.
   try {

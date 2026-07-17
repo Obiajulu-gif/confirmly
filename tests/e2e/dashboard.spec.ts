@@ -84,6 +84,25 @@ test("merchant can log in and navigate the dashboard", async ({ page }) => {
   await expect(page.getByText("/api/webhooks/monnify")).toBeVisible();
 });
 
+test("customer onboarding captures a profile and offers the WhatsApp handoff", async ({
+  page,
+}) => {
+  await page.goto("/start");
+  await expect(page.getByText("First, let's meet you")).toBeVisible();
+  await page.getByLabel(/Your name/).fill("Playwright Tester");
+  await page.getByLabel(/WhatsApp number/).fill("0803 555 0100");
+  await page.getByRole("button", { name: "Continue →" }).click();
+
+  await expect(page.getByText("Where do orders go?")).toBeVisible();
+  await page.getByRole("button", { name: /Yaba/ }).click();
+  await page.getByRole("button", { name: /Save & open WhatsApp/ }).click();
+
+  await expect(page.getByText(/You're all set/)).toBeVisible({
+    timeout: 30_000,
+  });
+  await expect(page.getByText("Try saying")).toBeVisible();
+});
+
 test("an invalid receipt token shows RECEIPT NOT VALID", async ({ page }) => {
   await page.goto("/verify/receipt/this-token-does-not-exist-123456789");
   await expect(page.getByText("RECEIPT NOT VALID")).toBeVisible();
