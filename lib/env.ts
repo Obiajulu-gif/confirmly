@@ -12,7 +12,7 @@ const envSchema = z.object({
   NODE_ENV: z
     .enum(["development", "test", "production"])
     .default("development"),
-  APP_URL: z.string().url().default("http://localhost:3000"),
+  APP_URL: z.string().default("http://localhost:3000"),
   DATABASE_URL: z.string().min(1).optional(),
   AUTH_SECRET: z.string().min(16).optional(),
   ENCRYPTION_KEY: z.string().min(16).optional(),
@@ -64,20 +64,36 @@ export type Env = z.infer<typeof envSchema>;
 
 let cached: Env | null = null;
 
+function isHttpUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" || url.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+function cleanConfiguredOrigin(configured: string): string {
+  let value = configured.trim().replace(/^["']|["']$/g, "");
+  if (/^APP_URL=/i.test(value)) value = value.replace(/^APP_URL=/i, "");
+  return value.replace(/\/$/, "");
+}
+
 function deployedOrigin(configured: string): string {
-  const normalized = configured.replace(/\/$/, "");
+  const normalized = cleanConfiguredOrigin(configured);
   const isLocal = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(normalized);
   const vercelHost =
     process.env.VERCEL_PROJECT_PRODUCTION_URL?.trim() ||
     process.env.VERCEL_URL?.trim();
 
-  if (isLocal && vercelHost) {
+  if ((!isHttpUrl(normalized) || isLocal) && vercelHost) {
     const withProtocol = /^https?:\/\//i.test(vercelHost)
       ? vercelHost
       : `https://${vercelHost}`;
     return withProtocol.replace(/\/$/, "");
   }
-  return normalized;
+
+  return isHttpUrl(normalized) ? normalized : "http://localhost:3000";
 }
 
 export function env(): Env {
@@ -92,7 +108,8 @@ export function env(): Env {
     );
     const parsed = envSchema.parse(trimmed);
     // Ensure every existing env().APP_URL consumer generates a public Vercel
-    // URL rather than localhost when APP_URL was omitted from the dashboard.
+    // URL even when the dashboard value was omitted, quoted, malformed, or
+    // accidentally entered as `APP_URL=https://...` instead of only the value.
     parsed.APP_URL = deployedOrigin(parsed.APP_URL);
     cached = parsed;
   }
