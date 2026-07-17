@@ -64,6 +64,22 @@ export type Env = z.infer<typeof envSchema>;
 
 let cached: Env | null = null;
 
+function deployedOrigin(configured: string): string {
+  const normalized = configured.replace(/\/$/, "");
+  const isLocal = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(normalized);
+  const vercelHost =
+    process.env.VERCEL_PROJECT_PRODUCTION_URL?.trim() ||
+    process.env.VERCEL_URL?.trim();
+
+  if (isLocal && vercelHost) {
+    const withProtocol = /^https?:\/\//i.test(vercelHost)
+      ? vercelHost
+      : `https://${vercelHost}`;
+    return withProtocol.replace(/\/$/, "");
+  }
+  return normalized;
+}
+
 export function env(): Env {
   if (!cached) {
     // Trim every value — dashboard/CLI tooling can smuggle in stray
@@ -74,9 +90,18 @@ export function env(): Env {
         typeof value === "string" ? value.trim() : value,
       ])
     );
-    cached = envSchema.parse(trimmed);
+    const parsed = envSchema.parse(trimmed);
+    // Ensure every existing env().APP_URL consumer generates a public Vercel
+    // URL rather than localhost when APP_URL was omitted from the dashboard.
+    parsed.APP_URL = deployedOrigin(parsed.APP_URL);
+    cached = parsed;
   }
   return cached;
+}
+
+/** Canonical public application origin. */
+export function appUrl(): string {
+  return env().APP_URL;
 }
 
 /** Test helper — clears the memoized env. */

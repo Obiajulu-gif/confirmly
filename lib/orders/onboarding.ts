@@ -2,6 +2,7 @@ import "server-only";
 import { prisma } from "@/lib/db";
 import { env } from "@/lib/env";
 import { recordAudit } from "@/lib/orders/audit";
+import { resolveWhatsAppPublicNumber } from "@/lib/whatsapp/client";
 
 /**
  * Customer onboarding: captures the details needed for a smooth first order
@@ -21,7 +22,6 @@ export function normalizeWhatsAppNumber(raw: string): string | null {
     return `234${digits.slice(1)}`;
   }
   if (digits.length === 10 && !digits.startsWith("0")) {
-    // Local number without the leading zero (e.g. 803…): assume Nigeria.
     return `234${digits}`;
   }
   return digits;
@@ -32,15 +32,12 @@ export interface OnboardingInput {
   phone: string;
   area?: string | null;
   address?: string | null;
-  /** Store the customer is onboarding for (multi-merchant). */
   storeCode?: string | null;
 }
 
 export interface OnboardingResult {
   waId: string;
   merchantName: string;
-  /** wa.me deep link with a friendly prefilled message, when a business
-   *  number is configured. */
   waLink: string | null;
   knownZone: string | null;
 }
@@ -76,15 +73,12 @@ export async function saveCustomerProfile(
     throw new OnboardingError("That store could not be found. Please try later.");
   }
 
-  // Pre-select this store for their WhatsApp session so the first message
-  // lands directly in the right shop.
   await prisma.waSession.upsert({
     where: { waId },
     update: { activeMerchantId: merchant.id },
     create: { waId, activeMerchantId: merchant.id, profileName: name },
   });
 
-  // Validate the chosen area against real delivery zones (DB decides).
   let knownZone: string | null = null;
   if (input.area) {
     const zone = await prisma.deliveryZone.findFirst({
@@ -103,7 +97,7 @@ export async function saveCustomerProfile(
   const customer = await prisma.customer.upsert({
     where: { merchantId_waId: { merchantId: merchant.id, waId } },
     update: {
-      name, // explicit onboarding beats WhatsApp profile names
+      name,
       phoneNumber: waId,
       ...(defaultAddress ? { defaultAddress } : {}),
     },
@@ -126,10 +120,12 @@ export async function saveCustomerProfile(
     },
   });
 
+  const publicNumber = await resolveWhatsAppPublicNumber();
+
   return {
     waId,
     merchantName: merchant.name,
-    waLink: buildWaLink(merchant.storeCode),
+    waLink: buildWaLink(merchant.storeCode, publicNumber),
     knownZone,
   };
 }
@@ -138,8 +134,15 @@ export async function saveCustomerProfile(
  * wa.me deep link that opens the shared business number with the store
  * selection command prefilled — deterministic routing into the right shop.
  */
-export function buildWaLink(storeCode: string): string | null {
-  const digits = (env().WHATSAPP_PUBLIC_NUMBER ?? "").replace(/\D/g, "");
+export function buildWaLink(
+  storeCode: string,
+  resolvedPublicNumber?: string | null
+): string | null {
+  const digits = (
+    resolvedPublicNumber ??
+    env().WHATSAPP_PUBLIC_NUMBER ??
+    ""
+  ).replace(/\D/g, "");
   if (digits.length < 7) return null;
   return `https://wa.me/${digits}?text=${encodeURIComponent(`START ${storeCode}`)}`;
 }
