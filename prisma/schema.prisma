@@ -5,9 +5,6 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
-  // Only used by `prisma migrate dev` (local development). Production
-  // `migrate deploy` never touches the shadow database.
-  shadowDatabaseUrl = env("SHADOW_DATABASE_URL")
 }
 
 // ---------------------------------------------------------------------------
