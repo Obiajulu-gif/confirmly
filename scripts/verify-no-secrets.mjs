@@ -135,12 +135,22 @@ if (existsSync(staticDir)) {
   const walk = (dir) => {
     for (const entry of readdirSync(dir)) {
       const full = path.join(dir, entry);
-      if (statSync(full).isDirectory()) walk(full);
+      let stat;
+      try {
+        stat = statSync(full);
+      } catch {
+        continue; // stale dev-server artifact
+      }
+      if (stat.isDirectory()) walk(full);
       else if (/\.(js|css|json|txt)$/.test(entry)) {
-        scanText(
-          readFileSync(full, "utf8"),
-          `client-bundle:${path.relative(ROOT, full)}`
-        );
+        try {
+          scanText(
+            readFileSync(full, "utf8"),
+            `client-bundle:${path.relative(ROOT, full)}`
+          );
+        } catch {
+          /* unreadable dev artifact */
+        }
       }
     }
   };
