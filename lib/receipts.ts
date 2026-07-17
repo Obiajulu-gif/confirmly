@@ -1,7 +1,7 @@
 import "server-only";
 import { createHmac } from "crypto";
 import { prisma } from "@/lib/db";
-import { requireEnv, env } from "@/lib/env";
+import { requireEnv, appUrl } from "@/lib/env";
 import { generateReceiptToken } from "@/lib/references";
 import type { Prisma } from "@prisma/client";
 
@@ -12,11 +12,11 @@ import type { Prisma } from "@prisma/client";
  */
 
 export function receiptUrl(token: string): string {
-  return `${env().APP_URL}/receipt/${token}`;
+  return `${appUrl()}/receipt/${token}`;
 }
 
 export function receiptVerifyUrl(token: string): string {
-  return `${env().APP_URL}/verify/receipt/${token}`;
+  return `${appUrl()}/verify/receipt/${token}`;
 }
 
 /** Deterministic MAC of the token — defence in depth if the DB leaks. */
