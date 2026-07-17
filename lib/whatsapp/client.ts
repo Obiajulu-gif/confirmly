@@ -1,5 +1,5 @@
 import "server-only";
-import { requireEnv } from "@/lib/env";
+import { env, requireEnv } from "@/lib/env";
 import { logger } from "@/lib/logger";
 
 /**
@@ -28,6 +28,45 @@ interface SendResult {
 function graphUrl(): string {
   const e = requireEnv("WHATSAPP_ACCESS_TOKEN", "WHATSAPP_PHONE_NUMBER_ID");
   return `https://graph.facebook.com/${e.WHATSAPP_GRAPH_VERSION}/${e.WHATSAPP_PHONE_NUMBER_ID}/messages`;
+}
+
+/**
+ * Resolves the actual WhatsApp display number used in wa.me links.
+ *
+ * `WHATSAPP_PHONE_NUMBER_ID` is an API resource id, not a telephone number.
+ * Prefer the optional public-number env value, but query Meta when it was not
+ * supplied so customer onboarding still opens the correct test/production
+ * number instead of returning a dead link.
+ */
+export async function resolveWhatsAppPublicNumber(): Promise<string | null> {
+  const configured = (env().WHATSAPP_PUBLIC_NUMBER ?? "").replace(/\D/g, "");
+  if (configured.length >= 7) return configured;
+
+  try {
+    const e = requireEnv("WHATSAPP_ACCESS_TOKEN", "WHATSAPP_PHONE_NUMBER_ID");
+    const response = await fetch(
+      `https://graph.facebook.com/${e.WHATSAPP_GRAPH_VERSION}/${e.WHATSAPP_PHONE_NUMBER_ID}?fields=display_phone_number`,
+      {
+        headers: { Authorization: `Bearer ${e.WHATSAPP_ACCESS_TOKEN}` },
+        signal: AbortSignal.timeout(8_000),
+        cache: "no-store",
+      }
+    );
+    if (!response.ok) {
+      logger.warn("could not resolve WhatsApp display number", {
+        status: response.status,
+      });
+      return null;
+    }
+    const data = (await response.json()) as { display_phone_number?: string };
+    const digits = (data.display_phone_number ?? "").replace(/\D/g, "");
+    return digits.length >= 7 ? digits : null;
+  } catch (err) {
+    logger.warn("could not resolve WhatsApp display number", {
+      reason: err instanceof Error ? err.message : "unknown",
+    });
+    return null;
+  }
 }
 
 async function post(body: Record<string, unknown>): Promise<SendResult> {
@@ -60,7 +99,7 @@ async function post(body: Record<string, unknown>): Promise<SendResult> {
         null,
         null
       );
-      continue; // network errors are retryable
+      continue;
     }
 
     if (response.ok) {
@@ -103,7 +142,7 @@ export async function sendText(to: string, body: string): Promise<SendResult> {
 
 export interface InteractiveButton {
   id: string;
-  title: string; // max 20 chars
+  title: string;
 }
 
 export async function sendButtons(
@@ -129,8 +168,8 @@ export async function sendButtons(
 
 export interface ListRow {
   id: string;
-  title: string; // max 24 chars
-  description?: string; // max 72 chars
+  title: string;
+  description?: string;
 }
 
 export async function sendList(
