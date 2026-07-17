@@ -64,31 +64,9 @@ export type Env = z.infer<typeof envSchema>;
 
 let cached: Env | null = null;
 
-export function env(): Env {
-  if (!cached) {
-    // Trim every value — dashboard/CLI tooling can smuggle in stray
-    // whitespace or CRLF that would otherwise fail strict validation.
-    const trimmed = Object.fromEntries(
-      Object.entries(process.env).map(([key, value]) => [
-        key,
-        typeof value === "string" ? value.trim() : value,
-      ])
-    );
-    cached = envSchema.parse(trimmed);
-  }
-  return cached;
-}
-
-/**
- * Canonical public application origin.
- *
- * APP_URL remains the explicit override. On Vercel, fall back to the stable
- * production/project URL instead of ever generating localhost payment,
- * receipt or password-reset links when APP_URL was omitted.
- */
-export function appUrl(): string {
-  const configured = env().APP_URL.replace(/\/$/, "");
-  const isLocal = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(configured);
+function deployedOrigin(configured: string): string {
+  const normalized = configured.replace(/\/$/, "");
+  const isLocal = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(normalized);
   const vercelHost =
     process.env.VERCEL_PROJECT_PRODUCTION_URL?.trim() ||
     process.env.VERCEL_URL?.trim();
@@ -99,7 +77,31 @@ export function appUrl(): string {
       : `https://${vercelHost}`;
     return withProtocol.replace(/\/$/, "");
   }
-  return configured;
+  return normalized;
+}
+
+export function env(): Env {
+  if (!cached) {
+    // Trim every value — dashboard/CLI tooling can smuggle in stray
+    // whitespace or CRLF that would otherwise fail strict validation.
+    const trimmed = Object.fromEntries(
+      Object.entries(process.env).map(([key, value]) => [
+        key,
+        typeof value === "string" ? value.trim() : value,
+      ])
+    );
+    const parsed = envSchema.parse(trimmed);
+    // Ensure every existing env().APP_URL consumer generates a public Vercel
+    // URL rather than localhost when APP_URL was omitted from the dashboard.
+    parsed.APP_URL = deployedOrigin(parsed.APP_URL);
+    cached = parsed;
+  }
+  return cached;
+}
+
+/** Canonical public application origin. */
+export function appUrl(): string {
+  return env().APP_URL;
 }
 
 /** Test helper — clears the memoized env. */
