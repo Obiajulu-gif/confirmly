@@ -83,6 +83,13 @@ flowchart LR
 
 ## Features
 
+- 🚀 Futuristic animated landing page: hero phone demo of the chat flow,
+  stacked sticky-scroll walkthrough, scroll reveals — all CSS-driven and
+  `prefers-reduced-motion` aware
+- 🤝 Customer onboarding at `/start`: captures name, WhatsApp number
+  (auto-normalised to 234…) and delivery area **before** the first chat, then
+  deep-links into WhatsApp with a prefilled greeting — the engine recognises
+  the profile and skips the delivery question on future orders
 - 📱 Mobile-first customer pages (pay page, receipt, verification)
 - 🧾 Verifiable receipts: high-entropy token, QR code, revocation,
   `VALID CONFIRMLY RECEIPT` / `RECEIPT NOT VALID`
@@ -108,6 +115,7 @@ Vercel + Prisma Postgres.
 ```text
 app/
   (auth)/login/          merchant sign-in
+  start/                 customer onboarding → wa.me deep-link handoff
   dashboard/             overview, orders, products, conversations, settings
   pay/[orderReference]/  public payment page (display-only, never mutates)
   receipt/[token]/       public receipt with QR
@@ -191,6 +199,7 @@ Names only — values live in `.env.local` (git-ignored) or Vercel.
 | `WHATSAPP_APP_SECRET` | Webhook signature validation |
 | `WHATSAPP_VERIFY_TOKEN` | Webhook GET challenge |
 | `WHATSAPP_GRAPH_VERSION` | e.g. `v23.0` |
+| `WHATSAPP_PUBLIC_NUMBER` | Display number for wa.me links (not a secret) |
 | `NVIDIA_API_KEY` / `NVIDIA_BASE_URL` / `NVIDIA_ORDER_MODEL` | NIM extraction |
 | `MONNIFY_BASE_URL` / `MONNIFY_API_KEY` / `MONNIFY_SECRET_KEY` / `MONNIFY_CONTRACT_CODE` | Payments (contract code ≠ wallet account number!) |
 | `DEMO_MODE` | `true` only for fixture-based review — shows a banner |
