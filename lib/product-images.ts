@@ -97,6 +97,7 @@ export async function saveStoredProductImage(input: {
       "invalid_image"
     );
   }
+  const databaseBytes = Uint8Array.from(input.bytes);
   const sha256 = createHash("sha256").update(input.bytes).digest("hex");
   const imageUrl = productPublicImageUrl(input.productId);
   const approvedAt = input.source === "MERCHANT_UPLOAD" ? new Date() : null;
@@ -114,7 +115,7 @@ export async function saveStoredProductImage(input: {
       where: { productId: input.productId },
       update: {
         merchantId: input.merchantId,
-        bytes: input.bytes,
+        bytes: databaseBytes,
         contentType,
         sizeBytes: input.bytes.length,
         sha256,
@@ -122,7 +123,7 @@ export async function saveStoredProductImage(input: {
       create: {
         productId: input.productId,
         merchantId: input.merchantId,
-        bytes: input.bytes,
+        bytes: databaseBytes,
         contentType,
         sizeBytes: input.bytes.length,
         sha256,
@@ -252,22 +253,25 @@ export async function approveGeneratedProductImage(input: {
   merchantId: string;
   productId: string;
 }): Promise<void> {
-  const result = await prisma.product.updateMany({
+  const product = await prisma.product.findFirst({
     where: {
       id: input.productId,
       merchantId: input.merchantId,
       imageSource: "AI_GENERATED",
       imageStatus: "READY",
-      imageAsset: { isNot: null },
     },
-    data: { imageApprovedAt: new Date() },
+    select: { id: true, imageAsset: { select: { id: true } } },
   });
-  if (!result.count) {
+  if (!product?.imageAsset) {
     throw new ProductImageError(
       "A generated image is not ready for approval.",
       "product_not_found"
     );
   }
+  await prisma.product.update({
+    where: { id: product.id },
+    data: { imageApprovedAt: new Date() },
+  });
   await prisma.auditEvent.create({
     data: {
       merchantId: input.merchantId,
