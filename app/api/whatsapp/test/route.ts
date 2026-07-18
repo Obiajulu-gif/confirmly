@@ -58,6 +58,19 @@ export async function POST(request: NextRequest) {
     });
   } catch (err) {
     if (err instanceof WhatsAppSendError) {
+      if (err.errorCode === 131030) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: "recipient_not_allowed",
+            providerMessage: err.message,
+            code: err.errorCode,
+            action:
+              "In Meta Developers, open WhatsApp > API Setup, add this phone number under the recipient 'To' list, complete OTP verification, then retry.",
+          },
+          { status: 409 }
+        );
+      }
       return NextResponse.json(
         { ok: false, error: err.message, status: err.status, code: err.errorCode },
         { status: 502 }
