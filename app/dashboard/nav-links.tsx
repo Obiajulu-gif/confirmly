@@ -11,10 +11,12 @@ import {
   Package,
   Receipt,
   Settings,
+  Store,
 } from "lucide-react";
 
 const links = [
   { href: "/dashboard", label: "Overview", icon: LayoutDashboard, exact: true },
+  { href: "/dashboard/stores", label: "Stores", icon: Store },
   { href: "/dashboard/orders", label: "Orders", icon: Receipt },
   { href: "/dashboard/payments", label: "Payments", icon: CreditCard },
   { href: "/dashboard/products", label: "Products", icon: Package },
