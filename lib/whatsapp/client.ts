@@ -21,7 +21,7 @@ export class WhatsAppSendError extends Error {
   }
 }
 
-interface SendResult {
+export interface SendResult {
   providerMessageId: string;
 }
 
@@ -32,11 +32,7 @@ function graphUrl(): string {
 
 /**
  * Resolves the actual WhatsApp display number used in wa.me links.
- *
  * `WHATSAPP_PHONE_NUMBER_ID` is an API resource id, not a telephone number.
- * Prefer the optional public-number env value, but query Meta when it was not
- * supplied so customer onboarding still opens the correct test/production
- * number instead of returning a dead link.
  */
 export async function resolveWhatsAppPublicNumber(): Promise<string | null> {
   const configured = (env().WHATSAPP_PUBLIC_NUMBER ?? "").replace(/\D/g, "");
@@ -76,7 +72,7 @@ async function post(body: Record<string, unknown>): Promise<SendResult> {
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     if (attempt > 0) {
       const delay = Math.min(BASE_DELAY_MS * 2 ** (attempt - 1), 5_000);
-      await new Promise((r) => setTimeout(r, delay));
+      await new Promise((resolve) => setTimeout(resolve, delay));
     }
     let response: Response;
     try {
@@ -122,7 +118,7 @@ async function post(body: Record<string, unknown>): Promise<SendResult> {
       errorCode = data.error?.code ?? null;
       errorMessage = data.error?.message ?? errorMessage;
     } catch {
-      /* non-JSON error body */
+      // Non-JSON provider error.
     }
     lastError = new WhatsAppSendError(errorMessage, response.status, errorCode);
 
@@ -155,11 +151,11 @@ export async function sendButtons(
     type: "interactive",
     interactive: {
       type: "button",
-      body: { text: bodyText },
+      body: { text: bodyText.slice(0, 1024) },
       action: {
-        buttons: buttons.slice(0, 3).map((b) => ({
+        buttons: buttons.slice(0, 3).map((button) => ({
           type: "reply",
-          reply: { id: b.id, title: b.title.slice(0, 20) },
+          reply: { id: button.id, title: button.title.slice(0, 20) },
         })),
       },
     },
@@ -183,21 +179,74 @@ export async function sendList(
     type: "interactive",
     interactive: {
       type: "list",
-      body: { text: bodyText },
+      body: { text: bodyText.slice(0, 1024) },
       action: {
         button: buttonLabel.slice(0, 20),
         sections: [
           {
             title: "Options",
-            rows: rows.slice(0, 10).map((r) => ({
-              id: r.id,
-              title: r.title.slice(0, 24),
-              description: r.description?.slice(0, 72),
+            rows: rows.slice(0, 10).map((row) => ({
+              id: row.id.slice(0, 200),
+              title: row.title.slice(0, 24),
+              description: row.description?.slice(0, 72),
             })),
           },
         ],
       },
     },
+  });
+}
+
+/**
+ * Sends a published WhatsApp Flow. The caller must supply a high-entropy
+ * flow token. When Flow configuration is unavailable the commerce layer falls
+ * back to interactive lists instead of pretending the Flow was delivered.
+ */
+export async function sendFlow(
+  to: string,
+  input: {
+    flowId: string;
+    flowToken: string;
+    bodyText: string;
+    cta: string;
+    screen?: string;
+    data?: Record<string, unknown>;
+  }
+): Promise<SendResult> {
+  return post({
+    to,
+    type: "interactive",
+    interactive: {
+      type: "flow",
+      body: { text: input.bodyText.slice(0, 1024) },
+      action: {
+        name: "flow",
+        parameters: {
+          flow_message_version: "3",
+          flow_token: input.flowToken,
+          flow_id: input.flowId,
+          flow_cta: input.cta.slice(0, 20),
+          flow_action: "navigate",
+          ...(input.screen
+            ? {
+                flow_action_payload: {
+                  screen: input.screen,
+                  data: input.data ?? {},
+                },
+              }
+            : {}),
+        },
+      },
+    },
+  });
+}
+
+export async function markMessageRead(
+  providerMessageId: string
+): Promise<SendResult> {
+  return post({
+    status: "read",
+    message_id: providerMessageId,
   });
 }
 
