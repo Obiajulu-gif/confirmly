@@ -2,6 +2,7 @@
 
 import { useActionState, useMemo, useState } from "react";
 import { Button, Input } from "@/components/ui";
+import { ProductImageManager } from "./product-image-manager";
 import {
   createProductAction,
   createZoneAction,
@@ -13,24 +14,26 @@ import {
 const productInitialState: ProductFormState = { error: null, ok: false };
 const zoneInitialState: ZoneFormState = { error: null, ok: false };
 
-export function ProductForm({
-  product,
-}: {
-  product?: {
-    id: string;
-    name: string;
-    description: string | null;
-    category: string | null;
-    priceKobo: number;
-    aliases: string[];
-    stockQuantity: number;
-    imageUrl: string | null;
-    variants: Array<{
-      size: string | null;
-      colour: string | null;
-    }>;
-  };
-}) {
+type ProductInput = {
+  id: string;
+  name: string;
+  description: string | null;
+  category: string | null;
+  priceKobo: number;
+  aliases: string[];
+  stockQuantity: number;
+  imageUrl: string | null;
+  imageSource: string | null;
+  imageStatus: string;
+  imageApprovedAt: string | null;
+  imageFailureReason: string | null;
+  variants: Array<{
+    size: string | null;
+    colour: string | null;
+  }>;
+};
+
+export function ProductForm({ product }: { product?: ProductInput }) {
   const [open, setOpen] = useState(false);
   const action = product ? updateProductAction : createProductAction;
   const [state, formAction, pending] = useActionState(
@@ -72,6 +75,8 @@ export function ProductForm({
     );
   }
 
+  const imageProductId = product?.id ?? state.productId;
+
   return (
     <form
       action={formAction}
@@ -108,14 +113,6 @@ export function ProductForm({
         required
         defaultValue={product?.stockQuantity ?? 0}
       />
-      <div className="sm:col-span-2">
-        <Input
-          name="imageUrl"
-          label="Product image URL"
-          defaultValue={product?.imageUrl ?? ""}
-          placeholder="https://..."
-        />
-      </div>
       <Input
         name="variantSizes"
         label="Sizes (comma-separated)"
@@ -158,7 +155,7 @@ export function ProductForm({
       ) : null}
       {state.ok ? (
         <p className="text-sm text-emerald-700 sm:col-span-2">
-          Product saved successfully.
+          Product saved successfully. You can attach its product image below.
         </p>
       ) : null}
       <div className="flex gap-2 sm:col-span-2">
@@ -169,6 +166,21 @@ export function ProductForm({
           Close
         </Button>
       </div>
+      {imageProductId ? (
+        <ProductImageManager
+          productId={imageProductId}
+          imageUrl={product?.imageUrl ?? null}
+          imageSource={product?.imageSource ?? null}
+          imageStatus={product?.imageStatus ?? "NONE"}
+          imageApprovedAt={product?.imageApprovedAt ?? null}
+          imageFailureReason={product?.imageFailureReason ?? null}
+        />
+      ) : (
+        <p className="text-xs text-ink-500 sm:col-span-2">
+          Save the product first, then upload a real photo or generate an AI
+          illustration without leaving this form.
+        </p>
+      )}
     </form>
   );
 }
