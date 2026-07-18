@@ -34,6 +34,12 @@ const envSchema = z.object({
     .string()
     .regex(/^\+?[\d\s().-]{7,20}$/)
     .optional(),
+  /** Optional published WhatsApp Flow; interactive lists are the fallback. */
+  WHATSAPP_ORDER_FLOW_ID: z.string().min(1).optional(),
+  WHATSAPP_FLOW_ENABLED: z
+    .string()
+    .transform((value) => value === "true" || value === "1")
+    .default("false"),
 
   NVIDIA_API_KEY: z.string().min(1).optional(),
   NVIDIA_BASE_URL: z
@@ -50,13 +56,13 @@ const envSchema = z.object({
    *  Sub Account feature on the platform account). */
   MONNIFY_SUBACCOUNT_ENABLED: z
     .string()
-    .transform((v) => v === "true" || v === "1")
+    .transform((value) => value === "true" || value === "1")
     .default("false"),
   MONNIFY_PLATFORM_FEE_PERCENT: z.coerce.number().min(0).max(50).default(0),
 
   DEMO_MODE: z
     .string()
-    .transform((v) => v === "true" || v === "1")
+    .transform((value) => value === "true" || value === "1")
     .default("false"),
 });
 
@@ -81,7 +87,9 @@ function cleanConfiguredOrigin(configured: string): string {
 
 function deployedOrigin(configured: string): string {
   const normalized = cleanConfiguredOrigin(configured);
-  const isLocal = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(normalized);
+  const isLocal = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(
+    normalized
+  );
   const vercelHost =
     process.env.VERCEL_PROJECT_PRODUCTION_URL?.trim() ||
     process.env.VERCEL_URL?.trim();
@@ -98,8 +106,6 @@ function deployedOrigin(configured: string): string {
 
 export function env(): Env {
   if (!cached) {
-    // Trim every value — dashboard/CLI tooling can smuggle in stray
-    // whitespace or CRLF that would otherwise fail strict validation.
     const trimmed = Object.fromEntries(
       Object.entries(process.env).map(([key, value]) => [
         key,
@@ -107,9 +113,6 @@ export function env(): Env {
       ])
     );
     const parsed = envSchema.parse(trimmed);
-    // Ensure every existing env().APP_URL consumer generates a public Vercel
-    // URL even when the dashboard value was omitted, quoted, malformed, or
-    // accidentally entered as `APP_URL=https://...` instead of only the value.
     parsed.APP_URL = deployedOrigin(parsed.APP_URL);
     cached = parsed;
   }
@@ -140,10 +143,12 @@ export class MissingEnvError extends Error {
 export function requireEnv<K extends keyof Env>(
   ...keys: K[]
 ): { [P in K]-?: NonNullable<Env[P]> } & Env {
-  const e = env();
-  const missing = keys.filter((k) => e[k] === undefined || e[k] === "");
+  const current = env();
+  const missing = keys.filter(
+    (key) => current[key] === undefined || current[key] === ""
+  );
   if (missing.length) throw new MissingEnvError(missing as string[]);
-  return e as { [P in K]-?: NonNullable<Env[P]> } & Env;
+  return current as { [P in K]-?: NonNullable<Env[P]> } & Env;
 }
 
 export type IntegrationName = "database" | "whatsapp" | "nvidia" | "monnify";
@@ -160,16 +165,15 @@ const INTEGRATION_KEYS: Record<IntegrationName, (keyof Env)[]> = {
   monnify: ["MONNIFY_API_KEY", "MONNIFY_SECRET_KEY", "MONNIFY_CONTRACT_CODE"],
 };
 
-/** Safe diagnostics: which integrations are configured, and which variable
- *  NAMES are missing. Never exposes values. */
+/** Safe diagnostics: variable names only, never values. */
 export function integrationStatus() {
-  const e = env();
+  const current = env();
   const out: Record<
     IntegrationName,
     { configured: boolean; missing: string[] }
   > = {} as never;
   for (const [name, keys] of Object.entries(INTEGRATION_KEYS)) {
-    const missing = keys.filter((k) => !e[k as keyof Env]);
+    const missing = keys.filter((key) => !current[key as keyof Env]);
     out[name as IntegrationName] = {
       configured: missing.length === 0,
       missing: missing as string[],
