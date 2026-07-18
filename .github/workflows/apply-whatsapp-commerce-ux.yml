@@ -1,0 +1,769 @@
+name: Apply WhatsApp commerce UX upgrade
+
+on:
+  push:
+    branches:
+      - feat/multi-store-whatsapp-ux
+    paths:
+      - .github/workflows/apply-whatsapp-commerce-ux.yml
+
+permissions:
+  contents: write
+
+jobs:
+  upgrade:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/multi-store-whatsapp-ux
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Apply targeted upgrade
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_once(text: str, old: str, new: str, label: str) -> str:
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"{label}: expected one match, found {count}")
+              return text.replace(old, new, 1)
+
+          engine_path = Path("lib/orders/engine.ts")
+          text = engine_path.read_text(encoding="utf-8")
+
+          text = replace_once(
+              text,
+              '''import {
+            matchAgainst,
+            normalizeColour,
+            normalizeSize,
+          } from "@/lib/orders/matching";''',
+              '''import {
+            matchAgainst,
+            normalizeColour,
+            normalizeSize,
+            scoreMatch,
+          } from "@/lib/orders/matching";''',
+              "matching import",
+          )
+
+          text = replace_once(
+              text,
+              '''const COMMAND_HELP = /^(help|menu)[.!?]?$/i;
+          const COMMAND_CHECK_PAYMENT = /^(check payment|payment status)[.!?]?$/i;
+          const COMMAND_RESUME = /^(resume|start over)[.!?]?$/i;
+          // Store selection (one shared WhatsApp number serves every merchant).
+          const COMMAND_STORE = /^(?:start|store)\\s+([a-z0-9-]{2,24})[.!]?$/i;
+          const COMMAND_STORE_LIST = /^(stores|shops|switch|change (store|shop))[.!?]?$/i;''',
+              '''const COMMAND_HELP = /^(help)[.!?]?$/i;
+          const COMMAND_CHECK_PAYMENT = /^(check payment|payment status)[.!?]?$/i;
+          const COMMAND_RESUME = /^(resume|start over)[.!?]?$/i;
+          const COMMAND_BROWSE = /^(hi|hello|hey|menu|browse|shop|order|start shopping|i want to (buy|order)( something)?)[.!?]?$/i;
+          // Store selection (one shared WhatsApp number serves every merchant).
+          const COMMAND_STORE = /^(?:start|store)\\s+([a-z0-9-]{2,24})[.!]?$/i;
+          const COMMAND_STORE_LIST = /^(stores|shops|switch|change (store|shop))[.!?]?$/i;''',
+              "commands",
+          )
+
+          text = replace_once(
+              text,
+              '''  const storeInteractiveId = message.interactiveId?.startsWith("store:")
+            ? message.interactiveId.slice("store:".length)
+            : null;''',
+              '''  const storeInteractiveId = message.interactiveId?.startsWith("store_select:")
+            ? message.interactiveId.slice("store_select:".length)
+            : message.interactiveId?.startsWith("store:")
+              ? message.interactiveId.slice("store:".length)
+              : null;''',
+              "store interactive id",
+          )
+
+          text = replace_once(
+              text,
+              '''      text: "Welcome to Confirmly. Pick a store to shop from — reply with its code (e.g. START ADASTYLES) or choose below.",''',
+              '''      text: "Welcome to Confirmly. Choose a store below to start shopping. You can browse products, select delivery and confirm your order without memorising a code.",''',
+              "welcome text",
+          )
+
+          old_select = '''  const products = await prisma.product.findMany({
+            where: { merchantId, active: true },
+            orderBy: { name: "asc" },
+            take: 4,
+          });
+          const teaser = products.length
+            ? `Popular items: ${products.map((p) => p.name).join(", ")}.`
+            : "";
+          await sendToCustomer({
+            merchantId,
+            customer,
+            conversationId: conversation.id,
+            kind: "text",
+            text: `You're now shopping with *${merchant.name}*. ${teaser}\\n\\nReply "stores" anytime to switch shops, or "help" for options.`,
+          });
+
+          // Conversational onboarding: collect whatever the profile is missing,
+          // one question at a time, right here in the chat.
+          await startChatOnboarding(
+            { merchantId, customer, conversation },
+            { includeGreeting: false }
+          );'''
+          new_select = '''  await sendToCustomer({
+            merchantId,
+            customer,
+            conversationId: conversation.id,
+            kind: "text",
+            text: `You are now shopping from *${merchant.name}*. Choose a category below or browse every available product.`,
+          });
+
+          // Conversational onboarding: collect only missing identity details,
+          // then show the clickable catalogue instead of asking for store codes.
+          await startChatOnboarding(
+            { merchantId, customer, conversation },
+            { includeGreeting: false }
+          );'''
+          text = replace_once(text, old_select, new_select, "store selection greeting")
+
+          old_onboarding = '''  if (!ctx.customer.defaultAddress) {
+            const zones = await prisma.deliveryZone.findMany({
+              where: { merchantId: ctx.merchantId, active: true },
+            });
+            const deliveryZones = zones.filter(
+              (z) => z.name.toLowerCase() !== "pickup"
+            );
+            if (deliveryZones.length) {
+              await setConversation(ctx, { pendingQuestion: "onboard:zone" });
+              await sendToCustomer({
+                merchantId: ctx.merchantId,
+                customer: ctx.customer,
+                conversationId: ctx.conversation.id,
+                kind: "list",
+                text: `Nice to meet you, ${firstName(ctx.customer.name)}! Where should deliveries usually go? (You can change this on any order.)`,
+                listButtonLabel: "Choose area",
+                rows: [
+                  ...deliveryZones.slice(0, 9).map((z) => ({
+                    id: `onboardzone:${z.id}`,
+                    title: z.name.slice(0, 24),
+                    description: formatNaira(z.feeKobo),
+                  })),
+                  { id: "onboardzone:skip", title: "Skip for now" },
+                ],
+              });
+              return;
+            }
+          }
+          await setConversation(ctx, { pendingQuestion: null });
+          await reply(
+            ctx,
+            `You're all set, ${firstName(ctx.customer.name ?? "friend")}! Just tell me what you'd like to order — in plain words.`
+          );'''
+          new_onboarding = '''  await setConversation(ctx, { pendingQuestion: null });
+          await sendStoreMenu(ctx);'''
+          text = replace_once(text, old_onboarding, new_onboarding, "catalogue onboarding")
+
+          old_store_list = '''async function sendStoreList(waId: string): Promise<void> {
+            const merchants = await prisma.merchant.findMany({
+              where: { active: true },
+              orderBy: { createdAt: "asc" },
+              take: 10,
+            });
+            if (!merchants.length) {
+              await sendUnscoped(waId, {
+                kind: "text",
+                text: "No stores are live yet — please check back soon.",
+              });
+              return;
+            }
+            await sendUnscoped(waId, {
+              kind: "list",
+              text: "Which store would you like to shop from?",
+              listButtonLabel: "Choose store",
+              rows: merchants.map((m) => ({
+                id: `store:${m.id}`,
+                title: m.name.slice(0, 24),
+                description: `Code: ${m.storeCode}`,
+              })),
+            });
+          }'''
+          new_store_list = '''async function sendStoreList(waId: string): Promise<void> {
+            const merchants = await prisma.merchant.findMany({
+              where: { active: true },
+              orderBy: { name: "asc" },
+              take: 10,
+            });
+            if (!merchants.length) {
+              await sendUnscoped(waId, {
+                kind: "text",
+                text: "No stores are live yet. Please check back soon.",
+              });
+              return;
+            }
+            await sendUnscoped(waId, {
+              kind: "list",
+              text: "Choose a store to start shopping.",
+              listButtonLabel: "Browse stores",
+              rows: merchants.map((merchant) => ({
+                id: `store_select:${merchant.id}`,
+                title: merchant.name.slice(0, 24),
+                description: `${merchant.category ?? "General store"} · ${merchant.storeCode}`.slice(0, 72),
+              })),
+            });
+          }
+
+          function encodeCategory(category: string): string {
+            return Buffer.from(category, "utf8").toString("base64url");
+          }
+
+          function decodeCategory(value: string): string | null {
+            try {
+              return Buffer.from(value, "base64url").toString("utf8").slice(0, 60);
+            } catch {
+              return null;
+            }
+          }
+
+          async function sendStoreMenu(ctx: EngineContext): Promise<void> {
+            const products = await prisma.product.findMany({
+              where: {
+                merchantId: ctx.merchantId,
+                active: true,
+                stockQuantity: { gt: 0 },
+              },
+              orderBy: [{ category: "asc" }, { name: "asc" }],
+            });
+            if (!products.length) {
+              await sendToCustomer({
+                merchantId: ctx.merchantId,
+                customer: ctx.customer,
+                conversationId: ctx.conversation.id,
+                kind: "buttons",
+                text: "This store has no available products right now. You can change stores or ask the merchant for help.",
+                buttons: [
+                  { id: "change_store", title: "Change store" },
+                  { id: "talk_merchant", title: "Talk to merchant" },
+                ],
+              });
+              return;
+            }
+
+            const categories = [
+              ...new Set(
+                products
+                  .map((product) => product.category?.trim())
+                  .filter((category): category is string => Boolean(category))
+              ),
+            ].sort((a, b) => a.localeCompare(b));
+
+            await sendToCustomer({
+              merchantId: ctx.merchantId,
+              customer: ctx.customer,
+              conversationId: ctx.conversation.id,
+              kind: "list",
+              text: `Welcome ${firstName(ctx.customer.name ?? "there")}. Browse the catalogue or simply type what you need.`,
+              listButtonLabel: "View catalogue",
+              rows: [
+                { id: "browse_all", title: "All products", description: `${products.length} available item${products.length === 1 ? "" : "s"}` },
+                ...categories.slice(0, 8).map((category) => ({
+                  id: `category:${encodeCategory(category)}`,
+                  title: category.slice(0, 24),
+                  description: `${products.filter((product) => product.category === category).length} products`,
+                })),
+                { id: "change_store", title: "Change store" },
+              ].slice(0, 10),
+            });
+          }
+
+          async function sendProductList(
+            ctx: EngineContext,
+            category: string | null
+          ): Promise<void> {
+            const products = await prisma.product.findMany({
+              where: {
+                merchantId: ctx.merchantId,
+                active: true,
+                stockQuantity: { gt: 0 },
+                ...(category ? { category } : {}),
+              },
+              orderBy: { name: "asc" },
+              take: 9,
+            });
+            if (!products.length) {
+              await reply(ctx, "No available products were found in that category. Type menu to browse again.");
+              return;
+            }
+            await sendToCustomer({
+              merchantId: ctx.merchantId,
+              customer: ctx.customer,
+              conversationId: ctx.conversation.id,
+              kind: "list",
+              text: category ? `Choose a product from ${category}.` : "Choose a product to add to your order.",
+              listButtonLabel: "Choose product",
+              rows: [
+                ...products.map((product) => ({
+                  id: `product:${product.id}`,
+                  title: product.name.slice(0, 24),
+                  description: `${formatNaira(product.priceKobo)}${product.description ? ` · ${product.description}` : ""}`.slice(0, 72),
+                })),
+                { id: "menu_categories", title: "Back to categories" },
+              ].slice(0, 10),
+            });
+          }
+
+          function suggestedZones<T extends { name: string; aliases: string[]; feeKobo: number }>(
+            zones: T[],
+            searchTerm: string | null | undefined
+          ): T[] {
+            const term = searchTerm?.trim() ?? "";
+            const ranked = zones
+              .map((zone) => ({
+                zone,
+                score: term
+                  ? Math.max(scoreMatch(term, zone.name), ...zone.aliases.map((alias) => scoreMatch(term, alias)))
+                  : 0,
+              }))
+              .sort((a, b) => b.score - a.score || a.zone.feeKobo - b.zone.feeKobo);
+            const matching = ranked.filter((entry) => entry.score > 0).slice(0, 3);
+            return (matching.length ? matching : ranked.slice(0, 3)).map((entry) => entry.zone);
+          }'''
+          text = replace_once(text, old_store_list, new_store_list, "store menu helpers")
+
+          text = replace_once(
+              text,
+              '''    if (message.kind === "unsupported") {
+                  await reply(
+                    ctx,
+                    "I can only read text messages for now. Please type your order — e.g. \\"2 black polo shirts, large, deliver to Yaba\\"."
+                  );
+                  return;
+                }''',
+              '''    if (message.kind === "location") {
+                  await handleLocationMessage(ctx, message);
+                  return;
+                }
+                if (message.kind === "unsupported") {
+                  await reply(
+                    ctx,
+                    "Please send text, use one of the menu choices, or share a location pin for delivery."
+                  );
+                  return;
+                }''',
+              "location message dispatch",
+          )
+
+          marker = '''// ---------------------------------------------------------------------------
+          // Text handling
+          // ---------------------------------------------------------------------------'''
+          location_helper = '''async function handleLocationMessage(
+            ctx: EngineContext,
+            message: ParsedInboundMessage
+          ): Promise<void> {
+            const zones = await prisma.deliveryZone.findMany({
+              where: { merchantId: ctx.merchantId, active: true },
+              orderBy: { feeKobo: "asc" },
+            });
+            const deliveryZones = zones.filter((zone) => zone.name.toLowerCase() !== "pickup");
+            const hint = [message.location?.name, message.location?.address]
+              .filter(Boolean)
+              .join(" ");
+            const choices = suggestedZones(deliveryZones, hint);
+            const pickup = zones.find((zone) => zone.name.toLowerCase() === "pickup");
+
+            await sendToCustomer({
+              merchantId: ctx.merchantId,
+              customer: ctx.customer,
+              conversationId: ctx.conversation.id,
+              kind: "list",
+              text: "Location received. Choose the closest supported delivery area. Confirmly only uses merchant-configured areas and fees.",
+              listButtonLabel: "Choose area",
+              rows: [
+                ...choices.map((zone) => ({
+                  id: `zone:${zone.id}`,
+                  title: zone.name.slice(0, 24),
+                  description: formatNaira(zone.feeKobo),
+                })),
+                ...(pickup ? [{ id: "delivery:PICKUP", title: "Store pickup", description: formatNaira(pickup.feeKobo) }] : []),
+                { id: "talk_merchant", title: "Talk to merchant" },
+              ].slice(0, 10),
+            });
+          }
+
+          // ---------------------------------------------------------------------------
+          // Text handling
+          // ---------------------------------------------------------------------------'''
+          text = replace_once(text, marker, location_helper, "location helper")
+
+          text = replace_once(
+              text,
+              '''  if (COMMAND_RESUME.test(trimmed)) {
+                await setConversation(ctx, { state: "COLLECTING_ORDER", draft: EMPTY_DRAFT });
+                await reply(ctx, "Fresh start! What would you like to order?");
+                return;
+              }
+
+              // In-chat onboarding answers''',
+              '''  if (COMMAND_RESUME.test(trimmed)) {
+                await setConversation(ctx, { state: "COLLECTING_ORDER", draft: EMPTY_DRAFT });
+                await sendStoreMenu(ctx);
+                return;
+              }
+              if (COMMAND_BROWSE.test(trimmed)) {
+                await sendStoreMenu(ctx);
+                return;
+              }
+
+              // In-chat onboarding answers''',
+              "browse command",
+          )
+
+          text = replace_once(
+              text,
+              '''    case "OTHER":
+                  await reply(
+                    ctx,
+                    `I help you order from this shop. ${HELP_TEXT}`
+                  );
+                  return;''',
+              '''    case "OTHER":
+                  await sendStoreMenu(ctx);
+                  return;''',
+              "other intent menu",
+          )
+
+          old_zone_rows = '''    const zoneRows = zones
+                .filter((z) => z.name.toLowerCase() !== "pickup")
+                .slice(0, 10)
+                .map((z) => ({
+                  id: `zone:${z.id}`,
+                  title: z.name.slice(0, 24),
+                  description: formatNaira(z.feeKobo),
+                }));'''
+          new_zone_rows = '''    const deliveryZones = zones.filter((z) => z.name.toLowerCase() !== "pickup");
+              const pickup = zones.find((z) => z.name.toLowerCase() === "pickup");
+              const zoneRows = [
+                ...suggestedZones(deliveryZones, draft.deliveryArea).map((z) => ({
+                  id: `zone:${z.id}`,
+                  title: z.name.slice(0, 24),
+                  description: formatNaira(z.feeKobo),
+                })),
+                ...(pickup
+                  ? [{
+                      id: "delivery:PICKUP",
+                      title: "Store pickup",
+                      description: formatNaira(pickup.feeKobo),
+                    }]
+                  : []),
+                { id: "talk_merchant", title: "Talk to merchant" },
+              ].slice(0, 10);'''
+          text = replace_once(text, old_zone_rows, new_zone_rows, "zone suggestions")
+
+          text = replace_once(
+              text,
+              '''  const draft = parseDraft(ctx.conversation.draft);
+              const products = await activeProducts(ctx.merchantId);
+              const zones = await prisma.deliveryZone.findMany({''',
+              '''  if (interactiveId === "change_store") {
+                await prisma.waSession.update({
+                  where: { waId: ctx.customer.waId },
+                  data: { activeMerchantId: null },
+                });
+                await sendStoreList(ctx.customer.waId);
+                return;
+              }
+              if (interactiveId === "menu_categories") {
+                await sendStoreMenu(ctx);
+                return;
+              }
+              if (interactiveId === "browse_all") {
+                await sendProductList(ctx, null);
+                return;
+              }
+              if (interactiveId.startsWith("category:")) {
+                const category = decodeCategory(interactiveId.slice("category:".length));
+                if (!category) {
+                  await reply(ctx, "That category has expired. Type menu to browse again.");
+                  return;
+                }
+                await sendProductList(ctx, category);
+                return;
+              }
+              if (interactiveId.startsWith("product:")) {
+                const productId = interactiveId.slice("product:".length);
+                const product = await prisma.product.findFirst({
+                  where: {
+                    id: productId,
+                    merchantId: ctx.merchantId,
+                    active: true,
+                    stockQuantity: { gt: 0 },
+                  },
+                });
+                if (!product) {
+                  await reply(ctx, "That product is no longer available. Type menu to browse again.");
+                  return;
+                }
+                const intent: OrderIntent = {
+                  intent: "PLACE_ORDER",
+                  merchantCode: null,
+                  items: [
+                    {
+                      searchTerm: product.name,
+                      quantity: 1,
+                      size: null,
+                      colour: null,
+                    },
+                  ],
+                  deliveryMethod: null,
+                  deliveryAddress: null,
+                  deliveryArea: null,
+                  customerName: null,
+                  notes: null,
+                  missingFields: [],
+                };
+                await applyOrderIntent(ctx, intent);
+                return;
+              }
+
+              const draft = parseDraft(ctx.conversation.draft);
+              const products = await activeProducts(ctx.merchantId);
+              const zones = await prisma.deliveryZone.findMany({''',
+              "interactive commerce menu",
+          )
+
+          text = replace_once(
+              text,
+              '''  await reply(
+                ctx,
+                `Saved — deliveries default to *${zoneName}*. Now, what would you like to order?`
+              );''',
+              '''  await reply(ctx, `Saved — deliveries default to *${zoneName}*.`);
+              await sendStoreMenu(ctx);''',
+              "default zone menu",
+          )
+
+          text = text.replace(
+              '''          : message.kind === "unsupported"
+                    ? "UNSUPPORTED"''',
+              '''          : message.kind === "unsupported" || message.kind === "location"
+                    ? "UNSUPPORTED"''',
+              1,
+          )
+
+          engine_path.write_text(text, encoding="utf-8")
+
+          types_path = Path("lib/whatsapp/types.ts")
+          types = types_path.read_text(encoding="utf-8")
+          types = replace_once(
+              types,
+              '''export const waOtherMessageSchema = z.object({''',
+              '''export const waLocationMessageSchema = z.object({
+            id: z.string(),
+            from: z.string(),
+            timestamp: z.string(),
+            type: z.literal("location"),
+            location: z.object({
+              latitude: z.number(),
+              longitude: z.number(),
+              name: z.string().optional(),
+              address: z.string().optional(),
+            }),
+          });
+
+          export const waOtherMessageSchema = z.object({''',
+              "location schema",
+          )
+          types = replace_once(
+              types,
+              '''  waInteractiveMessageSchema,
+            waOtherMessageSchema,''',
+              '''  waInteractiveMessageSchema,
+            waLocationMessageSchema,
+            waOtherMessageSchema,''',
+              "location union",
+          )
+          types = replace_once(
+              types,
+              '''  kind: "text" | "button_reply" | "list_reply" | "unsupported";
+            text: string | null;
+            /** For button/list replies, the developer-defined identifier. */
+            interactiveId: string | null;
+            rawType: string;''',
+              '''  kind: "text" | "button_reply" | "list_reply" | "location" | "unsupported";
+            text: string | null;
+            /** For button/list replies, the developer-defined identifier. */
+            interactiveId: string | null;
+            location: {
+              latitude: number;
+              longitude: number;
+              name: string | null;
+              address: string | null;
+            } | null;
+            rawType: string;''',
+              "parsed location type",
+          )
+          types = types.replace('''            interactiveId: null,
+                rawType: "text",''', '''            interactiveId: null,
+                location: null,
+                rawType: "text",''', 1)
+          types = replace_once(
+              types,
+              '''        } else if ("interactive" in msg && msg.type === "interactive") {''',
+              '''        } else if ("location" in msg && msg.type === "location") {
+                  out.messages.push({
+                    providerMessageId: msg.id,
+                    from: msg.from,
+                    profileName,
+                    timestamp,
+                    kind: "location",
+                    text: msg.location.name ?? msg.location.address ?? null,
+                    interactiveId: null,
+                    location: {
+                      latitude: msg.location.latitude,
+                      longitude: msg.location.longitude,
+                      name: msg.location.name ?? null,
+                      address: msg.location.address ?? null,
+                    },
+                    rawType: "location",
+                  });
+                } else if ("interactive" in msg && msg.type === "interactive") {''',
+              "parse location",
+          )
+          types = types.replace('''            interactiveId: reply?.id ?? null,
+                rawType: "interactive",''', '''            interactiveId: reply?.id ?? null,
+                location: null,
+                rawType: "interactive",''', 1)
+          types = types.replace('''            interactiveId: null,
+                rawType: msg.type,''', '''            interactiveId: null,
+                location: null,
+                rawType: msg.type,''', 1)
+          types = replace_once(
+              types,
+              '''    hasText: message.text !== null,
+              timestamp: message.timestamp.toISOString(),''',
+              '''    hasText: message.text !== null,
+              hasLocation: message.location !== null,
+              timestamp: message.timestamp.toISOString(),''',
+              "sanitize location",
+          )
+          types_path.write_text(types, encoding="utf-8")
+
+          env_path = Path("lib/env.ts")
+          env_text = env_path.read_text(encoding="utf-8")
+          env_text = replace_once(
+              env_text,
+              '''  WHATSAPP_PUBLIC_NUMBER: z
+                .string()
+                .regex(/^\\+?[\\d\\s().-]{7,20}$/)
+                .optional(),''',
+              '''  WHATSAPP_PUBLIC_NUMBER: z
+                .string()
+                .regex(/^\\+?[\\d\\s().-]{7,20}$/)
+                .optional(),
+              WHATSAPP_ORDER_FLOW_ID: z.string().min(1).optional(),
+              WHATSAPP_FLOW_ENABLED: z
+                .string()
+                .transform((value) => value === "true" || value === "1")
+                .default("false"),''',
+              "flow env schema",
+          )
+          env_path.write_text(env_text, encoding="utf-8")
+
+          client_path = Path("lib/whatsapp/client.ts")
+          client = client_path.read_text(encoding="utf-8")
+          flow_function = '''
+          export async function sendFlow(
+            to: string,
+            bodyText: string,
+            cta: string,
+            flowId: string,
+            flowToken: string,
+            screen?: string
+          ): Promise<SendResult> {
+            return post({
+              to,
+              type: "interactive",
+              interactive: {
+                type: "flow",
+                body: { text: bodyText.slice(0, 1024) },
+                action: {
+                  name: "flow",
+                  parameters: {
+                    flow_message_version: "3",
+                    flow_token: flowToken,
+                    flow_id: flowId,
+                    flow_cta: cta.slice(0, 20),
+                    flow_action: "navigate",
+                    ...(screen
+                      ? { flow_action_payload: { screen, data: {} } }
+                      : {}),
+                  },
+                },
+              },
+            });
+          }
+          '''
+          client = replace_once(
+              client,
+              '''/** Sends the pre-approved hello_world template (Meta test number default). */''',
+              flow_function + '''
+          /** Sends the pre-approved hello_world template (Meta test number default). */''',
+              "flow client",
+          )
+          client_path.write_text(client, encoding="utf-8")
+
+          example_path = Path(".env.example")
+          example = example_path.read_text(encoding="utf-8")
+          example = replace_once(
+              example,
+              '''# Public display number customers message (used for wa.me links; not a secret)
+          WHATSAPP_PUBLIC_NUMBER=''',
+              '''# Public display number customers message (used for wa.me links; not a secret)
+          WHATSAPP_PUBLIC_NUMBER=
+          # Optional published WhatsApp Flow. Interactive lists remain the safe fallback.
+          WHATSAPP_ORDER_FLOW_ID=
+          WHATSAPP_FLOW_ENABLED=false''',
+              "flow env example",
+          )
+          example_path.write_text(example, encoding="utf-8")
+
+          products_path = Path("app/dashboard/products/page.tsx")
+          products_page = products_path.read_text(encoding="utf-8")
+          products_page = replace_once(
+              products_page,
+              '''  const categories = [
+                ...new Set(products.map((product) => product.category).filter(Boolean)),
+              ];''',
+              '''  const categories = [
+                ...new Set(
+                  products
+                    .map((product) => product.category)
+                    .filter((category): category is string => Boolean(category))
+                ),
+              ];''',
+              "category type narrowing",
+          )
+          products_path.write_text(products_page, encoding="utf-8")
+          PY
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate
+        run: |
+          npm run lint
+          npm run typecheck
+          npm run test
+          npm run build
+          npm run secrets:scan
+
+      - name: Commit verified changes
+        run: |
+          rm .github/workflows/apply-whatsapp-commerce-ux.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add lib/orders/engine.ts lib/whatsapp/types.ts lib/whatsapp/client.ts lib/env.ts .env.example app/dashboard/products/page.tsx .github/workflows/apply-whatsapp-commerce-ux.yml
+          git commit -m "feat: add clickable WhatsApp catalogue and location fallback"
+          git push origin HEAD:feat/multi-store-whatsapp-ux
