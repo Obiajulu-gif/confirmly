@@ -1,13 +1,11 @@
 import "server-only";
-import { prisma } from "@/lib/db";
 import { env } from "@/lib/env";
-import { recordAudit } from "@/lib/orders/audit";
-import { resolveWhatsAppPublicNumber } from "@/lib/whatsapp/client";
 
 /**
- * Customer onboarding: captures the details needed for a smooth first order
- * (name, WhatsApp number, delivery area/address) BEFORE the chat starts, so
- * the conversation engine can skip questions it already knows the answer to.
+ * Customer onboarding now happens conversationally inside WhatsApp (see
+ * lib/orders/engine.ts): after a customer selects a store, the assistant
+ * collects their name and default delivery area in chat. This module keeps
+ * the deep-link and phone helpers used across the app.
  */
 
 /**
@@ -27,112 +25,11 @@ export function normalizeWhatsAppNumber(raw: string): string | null {
   return digits;
 }
 
-export interface OnboardingInput {
-  name: string;
-  phone: string;
-  area?: string | null;
-  address?: string | null;
-  storeCode?: string | null;
-}
-
-export interface OnboardingResult {
-  waId: string;
-  merchantName: string;
-  waLink: string | null;
-  knownZone: string | null;
-}
-
-export class OnboardingError extends Error {}
-
-export async function saveCustomerProfile(
-  input: OnboardingInput
-): Promise<OnboardingResult> {
-  const waId = normalizeWhatsAppNumber(input.phone);
-  if (!waId) {
-    throw new OnboardingError(
-      "That doesn't look like a valid WhatsApp number. Use e.g. 0803 123 4567 or +234 803 123 4567."
-    );
-  }
-  const name = input.name.trim().slice(0, 80);
-  if (name.length < 2) {
-    throw new OnboardingError("Please tell us your name.");
-  }
-
-  const merchant = input.storeCode
-    ? await prisma.merchant.findFirst({
-        where: {
-          storeCode: input.storeCode.replace(/-/g, "").toUpperCase(),
-          active: true,
-        },
-      })
-    : await prisma.merchant.findFirst({
-        where: { active: true },
-        orderBy: { createdAt: "asc" },
-      });
-  if (!merchant) {
-    throw new OnboardingError("That store could not be found. Please try later.");
-  }
-
-  await prisma.waSession.upsert({
-    where: { waId },
-    update: { activeMerchantId: merchant.id },
-    create: { waId, activeMerchantId: merchant.id, profileName: name },
-  });
-
-  let knownZone: string | null = null;
-  if (input.area) {
-    const zone = await prisma.deliveryZone.findFirst({
-      where: {
-        merchantId: merchant.id,
-        active: true,
-        name: { equals: input.area, mode: "insensitive" },
-      },
-    });
-    knownZone = zone?.name ?? null;
-  }
-
-  const defaultAddress =
-    [input.address?.trim(), knownZone].filter(Boolean).join(", ") || null;
-
-  const customer = await prisma.customer.upsert({
-    where: { merchantId_waId: { merchantId: merchant.id, waId } },
-    update: {
-      name,
-      phoneNumber: waId,
-      ...(defaultAddress ? { defaultAddress } : {}),
-    },
-    create: {
-      merchantId: merchant.id,
-      waId,
-      phoneNumber: waId,
-      name,
-      defaultAddress,
-    },
-  });
-
-  await recordAudit({
-    merchantId: merchant.id,
-    event: "Customer onboarded",
-    actor: "CUSTOMER",
-    metadata: {
-      customerId: customer.id,
-      hasDefaultAddress: Boolean(defaultAddress),
-    },
-  });
-
-  const publicNumber = await resolveWhatsAppPublicNumber();
-
-  return {
-    waId,
-    merchantName: merchant.name,
-    waLink: buildWaLink(merchant.storeCode, publicNumber),
-    knownZone,
-  };
-}
-
 /**
  * wa.me deep link that opens the shared business number with the store
  * selection command prefilled — deterministic routing into the right shop.
+ * Pass a resolved display number (see resolveWhatsAppPublicNumber) to avoid
+ * relying solely on the WHATSAPP_PUBLIC_NUMBER env value.
  */
 export function buildWaLink(
   storeCode: string,

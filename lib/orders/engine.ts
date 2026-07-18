@@ -162,8 +162,80 @@ async function selectStore(
     customer,
     conversationId: conversation.id,
     kind: "text",
-    text: `You're now shopping with *${merchant.name}*. ${teaser}\n\nJust tell me what you'd like in plain words. Reply "stores" anytime to switch shops, or "help" for options.`,
+    text: `You're now shopping with *${merchant.name}*. ${teaser}\n\nReply "stores" anytime to switch shops, or "help" for options.`,
   });
+
+  // Conversational onboarding: collect whatever the profile is missing,
+  // one question at a time, right here in the chat.
+  await startChatOnboarding(
+    { merchantId, customer, conversation },
+    { includeGreeting: false }
+  );
+}
+
+/**
+ * Asks for the next missing profile detail (name, then default delivery
+ * area). When nothing is missing, invites the customer to order.
+ */
+async function startChatOnboarding(
+  ctx: EngineContext,
+  opts: { includeGreeting: boolean }
+): Promise<void> {
+  if (!ctx.customer.name) {
+    await setConversation(ctx, { pendingQuestion: "onboard:name" });
+    await reply(
+      ctx,
+      `${opts.includeGreeting ? "Welcome! " : ""}Before we start — what's your name?`
+    );
+    return;
+  }
+  if (!ctx.customer.defaultAddress) {
+    const zones = await prisma.deliveryZone.findMany({
+      where: { merchantId: ctx.merchantId, active: true },
+    });
+    const deliveryZones = zones.filter(
+      (z) => z.name.toLowerCase() !== "pickup"
+    );
+    if (deliveryZones.length) {
+      await setConversation(ctx, { pendingQuestion: "onboard:zone" });
+      await sendToCustomer({
+        merchantId: ctx.merchantId,
+        customer: ctx.customer,
+        conversationId: ctx.conversation.id,
+        kind: "list",
+        text: `Nice to meet you, ${firstName(ctx.customer.name)}! Where should deliveries usually go? (You can change this on any order.)`,
+        listButtonLabel: "Choose area",
+        rows: [
+          ...deliveryZones.slice(0, 9).map((z) => ({
+            id: `onboardzone:${z.id}`,
+            title: z.name.slice(0, 24),
+            description: formatNaira(z.feeKobo),
+          })),
+          { id: "onboardzone:skip", title: "Skip for now" },
+        ],
+      });
+      return;
+    }
+  }
+  await setConversation(ctx, { pendingQuestion: null });
+  await reply(
+    ctx,
+    `You're all set, ${firstName(ctx.customer.name ?? "friend")}! Just tell me what you'd like to order — in plain words.`
+  );
+}
+
+function firstName(name: string): string {
+  return name.trim().split(/\s+/)[0] ?? name;
+}
+
+/** True when a free-text message plausibly answers "what's your name?". */
+function looksLikeName(text: string): boolean {
+  const trimmed = text.trim();
+  if (trimmed.length < 2 || trimmed.length > 40) return false;
+  if (/\d/.test(trimmed)) return false;
+  const words = trimmed.split(/\s+/);
+  if (words.length > 5) return false;
+  return /^[\p{L}][\p{L}\s.'-]*$/u.test(trimmed);
 }
 
 /** Interactive list of active stores (sent before any store is selected). */
@@ -405,6 +477,39 @@ async function handleText(ctx: EngineContext, text: string): Promise<void> {
     await setConversation(ctx, { state: "COLLECTING_ORDER", draft: EMPTY_DRAFT });
     await reply(ctx, "Fresh start! What would you like to order?");
     return;
+  }
+
+  // In-chat onboarding answers (asked right after store selection).
+  if (ctx.conversation.pendingQuestion === "onboard:name") {
+    if (looksLikeName(trimmed)) {
+      const updated = await prisma.customer.update({
+        where: { id: ctx.customer.id },
+        data: { name: trimmed.slice(0, 80) },
+      });
+      ctx.customer = updated;
+      await recordAudit({
+        merchantId: ctx.merchantId,
+        conversationId: ctx.conversation.id,
+        event: "Customer onboarded",
+        actor: "CUSTOMER",
+        metadata: { via: "whatsapp", field: "name" },
+      });
+      await startChatOnboarding(ctx, { includeGreeting: false });
+      return;
+    }
+    // Not a name — stop asking and treat it as a normal message.
+    await setConversation(ctx, { pendingQuestion: null });
+  } else if (ctx.conversation.pendingQuestion === "onboard:zone") {
+    const zones = await prisma.deliveryZone.findMany({
+      where: { merchantId: ctx.merchantId, active: true },
+    });
+    const match = matchAgainst(trimmed, zones, (z) => [z.name, ...z.aliases]);
+    if (match.best && match.status !== "none") {
+      await saveDefaultZone(ctx, match.best.item.name);
+      return;
+    }
+    // Anything else (e.g. they started ordering) falls through normally.
+    await setConversation(ctx, { pendingQuestion: null });
   }
 
   // Free text → AI extraction (catalogue-grounded).
@@ -972,6 +1077,25 @@ async function handleInteractiveReply(
     await retryPayment(ctx, orderId ?? "");
     return;
   }
+  if (interactiveId.startsWith("onboardzone:")) {
+    const zoneId = interactiveId.split(":")[1];
+    if (zoneId === "skip") {
+      await setConversation(ctx, { pendingQuestion: null });
+      await reply(
+        ctx,
+        "No problem — I'll ask when you order. What would you like today?"
+      );
+      return;
+    }
+    const zone = zones.find((z) => z.id === zoneId);
+    if (zone) {
+      await saveDefaultZone(ctx, zone.name);
+    } else {
+      await setConversation(ctx, { pendingQuestion: null });
+      await reply(ctx, "That option expired — what would you like to order?");
+    }
+    return;
+  }
   await reply(ctx, "Sorry, that button has expired. Type \"help\" to see options.");
 }
 
@@ -1301,6 +1425,30 @@ async function cancelCurrentOrder(ctx: EngineContext): Promise<void> {
     order
       ? `Order ${order.reference} is cancelled. If you change your mind, just send a new order.`
       : "Nothing to cancel — your draft is cleared. Send a new order anytime."
+  );
+}
+
+/** Saves the customer's default delivery area from in-chat onboarding. */
+async function saveDefaultZone(
+  ctx: EngineContext,
+  zoneName: string
+): Promise<void> {
+  const updated = await prisma.customer.update({
+    where: { id: ctx.customer.id },
+    data: { defaultAddress: zoneName },
+  });
+  ctx.customer = updated;
+  await setConversation(ctx, { pendingQuestion: null });
+  await recordAudit({
+    merchantId: ctx.merchantId,
+    conversationId: ctx.conversation.id,
+    event: "Customer onboarded",
+    actor: "CUSTOMER",
+    metadata: { via: "whatsapp", field: "deliveryArea" },
+  });
+  await reply(
+    ctx,
+    `Saved — deliveries default to *${zoneName}*. Now, what would you like to order?`
   );
 }
 
