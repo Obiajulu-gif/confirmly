@@ -27,6 +27,26 @@ export const waInteractiveMessageSchema = z.object({
     list_reply: z
       .object({ id: z.string(), title: z.string() })
       .optional(),
+    nfm_reply: z
+      .object({
+        name: z.string().optional(),
+        body: z.string().optional(),
+        response_json: z.string(),
+      })
+      .optional(),
+  }),
+});
+
+export const waLocationMessageSchema = z.object({
+  id: z.string(),
+  from: z.string(),
+  timestamp: z.string(),
+  type: z.literal("location"),
+  location: z.object({
+    latitude: z.number(),
+    longitude: z.number(),
+    name: z.string().optional(),
+    address: z.string().optional(),
   }),
 });
 
@@ -40,6 +60,7 @@ export const waOtherMessageSchema = z.object({
 export const waMessageSchema = z.union([
   waTextMessageSchema,
   waInteractiveMessageSchema,
+  waLocationMessageSchema,
   waOtherMessageSchema,
 ]);
 
@@ -87,13 +108,26 @@ export type WaWebhookPayload = z.infer<typeof waWebhookSchema>;
 
 export interface ParsedInboundMessage {
   providerMessageId: string;
-  from: string; // wa_id
+  from: string;
   profileName: string | null;
   timestamp: Date;
-  kind: "text" | "button_reply" | "list_reply" | "unsupported";
+  kind:
+    | "text"
+    | "button_reply"
+    | "list_reply"
+    | "flow_reply"
+    | "location"
+    | "unsupported";
   text: string | null;
   /** For button/list replies, the developer-defined identifier. */
   interactiveId: string | null;
+  location: {
+    latitude: number;
+    longitude: number;
+    name: string | null;
+    address: string | null;
+  } | null;
+  flowResponse: Record<string, unknown> | null;
   rawType: string;
 }
 
@@ -109,6 +143,17 @@ export interface ParsedWebhook {
   statuses: ParsedStatusUpdate[];
 }
 
+function parseFlowResponse(raw: string): Record<string, unknown> | null {
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    return typeof parsed === "object" && parsed !== null
+      ? (parsed as Record<string, unknown>)
+      : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Flattens a validated webhook payload into inbound messages + statuses. */
 export function parseWebhookPayload(payload: WaWebhookPayload): ParsedWebhook {
   const out: ParsedWebhook = { phoneNumberId: null, messages: [], statuses: [] };
@@ -118,8 +163,7 @@ export function parseWebhookPayload(payload: WaWebhookPayload): ParsedWebhook {
       if (change.field !== "messages") continue;
       const value = change.value;
       out.phoneNumberId = value.metadata?.phone_number_id ?? out.phoneNumberId;
-      const profileName =
-        value.contacts?.[0]?.profile?.name ?? null;
+      const profileName = value.contacts?.[0]?.profile?.name ?? null;
 
       for (const raw of value.messages ?? []) {
         const parsed = waMessageSchema.safeParse(raw);
@@ -136,21 +180,62 @@ export function parseWebhookPayload(payload: WaWebhookPayload): ParsedWebhook {
             kind: "text",
             text: msg.text.body,
             interactiveId: null,
+            location: null,
+            flowResponse: null,
             rawType: "text",
           });
-        } else if ("interactive" in msg && msg.type === "interactive") {
-          const reply =
-            msg.interactive.button_reply ?? msg.interactive.list_reply;
+        } else if ("location" in msg && msg.type === "location") {
           out.messages.push({
             providerMessageId: msg.id,
             from: msg.from,
             profileName,
             timestamp,
-            kind: msg.interactive.button_reply ? "button_reply" : "list_reply",
-            text: reply?.title ?? null,
-            interactiveId: reply?.id ?? null,
-            rawType: "interactive",
+            kind: "location",
+            text: msg.location.name ?? msg.location.address ?? null,
+            interactiveId: null,
+            location: {
+              latitude: msg.location.latitude,
+              longitude: msg.location.longitude,
+              name: msg.location.name ?? null,
+              address: msg.location.address ?? null,
+            },
+            flowResponse: null,
+            rawType: "location",
           });
+        } else if ("interactive" in msg && msg.type === "interactive") {
+          if (msg.interactive.nfm_reply) {
+            out.messages.push({
+              providerMessageId: msg.id,
+              from: msg.from,
+              profileName,
+              timestamp,
+              kind: "flow_reply",
+              text: msg.interactive.nfm_reply.body ?? null,
+              interactiveId: msg.interactive.nfm_reply.name ?? "flow_reply",
+              location: null,
+              flowResponse: parseFlowResponse(
+                msg.interactive.nfm_reply.response_json
+              ),
+              rawType: "interactive.nfm_reply",
+            });
+          } else {
+            const reply =
+              msg.interactive.button_reply ?? msg.interactive.list_reply;
+            out.messages.push({
+              providerMessageId: msg.id,
+              from: msg.from,
+              profileName,
+              timestamp,
+              kind: msg.interactive.button_reply
+                ? "button_reply"
+                : "list_reply",
+              text: reply?.title ?? null,
+              interactiveId: reply?.id ?? null,
+              location: null,
+              flowResponse: null,
+              rawType: "interactive",
+            });
+          }
         } else {
           out.messages.push({
             providerMessageId: msg.id,
@@ -160,6 +245,8 @@ export function parseWebhookPayload(payload: WaWebhookPayload): ParsedWebhook {
             kind: "unsupported",
             text: null,
             interactiveId: null,
+            location: null,
+            flowResponse: null,
             rawType: msg.type,
           });
         }
@@ -179,7 +266,7 @@ export function parseWebhookPayload(payload: WaWebhookPayload): ParsedWebhook {
   return out;
 }
 
-/** Removes fields we never store (raw contacts, etc.) for auditing. */
+/** Removes fields we never store (raw contacts, coordinates, addresses, etc.). */
 export function sanitizeInboundPayload(message: ParsedInboundMessage) {
   return {
     providerMessageId: message.providerMessageId,
@@ -187,6 +274,8 @@ export function sanitizeInboundPayload(message: ParsedInboundMessage) {
     rawType: message.rawType,
     interactiveId: message.interactiveId,
     hasText: message.text !== null,
+    hasLocation: message.location !== null,
+    hasFlowResponse: message.flowResponse !== null,
     timestamp: message.timestamp.toISOString(),
   };
 }
