@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ArrowLeft, MessageCircle, Store } from "lucide-react";
 import { prisma } from "@/lib/db";
 import { buildWaLink } from "@/lib/orders/onboarding";
+import { resolveWhatsAppPublicNumber } from "@/lib/whatsapp/client";
 import { ConfirmlyLogo } from "@/components/logo";
 
 export const dynamic = "force-dynamic";
@@ -22,6 +23,8 @@ export default async function StartOrderPage() {
     orderBy: { createdAt: "asc" },
     take: 24,
   });
+  // Resolve the real display number (env value, else Meta lookup) once.
+  const publicNumber = await resolveWhatsAppPublicNumber().catch(() => null);
 
   return (
     <div className="relative flex min-h-screen flex-col overflow-hidden bg-night-900 text-white">
@@ -63,7 +66,7 @@ export default async function StartOrderPage() {
 
           <div className="mt-6 grid gap-3 sm:grid-cols-2">
             {merchants.map((m) => {
-              const waLink = buildWaLink(m.storeCode);
+              const waLink = buildWaLink(m.storeCode, publicNumber);
               const card = (
                 <>
                   <div className="flex items-start justify-between">

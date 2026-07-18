@@ -215,6 +215,12 @@ export default function LandingPage() {
               Login
             </Link>
             <Link
+              href="/signup"
+              className="hidden rounded-xl border border-white/15 px-4 py-2 text-sm font-semibold text-white/85 transition hover:border-brand-400/50 hover:text-white sm:block"
+            >
+              Create business account
+            </Link>
+            <Link
               href="/start"
               className="cta-glow rounded-xl bg-brand-500 px-4 py-2 text-sm font-semibold text-night-900 transition hover:bg-brand-400"
             >
