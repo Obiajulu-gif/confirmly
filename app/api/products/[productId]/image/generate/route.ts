@@ -11,6 +11,7 @@ import { saveStoredProductImage } from "@/lib/product-images";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 180;
 
 type Context = { params: Promise<{ productId: string }> };
 
