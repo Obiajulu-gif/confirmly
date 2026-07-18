@@ -4,7 +4,7 @@
   "private": true,
   "description": "Turn WhatsApp orders into verified payments.",
   "scripts": {
-    "prepare:product-images": "python scripts/finalize-product-images.py",
+    "prepare:product-images": "node scripts/run-product-image-patch.mjs",
     "dev": "npm run prepare:product-images && prisma generate && next dev",
     "build": "npm run prepare:product-images && prisma generate && next build",
     "vercel-build": "node scripts/vercel-build.mjs",
@@ -23,7 +23,7 @@
     "secrets:scan": "node scripts/verify-no-secrets.mjs",
     "vercel:env": "node scripts/sync-vercel-env.mjs",
     "smoke": "node scripts/smoke-test.mjs",
-    "postinstall": "python scripts/finalize-product-images.py && prisma generate"
+    "postinstall": "node scripts/run-product-image-patch.mjs && prisma generate"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
