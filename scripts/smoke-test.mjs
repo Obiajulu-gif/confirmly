@@ -22,12 +22,20 @@ await check("landing page renders", async () => {
   if (!r.ok) return false;
   // The headline spans styled elements — check both fragments.
   const html = await r.text();
-  return html.includes("From chat to") && html.includes("confirmed payment.");
+  return (
+    html.includes("Turn WhatsApp orders into") &&
+    html.includes("verified payments.")
+  );
 });
 
-await check("onboarding page renders", async () => {
+await check("store directory renders", async () => {
   const r = await fetch(`${base}/start`);
-  return r.ok && (await r.text()).includes("let&#x27;s meet you");
+  return r.ok && (await r.text()).includes("Choose a store");
+});
+
+await check("merchant signup renders", async () => {
+  const r = await fetch(`${base}/signup`);
+  return r.ok && (await r.text()).includes("Create your business account");
 });
 
 await check("health endpoint ok + database connected", async () => {
