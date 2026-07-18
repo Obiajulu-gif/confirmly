@@ -32,8 +32,4 @@ if (process.env.DATABASE_URL?.trim()) {
   );
 }
 
-if (process.env.VERCEL_ENV === "production") {
-  run(nodeCommand, ["scripts/probe-nvidia-image.mjs"]);
-}
-
 run(npmCommand, ["next", "build"]);
