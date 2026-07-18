@@ -12,11 +12,9 @@ function run(command, args) {
 
 const npmCommand = process.platform === "win32" ? "npx.cmd" : "npx";
 const nodeCommand = process.platform === "win32" ? "node.exe" : "node";
-const pythonCommand = process.platform === "win32" ? "python" : "python3";
 
-// The product-image upgrade keeps its schema/client integration patch
-// idempotent so local, preview and production builds all compile the same code.
-run(pythonCommand, ["scripts/finalize-product-images.py"]);
+// Keep local, preview and production builds on the same idempotent image schema.
+run(nodeCommand, ["scripts/run-product-image-patch.mjs"]);
 run(npmCommand, ["prisma", "generate"]);
 
 if (process.env.DATABASE_URL?.trim()) {
