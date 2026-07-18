@@ -6,6 +6,7 @@ import { isDemoMode } from "@/lib/env";
 import { ConfirmlyLogo } from "@/components/logo";
 import { logoutAction } from "@/app/(auth)/login/actions";
 import { NavLinks } from "./nav-links";
+import { StoreSwitcher } from "./store-switcher";
 
 export default async function DashboardLayout({
   children,
@@ -16,23 +17,45 @@ export default async function DashboardLayout({
   if (!authed) redirect("/login?next=/dashboard");
   const session = await getMerchantSession();
   if (!session) redirect("/onboarding");
-  const merchant = await prisma.merchant.findUnique({
-    where: { id: session.merchantId },
-  });
+
+  const [merchant, memberships] = await Promise.all([
+    prisma.merchant.findUnique({
+      where: { id: session.merchantId },
+    }),
+    prisma.merchantMembership.findMany({
+      where: { userId: session.userId },
+      include: {
+        merchant: {
+          select: { id: true, name: true, active: true },
+        },
+      },
+      orderBy: { createdAt: "asc" },
+    }),
+  ]);
+  const stores = memberships
+    .map((membership) => membership.merchant)
+    .filter((store) => store.active);
 
   return (
     <div className="flex min-h-screen flex-col lg:flex-row">
-      {/* Sidebar */}
       <aside className="relative border-b border-white/5 bg-gradient-to-b from-night-800 via-night-900 to-night-900 text-white lg:sticky lg:top-0 lg:flex lg:h-screen lg:w-64 lg:shrink-0 lg:flex-col lg:border-b-0 lg:border-r">
         <div className="night-grid pointer-events-none absolute inset-0 opacity-40" />
         <div className="relative flex items-center justify-between p-4 lg:block lg:p-5">
           <Link href="/dashboard" aria-label="Dashboard home">
             <ConfirmlyLogo tone="dark" />
           </Link>
-          <p className="mt-0 flex items-center gap-1.5 text-xs text-white/50 lg:mt-3">
-            <span className="h-1.5 w-1.5 rounded-full bg-brand-400" />
-            {merchant?.name ?? "Merchant"}
-          </p>
+          <div className="min-w-0 flex-1 lg:block">
+            <p className="mt-0 flex items-center gap-1.5 text-xs text-white/50 lg:mt-3">
+              <span className="h-1.5 w-1.5 rounded-full bg-brand-400" />
+              {merchant?.name ?? "Merchant"}
+            </p>
+            {stores.length > 1 ? (
+              <StoreSwitcher
+                currentMerchantId={session.merchantId}
+                stores={stores}
+              />
+            ) : null}
+          </div>
         </div>
         <NavLinks />
         <div className="relative mt-auto hidden p-4 lg:block">
@@ -50,7 +73,6 @@ export default async function DashboardLayout({
         </div>
       </aside>
 
-      {/* Main */}
       <div className="flex-1 bg-surface">
         {isDemoMode() ? (
           <div className="border-b border-amber-300 bg-amber-100 px-4 py-2 text-center text-sm font-semibold text-amber-900">
