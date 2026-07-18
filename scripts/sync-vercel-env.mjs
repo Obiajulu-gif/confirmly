@@ -15,8 +15,10 @@ const targetIndex = process.argv.indexOf("--target");
 const TARGET =
   targetIndex !== -1 ? (process.argv[targetIndex + 1] ?? "production") : "production";
 
+// APP_URL is deliberately NOT synced: the local value points at localhost
+// and would break production links. Set it once in Vercel to the deployed
+// domain.
 const PUSH_KEYS = [
-  "APP_URL",
   "DATABASE_URL",
   "AUTH_SECRET",
   "ENCRYPTION_KEY",

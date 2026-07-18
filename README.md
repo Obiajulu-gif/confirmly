@@ -231,6 +231,9 @@ Names only — values live in `.env.local` (git-ignored) or Vercel.
 | `APP_URL` | Public base URL (used in links/receipts) |
 | `DATABASE_URL` | PostgreSQL connection string (unquoted) |
 | `AUTH_SECRET` | Session JWT signing key (32 random bytes) |
+| `ENCRYPTION_KEY` | AES-256-GCM key for settlement bank details at rest |
+| `MONNIFY_SUBACCOUNT_ENABLED` | `true` = merchant-routed checkout via subaccounts |
+| `MONNIFY_PLATFORM_FEE_PERCENT` | Platform fee (MVP default 0) |
 | `RECEIPT_TOKEN_SECRET` | Receipt token MAC key |
 | `DEMO_MERCHANT_EMAIL` / `DEMO_MERCHANT_PASSWORD` | Seeded dashboard login |
 | `WHATSAPP_ACCESS_TOKEN` | Meta Graph API token |

@@ -92,7 +92,9 @@ test("wrong credentials are rejected", async ({ page }) => {
 test("merchant can log in and navigate the dashboard", async ({ page }) => {
   await login(page);
   await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
-  await expect(page.getByText("Integration health")).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Integration health" })
+  ).toBeVisible();
 
   await page.getByRole("link", { name: "Orders" }).first().click();
   await expect(page.getByRole("heading", { name: "Orders" })).toBeVisible();
@@ -113,28 +115,22 @@ test("merchant can log in and navigate the dashboard", async ({ page }) => {
   await expect(page.getByText("/api/webhooks/monnify")).toBeVisible();
 });
 
-test("customer onboarding captures a profile and offers the WhatsApp handoff", async ({
+test("the store directory deep-links every store into WhatsApp", async ({
   page,
 }) => {
   await page.goto("/start");
-  await expect(page.getByText("First, let's meet you")).toBeVisible();
-  await page.getByLabel(/Your name/).fill("Playwright Tester");
-  await page.getByLabel(/WhatsApp number/).fill("0803 555 0100");
-  await page.getByRole("button", { name: "Continue →" }).click();
-
-  await expect(page.getByText("Where do orders go?")).toBeVisible();
-  await page.getByRole("button", { name: /Yaba/ }).click();
-  await page.getByRole("button", { name: /Save & open WhatsApp/ }).click();
-
-  await expect(page.getByText(/You're all set/)).toBeVisible({
-    timeout: 30_000,
-  });
-  await expect(page.getByText("Try saying")).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Choose a store" })
+  ).toBeVisible();
+  const storeLink = page.locator('a[href^="https://wa.me/"]').first();
+  await expect(storeLink).toBeVisible();
+  const href = await storeLink.getAttribute("href");
+  expect(decodeURIComponent(href ?? "")).toMatch(/START [A-Z0-9]+/);
 });
 
-test("an invalid receipt token shows RECEIPT NOT VALID", async ({ page }) => {
+test("an unknown receipt token shows RECEIPT NOT FOUND", async ({ page }) => {
   await page.goto("/verify/receipt/this-token-does-not-exist-123456789");
-  await expect(page.getByText("RECEIPT NOT VALID")).toBeVisible();
+  await expect(page.getByText("RECEIPT NOT FOUND")).toBeVisible();
 });
 
 test("health endpoint responds", async ({ request }) => {

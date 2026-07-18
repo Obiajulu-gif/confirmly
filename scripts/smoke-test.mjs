@@ -75,9 +75,9 @@ await check("Monnify webhook POST rejects unsigned payloads (401)", async () => 
   return r.status === 401 || r.status === 503;
 });
 
-await check("invalid receipt shows RECEIPT NOT VALID", async () => {
+await check("unknown receipt shows RECEIPT NOT FOUND", async () => {
   const r = await fetch(`${base}/verify/receipt/not-a-real-token-1234567890`);
-  return r.ok && (await r.text()).includes("RECEIPT NOT VALID");
+  return r.ok && (await r.text()).includes("RECEIPT NOT FOUND");
 });
 
 let failed = 0;
