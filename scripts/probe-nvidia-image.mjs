@@ -17,14 +17,14 @@ try {
     },
     body: JSON.stringify({
       prompt:
-        "A simple clean ecommerce studio illustration of a plain reflective safety vest on a neutral background, no person, no text, no logo, square composition",
-      width: 512,
-      height: 512,
+        "A simple clean ecommerce studio product illustration of a plain reflective safety vest on a neutral background, no person, no text, no logo, square composition",
+      width: 1024,
+      height: 1024,
       samples: 1,
       seed: 0,
-      steps: 1,
+      steps: 4,
     }),
-    signal: AbortSignal.timeout(60_000),
+    signal: AbortSignal.timeout(180_000),
   });
 
   const body = await response.json().catch(() => ({}));
