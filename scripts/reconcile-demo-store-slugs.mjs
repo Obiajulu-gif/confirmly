@@ -38,6 +38,20 @@ try {
       );
     }
   }
+
+  // Test fixtures should never appear in the public WhatsApp store directory.
+  const hidden = await prisma.merchant.updateMany({
+    where: {
+      OR: [
+        { name: { startsWith: "Engine Test" } },
+        { storeCode: { startsWith: "ENGINE" } },
+      ],
+    },
+    data: { active: false },
+  });
+  if (hidden.count) {
+    console.log(`Paused ${hidden.count} internal test store fixture(s).`);
+  }
 } finally {
   await prisma.$disconnect();
 }
