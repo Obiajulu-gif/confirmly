@@ -1,0 +1,39 @@
+name: Finalize product images
+
+on:
+  push:
+    paths:
+      - .github/workflows/finalize-product-images.yml
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Apply integration patch
+        run: python scripts/finalize-product-images.py
+
+      - name: Validate
+        run: |
+          npm ci
+          npx prisma format
+          npx prisma generate
+          npm run lint
+          npm run typecheck
+          npm run test
+          npm run build
+          npm run secrets:scan
+
+      - name: Commit validated changes
+        run: |
+          rm scripts/finalize-product-images.py
+          rm .github/workflows/finalize-product-images.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .
+          git commit -m "feat: complete product image and WhatsApp preview integration"
+          git push origin HEAD:feat/product-images-whatsapp
