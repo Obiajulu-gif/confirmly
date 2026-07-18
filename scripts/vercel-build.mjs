@@ -11,12 +11,18 @@ function run(command, args) {
 }
 
 const npmCommand = process.platform === "win32" ? "npx.cmd" : "npx";
+const nodeCommand = process.platform === "win32" ? "node.exe" : "node";
 
 run(npmCommand, ["prisma", "generate"]);
 
 if (process.env.DATABASE_URL?.trim()) {
-  console.log("DATABASE_URL is configured; applying migrations and idempotent seed data.");
+  console.log(
+    "DATABASE_URL is configured; applying migrations and idempotent seed data."
+  );
   run(npmCommand, ["prisma", "migrate", "deploy"]);
+  // Existing user-created stores may already own a demo store code while using
+  // an older slug. Reconcile that identity before Prisma's slug-based upserts.
+  run(nodeCommand, ["scripts/reconcile-demo-store-slugs.mjs"]);
   run(npmCommand, ["prisma", "db", "seed"]);
 } else {
   console.warn(
