@@ -6,15 +6,6 @@ import { getMerchantSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { nairaAmountToKobo } from "@/lib/money";
 
-const optionalUrl = z
-  .string()
-  .trim()
-  .max(500)
-  .refine((value) => value === "" || /^https?:\/\//i.test(value), {
-    message: "Image URL must start with http:// or https://",
-  })
-  .optional();
-
 const productSchema = z.object({
   name: z.string().trim().min(1).max(120),
   description: z.string().trim().max(1000).optional().or(z.literal("")),
@@ -22,7 +13,6 @@ const productSchema = z.object({
   priceNaira: z.coerce.number().min(0).max(50_000_000),
   aliases: z.string().max(500).optional().or(z.literal("")),
   stockQuantity: z.coerce.number().int().min(0).max(1_000_000),
-  imageUrl: optionalUrl,
   variantSizes: z.string().max(300).optional().or(z.literal("")),
   variantColours: z.string().max(300).optional().or(z.literal("")),
 });
@@ -30,6 +20,7 @@ const productSchema = z.object({
 export interface ProductFormState {
   error: string | null;
   ok: boolean;
+  productId?: string;
 }
 
 function parseList(raw: string | undefined, max = 20): string[] {
@@ -83,7 +74,6 @@ function productData(data: z.infer<typeof productSchema>) {
     priceKobo: nairaAmountToKobo(data.priceNaira),
     aliases: parseAliases(data.aliases),
     stockQuantity: data.stockQuantity,
-    imageUrl: data.imageUrl || null,
   };
 }
 
@@ -108,7 +98,7 @@ export async function createProductAction(
     stockQuantity: data.stockQuantity,
   });
 
-  await prisma.product.create({
+  const product = await prisma.product.create({
     data: {
       merchantId: session.merchantId,
       ...productData(data),
@@ -118,7 +108,7 @@ export async function createProductAction(
   });
 
   revalidatePath("/dashboard/products");
-  return { error: null, ok: true };
+  return { error: null, ok: true, productId: product.id };
 }
 
 export async function updateProductAction(
@@ -163,7 +153,7 @@ export async function updateProductAction(
   });
 
   revalidatePath("/dashboard/products");
-  return { error: null, ok: true };
+  return { error: null, ok: true, productId: id };
 }
 
 export async function duplicateProductAction(formData: FormData): Promise<void> {
@@ -186,7 +176,14 @@ export async function duplicateProductAction(formData: FormData): Promise<void> 
       aliases: product.aliases,
       stockQuantity: product.stockQuantity,
       active: false,
-      imageUrl: product.imageUrl,
+      imageUrl:
+        product.imageSource === "EXTERNAL_URL" ? product.imageUrl : null,
+      imageSource:
+        product.imageSource === "EXTERNAL_URL" ? "EXTERNAL_URL" : null,
+      imageStatus:
+        product.imageSource === "EXTERNAL_URL" ? "READY" : "NONE",
+      imageApprovedAt:
+        product.imageSource === "EXTERNAL_URL" ? new Date() : null,
       variants: product.variants.length
         ? {
             create: product.variants.map((variant) => ({

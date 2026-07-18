@@ -13,6 +13,8 @@ function run(command, args) {
 const npmCommand = process.platform === "win32" ? "npx.cmd" : "npx";
 const nodeCommand = process.platform === "win32" ? "node.exe" : "node";
 
+// Keep local, preview and production builds on the same idempotent image schema.
+run(nodeCommand, ["scripts/run-product-image-patch.mjs"]);
 run(npmCommand, ["prisma", "generate"]);
 
 if (process.env.DATABASE_URL?.trim()) {
