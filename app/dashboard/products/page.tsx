@@ -14,6 +14,28 @@ import {
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Products" };
 
+function imageBadge(product: {
+  imageSource: string | null;
+  imageStatus: string;
+  imageApprovedAt: Date | null;
+}) {
+  if (product.imageStatus === "FAILED")
+    return <Badge tone="danger">Image generation failed</Badge>;
+  if (product.imageSource === "MERCHANT_UPLOAD")
+    return <Badge tone="success">Merchant photo</Badge>;
+  if (product.imageSource === "AI_GENERATED")
+    return (
+      <Badge tone={product.imageApprovedAt ? "success" : "warning"}>
+        {product.imageApprovedAt
+          ? "AI illustration approved"
+          : "AI illustration awaiting approval"}
+      </Badge>
+    );
+  if (product.imageSource === "EXTERNAL_URL")
+    return <Badge tone="info">External image</Badge>;
+  return <Badge tone="neutral">No image</Badge>;
+}
+
 export default async function ProductsPage() {
   const session = await getMerchantSession();
   if (!session) redirect("/login");
@@ -49,8 +71,8 @@ export default async function ProductsPage() {
             Catalogue and delivery
           </h1>
           <p className="mt-1 text-sm text-ink-500">
-            These are the products, categories and delivery options customers
-            can select inside WhatsApp.
+            Attach real product photographs or generate clearly labelled AI
+            illustrations, then let customers preview products inside WhatsApp.
           </p>
         </div>
         <ProductForm />
@@ -75,51 +97,63 @@ export default async function ProductsPage() {
             {products.map((product) => (
               <li key={product.id} className="py-5">
                 <div className="flex flex-wrap items-start justify-between gap-4">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p className="font-semibold text-ink-900">
-                        {product.name}
+                  <div className="flex min-w-0 flex-1 gap-4">
+                    {product.imageUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={product.imageUrl}
+                        alt=""
+                        className="h-20 w-20 shrink-0 rounded-xl border border-ink-900/10 object-contain"
+                      />
+                    ) : (
+                      <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-xl border border-dashed border-ink-900/15 text-center text-[10px] text-ink-500">
+                        No image
+                      </div>
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="font-semibold text-ink-900">
+                          {product.name}
+                        </p>
+                        <Badge tone={product.active ? "success" : "neutral"}>
+                          {product.active ? "Active" : "Hidden"}
+                        </Badge>
+                        {imageBadge(product)}
+                      </div>
+                      <p className="mt-1 text-sm text-ink-500">
+                        {formatNaira(product.priceKobo)} · stock{" "}
+                        {product.stockQuantity}
+                        {product.category ? ` · ${product.category}` : ""}
                       </p>
-                      <Badge tone={product.active ? "success" : "neutral"}>
-                        {product.active ? "Active" : "Hidden"}
-                      </Badge>
-                      {product.imageUrl ? (
-                        <Badge tone="success">Image configured</Badge>
+                      {product.description ? (
+                        <p className="mt-2 max-w-2xl text-sm text-ink-500">
+                          {product.description}
+                        </p>
+                      ) : null}
+                      {product.aliases.length ? (
+                        <p className="mt-2 text-xs text-ink-500">
+                          Customer aliases: {product.aliases.join(", ")}
+                        </p>
+                      ) : null}
+                      {product.variants.length ? (
+                        <div className="mt-3 flex flex-wrap gap-1.5">
+                          {product.variants.map((variant) => (
+                            <span
+                              key={variant.id}
+                              className="rounded-full bg-ink-900/5 px-2 py-1 text-xs text-ink-700"
+                            >
+                              {[variant.colour, variant.size]
+                                .filter(Boolean)
+                                .join(" / ")}
+                              {variant.priceAdjustmentKobo
+                                ? ` (+${formatNaira(variant.priceAdjustmentKobo)})`
+                                : ""}
+                              {` · ${variant.stockQuantity}`}
+                            </span>
+                          ))}
+                        </div>
                       ) : null}
                     </div>
-                    <p className="mt-1 text-sm text-ink-500">
-                      {formatNaira(product.priceKobo)} · stock{" "}
-                      {product.stockQuantity}
-                      {product.category ? ` · ${product.category}` : ""}
-                    </p>
-                    {product.description ? (
-                      <p className="mt-2 max-w-2xl text-sm text-ink-500">
-                        {product.description}
-                      </p>
-                    ) : null}
-                    {product.aliases.length ? (
-                      <p className="mt-2 text-xs text-ink-500">
-                        Customer aliases: {product.aliases.join(", ")}
-                      </p>
-                    ) : null}
-                    {product.variants.length ? (
-                      <div className="mt-3 flex flex-wrap gap-1.5">
-                        {product.variants.map((variant) => (
-                          <span
-                            key={variant.id}
-                            className="rounded-full bg-ink-900/5 px-2 py-1 text-xs text-ink-700"
-                          >
-                            {[variant.colour, variant.size]
-                              .filter(Boolean)
-                              .join(" / ")}
-                            {variant.priceAdjustmentKobo
-                              ? ` (+${formatNaira(variant.priceAdjustmentKobo)})`
-                              : ""}
-                            {` · ${variant.stockQuantity}`}
-                          </span>
-                        ))}
-                      </div>
-                    ) : null}
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
                     <form action={toggleProductActiveAction}>
@@ -140,7 +174,24 @@ export default async function ProductsPage() {
                         Duplicate
                       </button>
                     </form>
-                    <ProductForm product={product} />
+                    <ProductForm
+                      product={{
+                        id: product.id,
+                        name: product.name,
+                        description: product.description,
+                        category: product.category,
+                        priceKobo: product.priceKobo,
+                        aliases: product.aliases,
+                        stockQuantity: product.stockQuantity,
+                        imageUrl: product.imageUrl,
+                        imageSource: product.imageSource,
+                        imageStatus: product.imageStatus,
+                        imageApprovedAt:
+                          product.imageApprovedAt?.toISOString() ?? null,
+                        imageFailureReason: product.imageFailureReason,
+                        variants: product.variants,
+                      }}
+                    />
                   </div>
                 </div>
               </li>
