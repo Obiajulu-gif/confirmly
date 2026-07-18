@@ -10,15 +10,13 @@ import {
   sanitizeInboundPayload,
   waWebhookSchema,
 } from "@/lib/whatsapp/types";
+import { preprocessCommerceMessage } from "@/lib/whatsapp/commerce-menu";
 import { processInboundMessage } from "@/lib/orders/engine";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-/**
- * GET — Meta webhook verification challenge.
- * Returns ONLY the challenge on a token match; 403 otherwise.
- */
+/** Meta webhook verification challenge. */
 export async function GET(request: NextRequest) {
   const params = request.nextUrl.searchParams;
   const mode = params.get("hub.mode");
@@ -33,11 +31,9 @@ export async function GET(request: NextRequest) {
 }
 
 /**
- * POST — inbound messages and status updates.
- * Raw body is read before parsing; X-Hub-Signature-256 is validated with
- * HMAC-SHA256. Invalid signatures get 401. Processing happens after the 200
- * is returned (Next.js `after`), and unique provider message ids make
- * duplicate deliveries harmless.
+ * Signed inbound WhatsApp webhook. We acknowledge quickly and perform
+ * idempotent processing afterwards. Clickable store/category/product actions
+ * are handled deterministically before free text is passed to NVIDIA.
  */
 export async function POST(request: NextRequest) {
   const rawBody = await request.text();
@@ -47,7 +43,9 @@ export async function POST(request: NextRequest) {
   try {
     appSecret = requireEnv("WHATSAPP_APP_SECRET").WHATSAPP_APP_SECRET;
   } catch {
-    logger.error("whatsapp webhook hit but WHATSAPP_APP_SECRET is not configured");
+    logger.error(
+      "whatsapp webhook hit but WHATSAPP_APP_SECRET is not configured"
+    );
     return new NextResponse("Not configured", { status: 503 });
   }
 
@@ -64,14 +62,12 @@ export async function POST(request: NextRequest) {
   }
   const parsed = waWebhookSchema.safeParse(payload);
   if (!parsed.success) {
-    // Signed but unexpected shape — acknowledge so Meta doesn't retry forever.
     logger.warn("whatsapp webhook: unrecognized payload shape");
     return NextResponse.json({ received: true });
   }
 
   const webhook = parseWebhookPayload(parsed.data);
 
-  // Tenant safety: only process events for the configured phone number.
   const configuredPhoneId = env().WHATSAPP_PHONE_NUMBER_ID;
   if (
     webhook.phoneNumberId &&
@@ -82,34 +78,51 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ received: true });
   }
 
-  // Record sanitized events for auditability (idempotent on the event key).
+  // Only newly inserted provider events are processed. This protects the menu
+  // layer as well as the order engine from Meta webhook retries.
+  const newMessageIds = new Set<string>();
   for (const message of webhook.messages) {
     try {
       await prisma.webhookEvent.create({
         data: {
           provider: "WHATSAPP",
-          providerEventKey: webhookEventKey("wa", ["msg", message.providerMessageId]),
+          providerEventKey: webhookEventKey("wa", [
+            "msg",
+            message.providerMessageId,
+          ]),
           eventType: `message.${message.kind}`,
           payload: sanitizeInboundPayload(message),
           state: "RECEIVED",
         },
       });
+      newMessageIds.add(message.providerMessageId);
     } catch {
-      /* duplicate delivery — the unique key absorbs it */
+      logger.info("duplicate WhatsApp webhook ignored", {
+        providerMessageId: message.providerMessageId,
+      });
     }
   }
 
-  // Respond fast; process afterwards.
   defer(async () => {
     for (const message of webhook.messages) {
+      if (!newMessageIds.has(message.providerMessageId)) continue;
       try {
-        // Merchant resolution happens inside the engine (WaSession + store codes).
-        await processInboundMessage(message);
+        const menuResult = await preprocessCommerceMessage(message);
+        if (!menuResult.handled) {
+          await processInboundMessage(menuResult.forwardedMessage ?? message);
+        }
         await prisma.webhookEvent.updateMany({
           where: {
-            providerEventKey: webhookEventKey("wa", ["msg", message.providerMessageId]),
+            providerEventKey: webhookEventKey("wa", [
+              "msg",
+              message.providerMessageId,
+            ]),
           },
-          data: { state: "PROCESSED", processedAt: new Date(), attempts: { increment: 1 } },
+          data: {
+            state: "PROCESSED",
+            processedAt: new Date(),
+            attempts: { increment: 1 },
+          },
         });
       } catch (err) {
         logger.error("inbound processing failed", {
@@ -118,16 +131,21 @@ export async function POST(request: NextRequest) {
         });
         await prisma.webhookEvent.updateMany({
           where: {
-            providerEventKey: webhookEventKey("wa", ["msg", message.providerMessageId]),
+            providerEventKey: webhookEventKey("wa", [
+              "msg",
+              message.providerMessageId,
+            ]),
           },
           data: {
             state: "FAILED",
             attempts: { increment: 1 },
-            errorSummary: err instanceof Error ? err.message.slice(0, 300) : "unknown",
+            errorSummary:
+              err instanceof Error ? err.message.slice(0, 300) : "unknown",
           },
         });
       }
     }
+
     for (const status of webhook.statuses) {
       try {
         await prisma.whatsAppMessage.updateMany({
