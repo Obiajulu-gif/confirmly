@@ -1,0 +1,526 @@
+name: Implement product images
+
+on:
+  push:
+    paths:
+      - .github/workflows/implement-product-images.yml
+
+permissions:
+  contents: write
+
+jobs:
+  implement:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Apply product image upgrade
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import base64
+          
+          FILES = {
+              'lib/product-images.ts': 'aW1wb3J0ICJzZXJ2ZXItb25seSI7CgppbXBvcnQgeyBjcmVhdGVIYXNoIH0gZnJvbSAibm9kZTpjcnlwdG8iOwppbXBvcnQgeyBhcHBVcmwgfSBmcm9tICI...TRUNCATED_FOR_DISPLAY...'}
+          
+          for path, encoded in FILES.items():
+              target = Path(path)
+              target.parent.mkdir(parents=True, exist_ok=True)
+              target.write_bytes(base64.b64decode(encoded))
+          
+          # Prisma schema patch.
+          schema_path = Path("prisma/schema.prisma")
+          schema = schema_path.read_text()
+          if "enum ProductImageSource" not in schema:
+              marker = '''enum AuditActor {
+            SYSTEM
+            CUSTOMER
+            MERCHANT
+            AI
+            PROVIDER
+          }
+          '''
+              addition = marker + '''
+          enum ProductImageSource {
+            MERCHANT_UPLOAD
+            AI_GENERATED
+            EXTERNAL_URL
+          }
+          
+          enum ProductImageStatus {
+            NONE
+            PROCESSING
+            READY
+            FAILED
+          }
+          '''
+              if marker not in schema:
+                  raise SystemExit("AuditActor enum marker not found")
+              schema = schema.replace(marker, addition, 1)
+          
+          if "imageSource" not in schema:
+              old = '''  imageUrl      String?
+            createdAt     DateTime @default(now())
+            updatedAt     DateTime @updatedAt
+          
+            variants   ProductVariant[]
+            orderItems OrderItem[]
+          '''
+              new = '''  imageUrl           String?
+            imageSource        ProductImageSource?
+            imageStatus        ProductImageStatus @default(NONE)
+            imageAltText       String?
+            imagePrompt        String?
+            imageGeneratedAt   DateTime?
+            imageApprovedAt    DateTime?
+            imageFailureReason String?
+            imageContentHash   String?
+            createdAt          DateTime @default(now())
+            updatedAt          DateTime @updatedAt
+          
+            variants   ProductVariant[]
+            orderItems OrderItem[]
+            imageAsset ProductImageAsset?
+          '''
+              if old not in schema:
+                  raise SystemExit("Product image marker not found")
+              schema = schema.replace(old, new, 1)
+          
+          if "model ProductImageAsset" not in schema:
+              marker = '''model ProductVariant {
+          '''
+              model = '''model ProductImageAsset {
+            id          String   @id @default(cuid())
+            productId   String   @unique
+            product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+            merchantId  String
+            bytes       Bytes
+            contentType String
+            sizeBytes   Int
+            sha256      String
+            createdAt   DateTime @default(now())
+            updatedAt   DateTime @updatedAt
+          
+            @@index([merchantId])
+          }
+          
+          '''
+              if marker not in schema:
+                  raise SystemExit("ProductVariant marker not found")
+              schema = schema.replace(marker, model + marker, 1)
+          
+          schema_path.write_text(schema)
+          
+          # Environment schema patch.
+          env_path = Path("lib/env.ts")
+          env_text = env_path.read_text()
+          if "NVIDIA_IMAGE_API_KEY" not in env_text:
+              marker = '''  NVIDIA_ORDER_MODEL: z.string().default("nvidia/nemotron-3-nano-30b-a3b"),
+          '''
+              addition = marker + '''
+            NVIDIA_IMAGE_API_KEY: z.string().min(1).optional(),
+            NVIDIA_IMAGE_BASE_URL: z
+              .string()
+              .url()
+              .default("https://ai.api.nvidia.com"),
+            NVIDIA_IMAGE_MODEL: z
+              .string()
+              .default("black-forest-labs/flux.1-schnell"),
+            NVIDIA_IMAGE_WIDTH: z.coerce.number().int().min(256).max(2048).default(1024),
+            NVIDIA_IMAGE_HEIGHT: z.coerce.number().int().min(256).max(2048).default(1024),
+            NVIDIA_IMAGE_STEPS: z.coerce.number().int().min(1).max(4).default(4),
+            NVIDIA_IMAGE_TIMEOUT_MS: z.coerce
+              .number()
+              .int()
+              .min(5_000)
+              .max(120_000)
+              .default(45_000),
+            NVIDIA_IMAGE_GENERATION_ENABLED: z
+              .string()
+              .transform((value) => value !== "false" && value !== "0")
+              .default("true"),
+            ALLOW_UNAPPROVED_AI_PRODUCT_IMAGES: z
+              .string()
+              .transform((value) => value === "true" || value === "1")
+              .default("false"),
+            PRODUCT_IMAGE_MAX_BYTES: z.coerce
+              .number()
+              .int()
+              .min(100_000)
+              .max(4_194_304)
+              .default(4_194_304),
+          '''
+              if marker not in env_text:
+                  raise SystemExit("NVIDIA env marker not found")
+              env_text = env_text.replace(marker, addition, 1)
+          env_path.write_text(env_text)
+          
+          # .env.example additions.
+          example_path = Path(".env.example")
+          example = example_path.read_text()
+          if "NVIDIA_IMAGE_API_KEY" not in example:
+              marker = "NVIDIA_ORDER_MODEL=nvidia/nemotron-3-nano-30b-a3b\n"
+              addition = marker + '''NVIDIA_IMAGE_API_KEY=
+          NVIDIA_IMAGE_BASE_URL=https://ai.api.nvidia.com
+          NVIDIA_IMAGE_MODEL=black-forest-labs/flux.1-schnell
+          NVIDIA_IMAGE_WIDTH=1024
+          NVIDIA_IMAGE_HEIGHT=1024
+          NVIDIA_IMAGE_STEPS=4
+          NVIDIA_IMAGE_TIMEOUT_MS=45000
+          NVIDIA_IMAGE_GENERATION_ENABLED=true
+          ALLOW_UNAPPROVED_AI_PRODUCT_IMAGES=false
+          PRODUCT_IMAGE_MAX_BYTES=4194304
+          '''
+              if marker not in example:
+                  raise SystemExit(".env NVIDIA marker not found")
+              example = example.replace(marker, addition, 1)
+          example_path.write_text(example)
+          
+          # WhatsApp client image sender.
+          wa_path = Path("lib/whatsapp/client.ts")
+          wa = wa_path.read_text()
+          if "sendImageByUrl" not in wa:
+              marker = '''export interface InteractiveButton {
+          '''
+              addition = '''export async function sendImageByUrl(
+            to: string,
+            input: { imageUrl: string; caption?: string }
+          ): Promise<SendResult> {
+            const url = new URL(input.imageUrl);
+            if (
+              url.protocol !== "https:" ||
+              url.username ||
+              url.password ||
+              ["localhost", "127.0.0.1", "::1"].includes(url.hostname.toLowerCase())
+            ) {
+              throw new WhatsAppSendError("invalid public image URL", null, null);
+            }
+            return post({
+              to,
+              type: "image",
+              image: {
+                link: url.toString(),
+                ...(input.caption ? { caption: input.caption.slice(0, 1024) } : {}),
+              },
+            });
+          }
+          
+          '''
+              if marker not in wa:
+                  raise SystemExit("WhatsApp button marker not found")
+              wa = wa.replace(marker, addition + marker, 1)
+          wa_path.write_text(wa)
+          
+          # Commerce menu imports and product-preview flow.
+          commerce_path = Path("lib/whatsapp/commerce-menu.ts")
+          commerce = commerce_path.read_text()
+          commerce = commerce.replace(
+          '''  sendFlow,
+            sendList,
+            sendText,
+          ''',
+          '''  sendButtons,
+            sendFlow,
+            sendImageByUrl,
+            sendList,
+            sendText,
+          ''',
+          1,
+          )
+          
+          old_fn_start = commerce.index("async function forwardProductSelection(")
+          old_fn_end = commerce.index("\nasync function handleFlowReply(", old_fn_start)
+          new_fn = r'''async function productForSelection(
+            productId: string,
+            context: StoreContext
+          ) {
+            return prisma.product.findFirst({
+              where: {
+                id: productId,
+                merchantId: context.merchant.id,
+                active: true,
+                stockQuantity: { gt: 0 },
+              },
+              include: { variants: true },
+            });
+          }
+          
+          function productDetails(product: {
+            name: string;
+            description: string | null;
+            priceKobo: number;
+            stockQuantity: number;
+            variants: Array<{ colour: string | null; size: string | null }>;
+          }) {
+            const colours = [
+              ...new Set(
+                product.variants
+                  .map((variant) => variant.colour)
+                  .filter((value): value is string => Boolean(value))
+              ),
+            ];
+            const sizes = [
+              ...new Set(
+                product.variants
+                  .map((variant) => variant.size)
+                  .filter((value): value is string => Boolean(value))
+              ),
+            ];
+            return {
+              colours,
+              sizes,
+              text: [
+                `*${product.name}*`,
+                formatNaira(product.priceKobo),
+                [colours.join(", "), sizes.join(", ")].filter(Boolean).join(" · "),
+                `${product.stockQuantity} in stock`,
+                product.description ?? "",
+              ]
+                .filter(Boolean)
+                .join("\n"),
+            };
+          }
+          
+          async function previewProductSelection(
+            message: ParsedInboundMessage,
+            productId: string,
+            context: StoreContext
+          ): Promise<CommerceMenuResult> {
+            const product = await productForSelection(productId, context);
+            if (!product) {
+              await sendText(
+                message.from,
+                "That product is no longer available. Send MENU to browse again."
+              );
+              return { handled: true };
+            }
+          
+            const details = productDetails(product);
+            const allowGenerated =
+              product.imageSource !== "AI_GENERATED" ||
+              Boolean(product.imageApprovedAt) ||
+              env().ALLOW_UNAPPROVED_AI_PRODUCT_IMAGES;
+            const canSendImage = Boolean(product.imageUrl && allowGenerated);
+            const disclosure =
+              product.imageSource === "AI_GENERATED"
+                ? "AI-generated product illustration — actual item may vary."
+                : product.imageSource === "MERCHANT_UPLOAD"
+                  ? "Merchant-provided product photo."
+                  : product.imageSource === "EXTERNAL_URL"
+                    ? "Product image supplied by the merchant."
+                    : "";
+          
+            let imageSent = false;
+            if (canSendImage && product.imageUrl) {
+              try {
+                await sendImageByUrl(message.from, {
+                  imageUrl: product.imageUrl,
+                  caption: [details.text, disclosure].filter(Boolean).join("\n\n"),
+                });
+                imageSent = true;
+                logger.info("product image sent on WhatsApp", {
+                  merchantId: context.merchant.id,
+                  productId: product.id,
+                  source: product.imageSource,
+                });
+              } catch (error) {
+                logger.warn("product image send failed; continuing with text", {
+                  merchantId: context.merchant.id,
+                  productId: product.id,
+                  reason: error instanceof Error ? error.message : "unknown",
+                });
+              }
+            }
+          
+            if (!imageSent) {
+              const unavailable =
+                product.imageSource === "AI_GENERATED" && !allowGenerated
+                  ? "The AI illustration is waiting for merchant approval."
+                  : "The merchant has not added a customer-ready product photo yet.";
+              await sendText(message.from, `${details.text}\n\n${unavailable}`);
+            }
+          
+            await sendButtons(message.from, "What would you like to do?", [
+              { id: `commerce:add:${product.id}:1`, title: "Add 1 to order" },
+              { id: `commerce:quantity:${product.id}`, title: "Choose quantity" },
+              { id: "commerce:products_back", title: "Back to products" },
+            ]);
+            return { handled: true };
+          }
+          
+          async function forwardProductQuantity(
+            message: ParsedInboundMessage,
+            productId: string,
+            quantity: number,
+            context: StoreContext
+          ): Promise<CommerceMenuResult> {
+            const product = await productForSelection(productId, context);
+            if (!product || quantity < 1 || quantity > Math.min(10, product.stockQuantity)) {
+              await sendText(
+                message.from,
+                "That product or quantity is no longer available. Send MENU to browse again."
+              );
+              return { handled: true };
+            }
+            return {
+              handled: false,
+              forwardedMessage: {
+                ...message,
+                kind: "text",
+                text: `I want ${quantity} ${product.name}`,
+                interactiveId: null,
+                location: null,
+                flowResponse: null,
+                rawType: "interactive.product_selection",
+              },
+            };
+          }
+          
+          async function sendQuantityOptions(
+            message: ParsedInboundMessage,
+            productId: string,
+            context: StoreContext
+          ): Promise<void> {
+            const product = await productForSelection(productId, context);
+            if (!product) {
+              await sendText(message.from, "That product is no longer available.");
+              return;
+            }
+            const maximum = Math.min(9, product.stockQuantity);
+            await sendList(
+              message.from,
+              `Choose the quantity of ${product.name}.`,
+              "Choose quantity",
+              [
+                ...Array.from({ length: maximum }, (_, index) => ({
+                  id: `commerce:qty:${product.id}:${index + 1}`,
+                  title: `${index + 1}`,
+                  description: `${index + 1} × ${formatNaira(product.priceKobo)}`,
+                })),
+                { id: "commerce:products_back", title: "Back to products" },
+              ].slice(0, 10)
+            );
+          }
+          '''
+          commerce = commerce[:old_fn_start] + new_fn + commerce[old_fn_end:]
+          
+          old_handler = '''  if (interactiveId.startsWith("commerce:product:")) {
+              if (!context) {
+                await sendStoreDirectory(message.from);
+                return { handled: true };
+              }
+              return forwardProductSelection(
+                message,
+                interactiveId.slice("commerce:product:".length),
+                context
+              );
+            }
+          '''
+          new_handler = '''  if (interactiveId === "commerce:products_back") {
+              if (context) await sendProducts(message.from, context, null);
+              else await sendStoreDirectory(message.from);
+              return { handled: true };
+            }
+          
+            if (interactiveId.startsWith("commerce:add:")) {
+              if (!context) {
+                await sendStoreDirectory(message.from);
+                return { handled: true };
+              }
+              const parts = interactiveId.split(":");
+              return forwardProductQuantity(
+                message,
+                parts[2] ?? "",
+                Number(parts[3] ?? 1),
+                context
+              );
+            }
+          
+            if (interactiveId.startsWith("commerce:quantity:")) {
+              if (!context) {
+                await sendStoreDirectory(message.from);
+                return { handled: true };
+              }
+              await sendQuantityOptions(
+                message,
+                interactiveId.slice("commerce:quantity:".length),
+                context
+              );
+              return { handled: true };
+            }
+          
+            if (interactiveId.startsWith("commerce:qty:")) {
+              if (!context) {
+                await sendStoreDirectory(message.from);
+                return { handled: true };
+              }
+              const parts = interactiveId.split(":");
+              return forwardProductQuantity(
+                message,
+                parts[2] ?? "",
+                Number(parts[3] ?? 0),
+                context
+              );
+            }
+          
+            if (interactiveId.startsWith("commerce:product:")) {
+              if (!context) {
+                await sendStoreDirectory(message.from);
+                return { handled: true };
+              }
+              return previewProductSelection(
+                message,
+                interactiveId.slice("commerce:product:".length),
+                context
+              );
+            }
+          '''
+          if old_handler not in commerce:
+              raise SystemExit("commerce product handler marker not found")
+          commerce = commerce.replace(old_handler, new_handler, 1)
+          commerce_path.write_text(commerce)
+          
+          # Public health safe image configuration.
+          health_path = Path("app/api/health/route.ts")
+          health = health_path.read_text()
+          health = health.replace(
+          'import { integrationStatus, isDemoMode } from "@/lib/env";',
+          'import { env, integrationStatus, isDemoMode } from "@/lib/env";',
+          1,
+          )
+          if '"productImages"' not in health:
+              marker = '''        monnify: integrations.monnify,
+          '''
+              addition = marker + '''        productImages: {
+                    storage: "database",
+                    generationEnabled: env().NVIDIA_IMAGE_GENERATION_ENABLED,
+                    nvidiaConfigured: Boolean(
+                      env().NVIDIA_IMAGE_API_KEY ?? env().NVIDIA_API_KEY
+                    ),
+                  },
+          '''
+              if marker not in health:
+                  raise SystemExit("health integration marker not found")
+              health = health.replace(marker, addition, 1)
+          health_path.write_text(health)
+          PY
+
+      - name: Install and validate
+        run: |
+          npm ci
+          npx prisma format
+          npx prisma generate
+          npm run lint
+          npm run typecheck
+          npm run test
+          npm run build
+          npm run secrets:scan
+
+      - name: Commit implementation
+        run: |
+          rm .github/workflows/implement-product-images.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .
+          git commit -m "feat: add product images and WhatsApp previews"
+          git push origin HEAD:main
