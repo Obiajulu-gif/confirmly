@@ -12,6 +12,16 @@ export type ProductImageGenerationInput = {
   customPrompt?: string | null;
 };
 
+export type ProductImageGenerationOptions = {
+  /** Total provider attempts, including the first request. */
+  maxAttempts?: number;
+  /** Per-attempt timeout. Background jobs use a shorter budget than manual generation. */
+  timeoutMs?: number;
+  /** FLUX.1-schnell supports 1-4 steps. */
+  steps?: number;
+  seed?: number;
+};
+
 export class ProductImageGenerationError extends Error {
   constructor(
     message: string,
@@ -58,8 +68,13 @@ type NvidiaResponse = {
   data?: Array<{ b64_json?: string }>;
 };
 
+function clampInteger(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, Math.trunc(value)));
+}
+
 export async function generateProductImage(
-  input: ProductImageGenerationInput
+  input: ProductImageGenerationInput,
+  options: ProductImageGenerationOptions = {}
 ): Promise<{
   bytes: Buffer;
   contentType: "image/jpeg" | "image/png" | "image/webp";
@@ -84,9 +99,17 @@ export async function generateProductImage(
 
   const prompt = buildPrompt(input);
   const endpoint = `${config.NVIDIA_IMAGE_BASE_URL.replace(/\/$/, "")}/v1/genai/${config.NVIDIA_IMAGE_MODEL}`;
+  const maxAttempts = clampInteger(options.maxAttempts ?? 3, 1, 3);
+  const timeoutMs = clampInteger(
+    options.timeoutMs ?? config.NVIDIA_IMAGE_TIMEOUT_MS,
+    5_000,
+    120_000
+  );
+  const steps = clampInteger(options.steps ?? config.NVIDIA_IMAGE_STEPS, 1, 4);
+  const seed = Math.max(0, Math.trunc(options.seed ?? 0));
   let lastStatus = 0;
 
-  for (let attempt = 0; attempt < 3; attempt++) {
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
     let response: Response;
     try {
       response = await fetch(endpoint, {
@@ -100,15 +123,17 @@ export async function generateProductImage(
           prompt,
           width: config.NVIDIA_IMAGE_WIDTH,
           height: config.NVIDIA_IMAGE_HEIGHT,
+          cfg_scale: 0,
+          mode: "base",
           samples: 1,
-          seed: 0,
-          steps: config.NVIDIA_IMAGE_STEPS,
+          seed,
+          steps,
         }),
-        signal: AbortSignal.timeout(config.NVIDIA_IMAGE_TIMEOUT_MS),
+        signal: AbortSignal.timeout(timeoutMs),
         cache: "no-store",
       });
     } catch {
-      if (attempt < 2) continue;
+      if (attempt < maxAttempts - 1) continue;
       throw new ProductImageGenerationError(
         "NVIDIA image generation could not be reached.",
         "provider_unavailable"
@@ -145,7 +170,7 @@ export async function generateProductImage(
     }
 
     if (response.status === 429 || response.status >= 500) {
-      if (attempt < 2) {
+      if (attempt < maxAttempts - 1) {
         await new Promise((resolve) =>
           setTimeout(resolve, Math.min(800 * 2 ** attempt, 3000))
         );
