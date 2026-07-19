@@ -1,12 +1,16 @@
 import "server-only";
 import { randomBytes } from "node:crypto";
+import { defer } from "@/lib/defer";
+import { prewarmProductImages } from "@/lib/ai/product-image-prewarm";
 import { prisma } from "@/lib/db";
 import { env, isDemoMode } from "@/lib/env";
 import { logger } from "@/lib/logger";
 import { formatNaira } from "@/lib/money";
 import { scoreMatch } from "@/lib/orders/matching";
 import {
+  sendButtons,
   sendFlow,
+  sendImageByUrl,
   sendList,
   sendText,
   type ListRow,
@@ -120,7 +124,13 @@ async function upsertStoreContext(
         channel: "whatsapp",
       },
     },
-    update: { lastInboundAt: message.timestamp },
+    // Selecting a store from the directory is always a self-serve action, so
+    // resume automation and clear any stale pending question.
+    update: {
+      lastInboundAt: message.timestamp,
+      automationMode: "AUTO",
+      pendingQuestion: null,
+    },
     create: {
       merchantId: merchant.id,
       customerId: customer.id,
@@ -205,6 +215,19 @@ async function sendCatalogue(
   waId: string,
   context: StoreContext
 ): Promise<void> {
+  // Backfill a missing product image in the background as customers browse —
+  // never blocks the WhatsApp response.
+  defer(() =>
+    prewarmProductImages({
+      merchantId: context.merchant.id,
+      limit: 1,
+      autoApprove: true,
+      maxAttempts: 1,
+      timeoutMs: 40_000,
+      steps: 1,
+      maxRuntimeMs: 50_000,
+    }).then(() => undefined)
+  );
   const products = await prisma.product.findMany({
     where: {
       merchantId: context.merchant.id,
@@ -401,20 +424,58 @@ async function sendLocationOptions(
   );
 }
 
-async function forwardProductSelection(
-  message: ParsedInboundMessage,
-  productId: string,
-  context: StoreContext
-): Promise<CommerceMenuResult> {
-  const product = await prisma.product.findFirst({
+async function productForSelection(productId: string, context: StoreContext) {
+  return prisma.product.findFirst({
     where: {
       id: productId,
       merchantId: context.merchant.id,
       active: true,
       stockQuantity: { gt: 0 },
     },
-    select: { name: true },
+    include: { variants: true },
   });
+}
+
+function productDetails(product: {
+  name: string;
+  description: string | null;
+  priceKobo: number;
+  stockQuantity: number;
+  variants: Array<{ colour: string | null; size: string | null }>;
+}) {
+  const colours = [
+    ...new Set(
+      product.variants
+        .map((variant) => variant.colour)
+        .filter((value): value is string => Boolean(value))
+    ),
+  ];
+  const sizes = [
+    ...new Set(
+      product.variants
+        .map((variant) => variant.size)
+        .filter((value): value is string => Boolean(value))
+    ),
+  ];
+  return {
+    text: [
+      `*${product.name}*`,
+      formatNaira(product.priceKobo),
+      [colours.join(", "), sizes.join(", ")].filter(Boolean).join(" · "),
+      `${product.stockQuantity} in stock`,
+      product.description ?? "",
+    ]
+      .filter(Boolean)
+      .join("\n"),
+  };
+}
+
+async function previewProductSelection(
+  message: ParsedInboundMessage,
+  productId: string,
+  context: StoreContext
+): Promise<CommerceMenuResult> {
+  const product = await productForSelection(productId, context);
   if (!product) {
     await sendText(
       message.from,
@@ -423,18 +484,118 @@ async function forwardProductSelection(
     return { handled: true };
   }
 
+  const details = productDetails(product);
+  const allowGenerated =
+    product.imageSource !== "AI_GENERATED" ||
+    Boolean(product.imageApprovedAt) ||
+    env().ALLOW_UNAPPROVED_AI_PRODUCT_IMAGES;
+  const disclosure =
+    product.imageSource === "AI_GENERATED"
+      ? "AI-generated product illustration — actual item may vary."
+      : product.imageSource === "MERCHANT_UPLOAD"
+        ? "Merchant-provided product photo."
+        : product.imageSource === "EXTERNAL_URL"
+          ? "Product image supplied by the merchant."
+          : "";
+
+  let imageSent = false;
+  if (product.imageUrl && allowGenerated) {
+    try {
+      await sendImageByUrl(message.from, {
+        imageUrl: product.imageUrl,
+        caption: [details.text, disclosure].filter(Boolean).join("\n\n"),
+      });
+      imageSent = true;
+      logger.info("product image sent on WhatsApp", {
+        merchantId: context.merchant.id,
+        productId: product.id,
+        source: product.imageSource,
+      });
+    } catch (error) {
+      logger.warn("product image send failed; continuing with text", {
+        merchantId: context.merchant.id,
+        productId: product.id,
+        reason: error instanceof Error ? error.message : "unknown",
+      });
+    }
+  }
+
+  if (!imageSent) {
+    const unavailable =
+      product.imageSource === "AI_GENERATED" && !allowGenerated
+        ? "The AI illustration is waiting for merchant approval."
+        : "The merchant has not added a customer-ready product photo yet.";
+    await sendText(message.from, `${details.text}\n\n${unavailable}`);
+  }
+
+  await sendButtons(message.from, "What would you like to do?", [
+    { id: `commerce:add:${product.id}:1`, title: "Add 1 to order" },
+    { id: `commerce:quantity:${product.id}`, title: "Choose quantity" },
+    { id: "commerce:products_back", title: "Back to products" },
+  ]);
+  return { handled: true };
+}
+
+async function forwardProductQuantity(
+  message: ParsedInboundMessage,
+  productId: string,
+  quantity: number,
+  context: StoreContext
+): Promise<CommerceMenuResult> {
+  const product = await productForSelection(productId, context);
+  if (
+    !product ||
+    quantity < 1 ||
+    quantity > Math.min(10, product.stockQuantity)
+  ) {
+    await sendText(
+      message.from,
+      "That product or quantity is no longer available. Send MENU to browse again."
+    );
+    return { handled: true };
+  }
   return {
     handled: false,
     forwardedMessage: {
       ...message,
+      // A fresh synthetic id: the catalogue selection and the order it
+      // triggers are distinct events, so the engine's duplicate guard can
+      // never drop the forwarded order.
+      providerMessageId: `${message.providerMessageId}:order:${productId}:${quantity}`,
       kind: "text",
-      text: `I want 1 ${product.name}`,
+      text: `I want ${quantity} ${product.name}`,
       interactiveId: null,
       location: null,
       flowResponse: null,
       rawType: "interactive.product_selection",
     },
   };
+}
+
+async function sendQuantityOptions(
+  message: ParsedInboundMessage,
+  productId: string,
+  context: StoreContext
+): Promise<void> {
+  const product = await productForSelection(productId, context);
+  if (!product) {
+    await sendText(message.from, "That product is no longer available.");
+    return;
+  }
+  const maximum = Math.min(9, product.stockQuantity);
+  await sendList(
+    message.from,
+    `Choose the quantity of ${product.name}.`,
+    "Choose quantity",
+    [
+      ...Array.from({ length: maximum }, (_, index) => ({
+        id: `commerce:qty:${product.id}:${index + 1}`,
+        title: `${index + 1}`,
+        description: `${index + 1} × ${formatNaira(product.priceKobo)}`,
+      })),
+      { id: "commerce:products_back", title: "Back to products" },
+    ].slice(0, 10)
+  );
 }
 
 async function handleFlowReply(
@@ -577,12 +738,59 @@ export async function preprocessCommerceMessage(
     return { handled: true };
   }
 
+  if (interactiveId === "commerce:products_back") {
+    if (context) await sendProducts(message.from, context, null);
+    else await sendStoreDirectory(message.from);
+    return { handled: true };
+  }
+
+  if (interactiveId.startsWith("commerce:add:")) {
+    if (!context) {
+      await sendStoreDirectory(message.from);
+      return { handled: true };
+    }
+    const parts = interactiveId.split(":");
+    return forwardProductQuantity(
+      message,
+      parts[2] ?? "",
+      Number(parts[3] ?? 1),
+      context
+    );
+  }
+
+  if (interactiveId.startsWith("commerce:quantity:")) {
+    if (!context) {
+      await sendStoreDirectory(message.from);
+      return { handled: true };
+    }
+    await sendQuantityOptions(
+      message,
+      interactiveId.slice("commerce:quantity:".length),
+      context
+    );
+    return { handled: true };
+  }
+
+  if (interactiveId.startsWith("commerce:qty:")) {
+    if (!context) {
+      await sendStoreDirectory(message.from);
+      return { handled: true };
+    }
+    const parts = interactiveId.split(":");
+    return forwardProductQuantity(
+      message,
+      parts[2] ?? "",
+      Number(parts[3] ?? 0),
+      context
+    );
+  }
+
   if (interactiveId.startsWith("commerce:product:")) {
     if (!context) {
       await sendStoreDirectory(message.from);
       return { handled: true };
     }
-    return forwardProductSelection(
+    return previewProductSelection(
       message,
       interactiveId.slice("commerce:product:".length),
       context

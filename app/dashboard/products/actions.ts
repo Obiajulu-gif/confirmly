@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { getMerchantSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { defer } from "@/lib/defer";
+import { prewarmProductImages } from "@/lib/ai/product-image-prewarm";
 import { nairaAmountToKobo } from "@/lib/money";
 
 const productSchema = z.object({
@@ -107,6 +109,19 @@ export async function createProductAction(
     },
   });
 
+  defer(() =>
+    prewarmProductImages({
+      merchantId: session.merchantId,
+      productIds: [product.id],
+      limit: 1,
+      autoApprove: true,
+      maxAttempts: 1,
+      timeoutMs: 40_000,
+      steps: 1,
+      maxRuntimeMs: 50_000,
+    }).then(() => undefined)
+  );
+
   revalidatePath("/dashboard/products");
   return { error: null, ok: true, productId: product.id };
 }
@@ -151,6 +166,19 @@ export async function updateProductAction(
       });
     }
   });
+
+  defer(() =>
+    prewarmProductImages({
+      merchantId: session.merchantId,
+      productIds: [id],
+      limit: 1,
+      autoApprove: true,
+      maxAttempts: 1,
+      timeoutMs: 40_000,
+      steps: 1,
+      maxRuntimeMs: 50_000,
+    }).then(() => undefined)
+  );
 
   revalidatePath("/dashboard/products");
   return { error: null, ok: true, productId: id };

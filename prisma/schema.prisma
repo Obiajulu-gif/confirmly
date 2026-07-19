@@ -128,6 +128,19 @@ enum AuditActor {
   PROVIDER
 }
 
+enum ProductImageSource {
+  MERCHANT_UPLOAD
+  AI_GENERATED
+  EXTERNAL_URL
+}
+
+enum ProductImageStatus {
+  NONE
+  PROCESSING
+  READY
+  FAILED
+}
+
 // ---------------------------------------------------------------------------
 // Models
 // ---------------------------------------------------------------------------
@@ -248,14 +261,38 @@ model Product {
   aliases       String[] @default([])
   stockQuantity Int      @default(0)
   active        Boolean  @default(true)
-  imageUrl      String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  imageUrl           String?
+  imageSource        ProductImageSource?
+  imageStatus        ProductImageStatus @default(NONE)
+  imageAltText       String?
+  imagePrompt        String?
+  imageGeneratedAt   DateTime?
+  imageApprovedAt    DateTime?
+  imageFailureReason String?
+  imageContentHash   String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
   variants   ProductVariant[]
   orderItems OrderItem[]
+  imageAsset ProductImageAsset?
 
   @@index([merchantId, active])
+}
+
+model ProductImageAsset {
+  id          String   @id @default(cuid())
+  productId   String   @unique
+  product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  merchantId  String
+  bytes       Bytes
+  contentType String
+  sizeBytes   Int
+  sha256      String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([merchantId])
 }
 
 model ProductVariant {

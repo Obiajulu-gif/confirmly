@@ -99,6 +99,14 @@ export async function extractOrderIntent(
   message: string,
   catalogueHint: string
 ): Promise<ExtractionResult> {
+  // Deterministic commands (store codes, quantity forwards from the catalogue
+  // layer, human/cancel/etc.) are resolved locally so a list selection
+  // responds immediately without waiting for the remote model.
+  const deterministic = fallbackExtract(message);
+  if (deterministic.intent !== "OTHER") {
+    return { intent: deterministic, source: "fallback" };
+  }
+
   const system = buildExtractionSystemPrompt(catalogueHint);
 
   let raw: string;

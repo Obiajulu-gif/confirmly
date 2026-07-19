@@ -48,6 +48,8 @@ function inbound(
     kind: opts.interactiveId ? "button_reply" : "text",
     text: opts.interactiveId ? null : text,
     interactiveId: opts.interactiveId ?? null,
+    location: null,
+    flowResponse: null,
     rawType: opts.interactiveId ? "interactive" : "text",
   };
 }
@@ -236,6 +238,8 @@ describe("conversation engine", () => {
         kind: "text",
         text: `START ${otherStoreCode}`,
         interactiveId: null,
+        location: null,
+        flowResponse: null,
         rawType: "text",
       });
       const session = await prisma.waSession.findUniqueOrThrow({
@@ -265,6 +269,8 @@ describe("conversation engine", () => {
         kind: "text",
         text: "one polo please",
         interactiveId: null,
+        location: null,
+        flowResponse: null,
         rawType: "text",
       });
       nextIntent = null;
@@ -319,6 +325,8 @@ describe("conversation engine", () => {
       kind: "text",
       text: "one white polo size M",
       interactiveId: null,
+      location: null,
+      flowResponse: null,
       rawType: "text",
     });
     nextIntent = null;
@@ -350,6 +358,43 @@ describe("conversation engine", () => {
       where: { merchantId, customer: { waId: "2348011112222" } },
     });
     expect(conversation.state).toBe("HUMAN_ACTIVE");
+  });
+
+  it("a catalogue selection auto-resumes a stuck HUMAN conversation (no dead-end)", async () => {
+    const { processInboundMessage } = await import("@/lib/orders/engine");
+    // The conversation is HUMAN from the previous test. A forwarded catalogue
+    // order (rawType interactive.*) must resume automation and reply.
+    nextIntent = {
+      merchantCode: null,
+      intent: "PLACE_ORDER",
+      items: [{ searchTerm: "polo", quantity: 1, size: "M", colour: "black" }],
+      deliveryMethod: "DELIVERY",
+      deliveryAddress: null,
+      deliveryArea: "Yaba",
+      customerName: null,
+      notes: null,
+      missingFields: [],
+    };
+    outboundLog.length = 0;
+    await processInboundMessage({
+      providerMessageId: `wamid.RESUME-${Date.now()}`,
+      from: "2348011112222",
+      profileName: "Engine Tester",
+      timestamp: new Date(),
+      kind: "text",
+      text: "I want 1 Classic Polo Shirt",
+      interactiveId: null,
+      location: null,
+      flowResponse: null,
+      rawType: "interactive.product_selection",
+    });
+    nextIntent = null;
+
+    expect(outboundLog.length).toBeGreaterThan(0); // the bot responded
+    const conversation = await prisma.conversation.findFirstOrThrow({
+      where: { merchantId, customer: { waId: "2348011112222" } },
+    });
+    expect(conversation.automationMode).toBe("AUTO");
   });
 });
 

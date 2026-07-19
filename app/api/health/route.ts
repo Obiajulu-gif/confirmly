@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { integrationStatus, isDemoMode } from "@/lib/env";
+import { env, integrationStatus, isDemoMode } from "@/lib/env";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -81,6 +81,13 @@ export async function GET() {
         },
         nvidia: integrations.nvidia,
         monnify: integrations.monnify,
+        productImages: {
+          storage: "database",
+          generationEnabled: env().NVIDIA_IMAGE_GENERATION_ENABLED,
+          nvidiaConfigured: Boolean(
+            env().NVIDIA_IMAGE_API_KEY ?? env().NVIDIA_API_KEY
+          ),
+        },
       },
       time: new Date().toISOString(),
     },

@@ -136,6 +136,30 @@ export async function sendText(to: string, body: string): Promise<SendResult> {
   return post({ to, type: "text", text: { body, preview_url: true } });
 }
 
+/** Sends an image by public HTTPS URL (SSRF-guarded). */
+export async function sendImageByUrl(
+  to: string,
+  input: { imageUrl: string; caption?: string }
+): Promise<SendResult> {
+  const url = new URL(input.imageUrl);
+  if (
+    url.protocol !== "https:" ||
+    url.username ||
+    url.password ||
+    ["localhost", "127.0.0.1", "::1"].includes(url.hostname.toLowerCase())
+  ) {
+    throw new WhatsAppSendError("invalid public image URL", null, null);
+  }
+  return post({
+    to,
+    type: "image",
+    image: {
+      link: url.toString(),
+      ...(input.caption ? { caption: input.caption.slice(0, 1024) } : {}),
+    },
+  });
+}
+
 export interface InteractiveButton {
   id: string;
   title: string;

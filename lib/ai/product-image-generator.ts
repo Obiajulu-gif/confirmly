@@ -103,7 +103,7 @@ export async function generateProductImage(
   const timeoutMs = clampInteger(
     options.timeoutMs ?? config.NVIDIA_IMAGE_TIMEOUT_MS,
     5_000,
-    120_000
+    180_000
   );
   const steps = clampInteger(options.steps ?? config.NVIDIA_IMAGE_STEPS, 1, 4);
   const seed = Math.max(0, Math.trunc(options.seed ?? 0));

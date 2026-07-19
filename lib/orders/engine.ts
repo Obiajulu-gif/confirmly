@@ -138,7 +138,18 @@ async function selectStore(
     where: { id: merchantId },
   });
   const customer = await upsertCustomer(merchantId, message);
-  const conversation = await upsertConversation(merchantId, customer.id, message);
+  let conversation = await upsertConversation(merchantId, customer.id, message);
+  // A fresh store selection always resumes automation — a customer picking a
+  // shop is self-serving, never mid-handover.
+  if (
+    conversation.automationMode === "HUMAN" ||
+    conversation.pendingQuestion
+  ) {
+    conversation = await prisma.conversation.update({
+      where: { id: conversation.id },
+      data: { automationMode: "AUTO", pendingQuestion: null },
+    });
+  }
   await storeInboundMessage(merchantId, customer.id, conversation.id, message).catch(
     () => {}
   );
@@ -413,10 +424,37 @@ async function processScopedMessage(
 
   const ctx: EngineContext = { merchantId, customer, conversation };
 
-  // 3. Human takeover: the bot stays silent while a person is handling it.
+  // 3. Human takeover: the bot stays silent while a person is handling it —
+  //    BUT a customer who is actively self-serving (tapping catalogue/flow
+  //    actions or explicitly asking the bot back) automatically resumes
+  //    automation, so a handover can never become a permanent dead-end.
   if (conversation.automationMode === "HUMAN") {
-    await setConversation(ctx, { state: "HUMAN_ACTIVE" });
-    return;
+    const wantsBotBack =
+      message.rawType.startsWith("interactive.") ||
+      /^(resume|bot|menu|start over|restart|automate|shop|order)[.!?]*$/i.test(
+        message.text?.trim() ?? ""
+      );
+    if (wantsBotBack) {
+      const resumed = await prisma.conversation.update({
+        where: { id: conversation.id },
+        data: {
+          automationMode: "AUTO",
+          state: "COLLECTING_ORDER",
+          pendingQuestion: null,
+        },
+      });
+      ctx.conversation = resumed;
+      await recordAudit({
+        merchantId,
+        conversationId: conversation.id,
+        event: AUDIT.AUTOMATION_RESUMED,
+        actor: "CUSTOMER",
+        metadata: { reason: "customer self-serve" },
+      });
+    } else {
+      await setConversation(ctx, { state: "HUMAN_ACTIVE" });
+      return;
+    }
   }
 
   try {

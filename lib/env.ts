@@ -48,6 +48,34 @@ const envSchema = z.object({
     .default("https://integrate.api.nvidia.com/v1"),
   NVIDIA_ORDER_MODEL: z.string().default("nvidia/nemotron-3-nano-30b-a3b"),
 
+  // Product-image generation (NVIDIA-hosted FLUX.1-schnell)
+  NVIDIA_IMAGE_API_KEY: z.string().min(1).optional(),
+  NVIDIA_IMAGE_BASE_URL: z.string().url().default("https://ai.api.nvidia.com"),
+  NVIDIA_IMAGE_MODEL: z.string().default("black-forest-labs/flux.1-schnell"),
+  NVIDIA_IMAGE_WIDTH: z.coerce.number().int().min(256).max(2048).default(1024),
+  NVIDIA_IMAGE_HEIGHT: z.coerce.number().int().min(256).max(2048).default(1024),
+  NVIDIA_IMAGE_STEPS: z.coerce.number().int().min(1).max(4).default(4),
+  NVIDIA_IMAGE_TIMEOUT_MS: z.coerce
+    .number()
+    .int()
+    .min(5_000)
+    .max(180_000)
+    .default(120_000),
+  NVIDIA_IMAGE_GENERATION_ENABLED: z
+    .string()
+    .transform((value) => value !== "false" && value !== "0")
+    .default("true"),
+  ALLOW_UNAPPROVED_AI_PRODUCT_IMAGES: z
+    .string()
+    .transform((value) => value === "true" || value === "1")
+    .default("false"),
+  PRODUCT_IMAGE_MAX_BYTES: z.coerce
+    .number()
+    .int()
+    .min(100_000)
+    .max(4_194_304)
+    .default(4_194_304),
+
   MONNIFY_BASE_URL: z.string().url().default("https://sandbox.monnify.com"),
   MONNIFY_API_KEY: z.string().min(1).optional(),
   MONNIFY_SECRET_KEY: z.string().min(1).optional(),
