@@ -1,41 +1,49 @@
 import { spawnSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 
-const candidates =
+const scripts = [
+  "scripts/finalize-product-images.py",
+  "scripts/finalize-whatsapp-prewarm.py",
+];
+
+const commandCandidates =
   process.platform === "win32"
     ? [
-        ["python", ["scripts/finalize-product-images.py"]],
-        ["py", ["-3", "scripts/finalize-product-images.py"]],
+        ["python", []],
+        ["py", ["-3"]],
       ]
     : [
-        ["python3", ["scripts/finalize-product-images.py"]],
-        ["python", ["scripts/finalize-product-images.py"]],
+        ["python3", []],
+        ["python", []],
       ];
 
-let applied = false;
-let lastError = null;
-for (const [command, args] of candidates) {
-  const result = spawnSync(command, args, {
-    stdio: "inherit",
-    shell: false,
-    env: process.env,
-  });
-  if (!result.error && result.status === 0) {
-    applied = true;
-    break;
+for (const script of scripts) {
+  let completed = false;
+  let lastError = null;
+
+  for (const [command, prefixArgs] of commandCandidates) {
+    const result = spawnSync(command, [...prefixArgs, script], {
+      stdio: "inherit",
+      shell: false,
+      env: process.env,
+    });
+    if (!result.error && result.status === 0) {
+      completed = true;
+      break;
+    }
+    lastError = result.error ?? new Error(`${command} exited with ${result.status}`);
+    if (result.error?.code !== "ENOENT") break;
   }
-  lastError = result.error ?? new Error(`${command} exited with ${result.status}`);
-  if (result.error?.code !== "ENOENT") break;
+
+  if (!completed) {
+    console.error(`Unable to apply integration patch: ${script}`);
+    if (lastError) console.error(lastError.message);
+    process.exit(1);
+  }
 }
 
-if (!applied) {
-  console.error("Unable to apply the product-image integration patch.");
-  if (lastError) console.error(lastError.message);
-  process.exit(1);
-}
-
-// Hosted image models can require a cold start. Keep the server timeout below
-// the route's maxDuration while allowing substantially more than a chat call.
+// Manual merchant generation can use the longer budget. Scheduled prewarming
+// supplies its own shorter timeout so a Hobby function remains within 60s.
 const envPath = "lib/env.ts";
 let envText = readFileSync(envPath, "utf8");
 envText = envText.replace(
