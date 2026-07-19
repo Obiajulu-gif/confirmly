@@ -7,6 +7,10 @@
   },
   "crons": [
     {
+      "path": "/api/product-images/prewarm",
+      "schedule": "45 0 * * *"
+    },
+    {
       "path": "/api/payments/reconcile",
       "schedule": "0 6 * * *"
     }
