@@ -1,9 +1,22 @@
 import { spawnSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 
+function prewarmPatchApplied() {
+  const checks = [
+    ["lib/ai/nvidia.ts", "const deterministic = fallbackExtract(message);"],
+    ["app/dashboard/products/actions.ts", "prewarmProductImages"],
+    ["lib/whatsapp/commerce-menu.ts", "prewarmProductImages"],
+    ["scripts/sync-vercel-env.mjs", '"NVIDIA_IMAGE_API_KEY"'],
+    [".env.example", "CRON_SECRET="],
+  ];
+  return checks.every(([path, marker]) =>
+    readFileSync(path, "utf8").includes(marker)
+  );
+}
+
 const scripts = [
   "scripts/finalize-product-images.py",
-  "scripts/finalize-whatsapp-prewarm.py",
+  ...(prewarmPatchApplied() ? [] : ["scripts/finalize-whatsapp-prewarm.py"]),
 ];
 
 const commandCandidates =
