@@ -211,7 +211,8 @@ export async function prewarmProductImages(
         {
           maxAttempts: options.maxAttempts ?? 1,
           timeoutMs,
-          steps: options.steps ?? 1,
+          // Fall through to NVIDIA_IMAGE_STEPS (flux.1-dev needs >= 5).
+          steps: options.steps,
         }
       );
 

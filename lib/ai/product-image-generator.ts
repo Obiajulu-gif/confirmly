@@ -17,7 +17,7 @@ export type ProductImageGenerationOptions = {
   maxAttempts?: number;
   /** Per-attempt timeout. Background jobs use a shorter budget than manual generation. */
   timeoutMs?: number;
-  /** FLUX.1-schnell supports 1-4 steps. */
+  /** FLUX.1-dev supports 5-50 steps (schnell used 1-4). */
   steps?: number;
   seed?: number;
 };
@@ -105,7 +105,7 @@ export async function generateProductImage(
     5_000,
     180_000
   );
-  const steps = clampInteger(options.steps ?? config.NVIDIA_IMAGE_STEPS, 1, 4);
+  const steps = clampInteger(options.steps ?? config.NVIDIA_IMAGE_STEPS, 5, 50);
   const seed = Math.max(0, Math.trunc(options.seed ?? 0));
   let lastStatus = 0;
 
@@ -123,9 +123,7 @@ export async function generateProductImage(
           prompt,
           width: config.NVIDIA_IMAGE_WIDTH,
           height: config.NVIDIA_IMAGE_HEIGHT,
-          cfg_scale: 0,
-          mode: "base",
-          samples: 1,
+          cfg_scale: config.NVIDIA_IMAGE_CFG_SCALE,
           seed,
           steps,
         }),

@@ -24,8 +24,8 @@ function isAuthorizedCron(request: NextRequest): boolean {
 
 /**
  * Runs several bounded prewarm passes within the function budget, generating
- * customer-ready illustrations (steps=4 for quality) until the catalogue is
- * covered or time runs out.
+ * customer-ready illustrations (NVIDIA_IMAGE_STEPS, default 25 for flux.1-dev)
+ * until the catalogue is covered or time runs out.
  */
 async function sweep(merchantId?: string) {
   if (!env().NVIDIA_IMAGE_GENERATION_ENABLED) {
@@ -48,7 +48,6 @@ async function sweep(merchantId?: string) {
       autoApprove: true,
       maxAttempts: 1,
       timeoutMs: 40_000,
-      steps: 4,
       maxRuntimeMs: 52_000,
       retryAfterMinutes: 30,
     });

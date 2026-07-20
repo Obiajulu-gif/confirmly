@@ -48,13 +48,20 @@ const envSchema = z.object({
     .default("https://integrate.api.nvidia.com/v1"),
   NVIDIA_ORDER_MODEL: z.string().default("nvidia/nemotron-3-nano-30b-a3b"),
 
-  // Product-image generation (NVIDIA-hosted FLUX.1-schnell)
+  // Product-image generation (NVIDIA-hosted FLUX.1-dev).
+  // NOTE: flux.1-schnell's hosted function hangs indefinitely for this account
+  // (auth passes, but generation requests are never served). flux.1-dev is
+  // provisioned and returns real images in ~5s, so it is the default.
   NVIDIA_IMAGE_API_KEY: z.string().min(1).optional(),
   NVIDIA_IMAGE_BASE_URL: z.string().url().default("https://ai.api.nvidia.com"),
-  NVIDIA_IMAGE_MODEL: z.string().default("black-forest-labs/flux.1-schnell"),
+  NVIDIA_IMAGE_MODEL: z.string().default("black-forest-labs/flux.1-dev"),
   NVIDIA_IMAGE_WIDTH: z.coerce.number().int().min(256).max(2048).default(1024),
   NVIDIA_IMAGE_HEIGHT: z.coerce.number().int().min(256).max(2048).default(1024),
-  NVIDIA_IMAGE_STEPS: z.coerce.number().int().min(1).max(4).default(4),
+  // flux.1-dev requires steps in [5, 50]; flux.1-schnell used [1, 4].
+  NVIDIA_IMAGE_STEPS: z.coerce.number().int().min(1).max(50).default(25),
+  // Classifier-free guidance. flux.1-dev needs a positive value (~3.5);
+  // flux.1-schnell used 0. Ignored by the generator when set to 0.
+  NVIDIA_IMAGE_CFG_SCALE: z.coerce.number().min(0).max(20).default(3.5),
   NVIDIA_IMAGE_TIMEOUT_MS: z.coerce
     .number()
     .int()

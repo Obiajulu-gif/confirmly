@@ -87,6 +87,8 @@ export async function GET() {
           nvidiaConfigured: Boolean(
             env().NVIDIA_IMAGE_API_KEY ?? env().NVIDIA_API_KEY
           ),
+          model: env().NVIDIA_IMAGE_MODEL,
+          steps: env().NVIDIA_IMAGE_STEPS,
         },
       },
       time: new Date().toISOString(),

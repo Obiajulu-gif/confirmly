@@ -117,7 +117,6 @@ export async function createProductAction(
       autoApprove: true,
       maxAttempts: 1,
       timeoutMs: 40_000,
-      steps: 1,
       maxRuntimeMs: 50_000,
     }).then(() => undefined)
   );
@@ -175,7 +174,6 @@ export async function updateProductAction(
       autoApprove: true,
       maxAttempts: 1,
       timeoutMs: 40_000,
-      steps: 1,
       maxRuntimeMs: 50_000,
     }).then(() => undefined)
   );
