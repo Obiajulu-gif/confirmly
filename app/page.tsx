@@ -19,6 +19,7 @@ import {
 import { ConfirmlyLogo, ConfirmlyMark } from "@/components/logo";
 import { PhoneDemo } from "@/components/phone-demo";
 import { Reveal } from "@/components/reveal";
+import { WhatsAppQr } from "@/components/whatsapp-qr";
 
 const flowStrip = [
   "WhatsApp order",
@@ -493,6 +494,9 @@ export default function LandingPage() {
             </div>
           </div>
         </section>
+
+        {/* ------------------------------------- scan to chat on WhatsApp */}
+        <WhatsAppQr />
 
         {/* ------------------------------------------------ final CTA */}
         <section className="mx-auto w-full max-w-6xl px-4 pb-24 sm:px-6">
