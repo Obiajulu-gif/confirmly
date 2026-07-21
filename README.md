@@ -10,6 +10,21 @@ own bank account.
 
 > From chat to confirmed payment.
 
+---
+
+## 🚀 Try it now
+
+**Scan the QR code or message the WhatsApp number to test a live order:**
+
+[![WhatsApp QR Code](whatsapp-qr.png)](https://wa.me/2347044860938?text=Hi)
+
+📱 **WhatsApp:** [+234 704 486 0938](https://wa.me/2347044860938?text=Hi)  
+🌐 **Live demo:** [confirmly-alpha.vercel.app](https://confirmly-alpha.vercel.app)
+
+**Demo order script (2 min):** Send *"I need two black polo shirts, large size, delivered to Yaba."* → watch the AI extract intent → confirm → pay via Monnify sandbox → receive a verifiable receipt.
+
+---
+
 ## Settlement architecture
 
 ```text
