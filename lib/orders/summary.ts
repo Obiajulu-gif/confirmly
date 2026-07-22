@@ -86,6 +86,7 @@ export const HELP_TEXT = [
   "🧾 *menu* — browse the catalogue",
   "🔎 *search <name>* — find a product (or a store)",
   "🛒 *cart* — see your current order",
+  "📦 *my orders* — your recent orders & reorder",
   "🏬 *stores* — see every store, *START <code>* to switch",
   "💳 *check payment* — live payment status",
   "❌ *cancel* — cancel the current order",

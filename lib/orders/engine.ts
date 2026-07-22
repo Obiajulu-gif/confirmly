@@ -41,6 +41,7 @@ const COMMAND_HELP = /^(help|menu)[.!?]?$/i;
 const COMMAND_CHECK_PAYMENT = /^(check payment|payment status)[.!?]?$/i;
 const COMMAND_RESUME = /^(resume|start over)[.!?]?$/i;
 const COMMAND_VIEW_CART = /^(cart|view cart|view order|my cart|show cart|basket)[.!?]?$/i;
+const COMMAND_MY_ORDERS = /^(my orders|order history|my order|past orders|previous orders)[.!?]?$/i;
 // Store selection (one shared WhatsApp number serves every merchant).
 const COMMAND_STORE = /^(?:start|store)\s+([a-z0-9-]{2,24})[.!]?$/i;
 const COMMAND_STORE_LIST = /^(stores|shops|switch|change (store|shop))[.!?]?$/i;
@@ -511,6 +512,10 @@ async function handleText(ctx: EngineContext, text: string): Promise<void> {
   }
   if (COMMAND_VIEW_CART.test(trimmed)) {
     await showCart(ctx);
+    return;
+  }
+  if (COMMAND_MY_ORDERS.test(trimmed)) {
+    await listCustomerOrders(ctx);
     return;
   }
   if (COMMAND_RESUME.test(trimmed)) {
@@ -1286,6 +1291,14 @@ async function handleInteractiveReply(
     await retryPayment(ctx, orderId ?? "");
     return;
   }
+  if (interactiveId.startsWith("order:")) {
+    await showOrderDetail(ctx, interactiveId.slice("order:".length));
+    return;
+  }
+  if (interactiveId.startsWith("reorder:")) {
+    await reorderInto(ctx, interactiveId.slice("reorder:".length));
+    return;
+  }
   if (interactiveId.startsWith("onboardzone:")) {
     const zoneId = interactiveId.split(":")[1];
     if (zoneId === "skip") {
@@ -1610,6 +1623,129 @@ async function checkPaymentStatus(ctx: EngineContext): Promise<void> {
     return;
   }
   await reply(ctx, `Order ${order.reference} payment status: ${order.payment.state}.`);
+}
+
+/** Interactive list of the customer's recent orders (any state). */
+async function listCustomerOrders(ctx: EngineContext): Promise<void> {
+  const orders = await prisma.order.findMany({
+    where: { merchantId: ctx.merchantId, customerId: ctx.customer.id },
+    orderBy: { createdAt: "desc" },
+    take: 9,
+    include: { payment: true },
+  });
+  if (!orders.length) {
+    await reply(
+      ctx,
+      "You haven't placed any orders here yet. Tell me what you'd like and I'll get started!"
+    );
+    return;
+  }
+  await sendToCustomer({
+    merchantId: ctx.merchantId,
+    customer: ctx.customer,
+    conversationId: ctx.conversation.id,
+    kind: "list",
+    text: "Here are your recent orders. Tap one to see details or reorder.",
+    listButtonLabel: "View orders",
+    rows: orders.map((order) => ({
+      id: `order:${order.id}`,
+      title: order.reference,
+      description: `${formatNaira(order.totalKobo)} · ${order.payment?.state ?? order.state}`,
+    })),
+  });
+}
+
+/** Shows one order's status, receipt (if paid), and a Reorder button. */
+async function showOrderDetail(
+  ctx: EngineContext,
+  orderId: string
+): Promise<void> {
+  const order = await prisma.order.findFirst({
+    where: { id: orderId, merchantId: ctx.merchantId, customerId: ctx.customer.id },
+    include: { payment: true, receipt: true, items: true },
+  });
+  if (!order) {
+    await reply(ctx, "I couldn't find that order. Reply \"my orders\" to see the list again.");
+    return;
+  }
+  const lines = order.items
+    .map((i) => `• ${i.quantity} × ${i.productNameSnapshot}`)
+    .join("\n");
+  const parts = [
+    `🧾 *Order ${order.reference}*`,
+    lines,
+    `Total: *${formatNaira(order.totalKobo)}*`,
+    `Status: ${order.payment?.state ?? order.state}`,
+  ];
+  if (order.payment?.state === "PAID" && order.receipt) {
+    const { receiptUrl } = await import("@/lib/receipts");
+    parts.push(`Receipt: ${receiptUrl(order.receipt.token)}`);
+  }
+  await sendToCustomer({
+    merchantId: ctx.merchantId,
+    customer: ctx.customer,
+    conversationId: ctx.conversation.id,
+    kind: "buttons",
+    text: parts.filter(Boolean).join("\n"),
+    buttons: order.items.length
+      ? [{ id: `reorder:${order.id}`, title: "Reorder these" }]
+      : [{ id: "commerce:menu", title: "Browse catalogue" }],
+  });
+}
+
+/** Clones a past order's items into a fresh draft and re-prices from the DB. */
+async function reorderInto(ctx: EngineContext, orderId: string): Promise<void> {
+  const order = await prisma.order.findFirst({
+    where: { id: orderId, merchantId: ctx.merchantId, customerId: ctx.customer.id },
+    include: { items: true },
+  });
+  if (!order || !order.items.length) {
+    await reply(ctx, "I couldn't find that order to reorder. Reply \"my orders\" to try again.");
+    return;
+  }
+  const draft: Draft = { ...EMPTY_DRAFT };
+  draft.items = order.items.map((it): DraftItem => {
+    // variantSnapshot is "Colour / Size" (either side optional). Assign each
+    // token to size or colour via the same normalizers the matcher uses.
+    let size: string | null = null;
+    let colour: string | null = null;
+    for (const tok of (it.variantSnapshot ?? "")
+      .split("/")
+      .map((s) => s.trim())
+      .filter(Boolean)) {
+      if (/^(xs|s|m|l|xl|xxl|\d+)$/i.test(tok)) size = normalizeSize(tok);
+      else colour = normalizeColour(tok);
+    }
+    return {
+      searchTerm: it.productNameSnapshot,
+      quantity: it.quantity,
+      size,
+      colour,
+      status: "unmatched",
+      productId: null,
+      productName: null,
+      variantId: null,
+      variantLabel: null,
+      unitPriceKobo: null,
+      alternatives: [],
+    };
+  });
+  // Carry the previous delivery choice; the summary still lets them change it.
+  if (order.deliveryMethod === "PICKUP") {
+    draft.deliveryMethod = "PICKUP";
+  } else if (order.deliveryZone) {
+    draft.deliveryMethod = "DELIVERY";
+    draft.deliveryArea = order.deliveryZone;
+    draft.deliveryAddress = order.deliveryAddress;
+  }
+
+  const products = await activeProducts(ctx.merchantId);
+  const zones = await prisma.deliveryZone.findMany({
+    where: { merchantId: ctx.merchantId, active: true },
+  });
+  await setConversation(ctx, { state: "COLLECTING_ORDER", draft });
+  await reply(ctx, `Rebuilding your order from ${order.reference} at today's prices…`);
+  await recalcAndRespond(ctx, draft, products, zones);
 }
 
 async function cancelCurrentOrder(ctx: EngineContext): Promise<void> {

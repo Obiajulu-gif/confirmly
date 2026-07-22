@@ -499,6 +499,77 @@ describe("conversation engine — Phase 1 UX", () => {
     const reply = outboundLog.at(-1);
     expect(reply?.text.toLowerCase()).toContain("empty");
   });
+
+  it("tells a customer with no orders that the history is empty", async () => {
+    const { processInboundMessage } = await import("@/lib/orders/engine");
+    outboundLog.length = 0;
+    await processInboundMessage(inboundFrom("my orders"));
+    const reply = outboundLog.at(-1);
+    expect(reply?.text.toLowerCase()).toContain("haven't placed any orders");
+  });
+
+  it("lists a past order and reorders it into a fresh, re-priced draft", async () => {
+    const { processInboundMessage } = await import("@/lib/orders/engine");
+    const customer = await prisma.customer.findFirstOrThrow({
+      where: { merchantId, waId },
+    });
+    const past = await prisma.order.create({
+      data: {
+        reference: `CFY-HIST${Date.now().toString(36).toUpperCase().slice(-4)}`,
+        merchantId,
+        customerId: customer.id,
+        state: "COMPLETED",
+        subtotalKobo: 1_200_000,
+        deliveryFeeKobo: 0,
+        totalKobo: 1_200_000,
+        deliveryMethod: "PICKUP",
+        items: {
+          create: [
+            {
+              productNameSnapshot: "Classic Polo Shirt",
+              unitPriceKoboSnapshot: 1_200_000,
+              quantity: 1,
+              variantSnapshot: "Black / L",
+              lineTotalKobo: 1_200_000,
+            },
+          ],
+        },
+      },
+    });
+
+    // "my orders" lists the past order.
+    outboundLog.length = 0;
+    await processInboundMessage(inboundFrom("my orders"));
+    const list = outboundLog.at(-1);
+    expect(list?.kind).toBe("list");
+    expect(list?.text).toContain("recent orders");
+
+    // Tapping "Reorder these" rebuilds a matched draft and re-prices from the DB.
+    outboundLog.length = 0;
+    await processInboundMessage({
+      providerMessageId: `wamid.REORDER-${Date.now()}`,
+      from: waId,
+      profileName: "UX Tester",
+      timestamp: new Date(),
+      kind: "button_reply",
+      text: null,
+      interactiveId: `reorder:${past.id}`,
+      location: null,
+      flowResponse: null,
+      rawType: "interactive",
+    });
+
+    expect(outboundLog.length).toBeGreaterThan(0);
+    const conversation = await prisma.conversation.findFirstOrThrow({
+      where: { merchantId, customer: { waId } },
+    });
+    const draft = conversation.draft as { items?: unknown[] } | null;
+    expect(draft?.items?.length).toBe(1);
+    // Reorder never creates an order until the customer confirms.
+    expect(
+      await prisma.order.count({ where: { merchantId, customerId: customer.id } })
+    ).toBe(1);
+  });
 });
 
 describe("reconciliation", () => {
