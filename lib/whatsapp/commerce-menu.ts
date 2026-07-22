@@ -6,7 +6,7 @@ import { prisma } from "@/lib/db";
 import { env, isDemoMode } from "@/lib/env";
 import { logger } from "@/lib/logger";
 import { formatNaira } from "@/lib/money";
-import { scoreMatch } from "@/lib/orders/matching";
+import { scoreMatch, searchScore } from "@/lib/orders/matching";
 import {
   sendButtons,
   sendFlow,
@@ -19,6 +19,11 @@ import type { ParsedInboundMessage } from "@/lib/whatsapp/types";
 
 const DIRECTORY_COMMAND =
   /^(hi|hello|hey|shop|shops|store|stores|browse|menu|order|i want to buy|i want to order|change store|switch store)[.!?]?$/i;
+
+/** "search polo", "find ada styles", "look for hoodie". */
+const SEARCH_COMMAND = /^(?:search|find|look for)\s+(.{2,60})$/i;
+
+const SEARCH_THRESHOLD = 0.5;
 
 export interface CommerceMenuResult {
   handled: boolean;
@@ -69,7 +74,7 @@ async function sendStoreDirectory(waId: string): Promise<void> {
 
   await sendList(
     waId,
-    "Welcome to Confirmly. Choose a store to start shopping.",
+    'Welcome to Confirmly. Choose a store below, or type "find <name>" to search.',
     "Browse stores",
     stores.map((store) => ({
       id: `store:${store.id}`,
@@ -78,6 +83,124 @@ async function sendStoreDirectory(waId: string): Promise<void> {
     }))
   );
   logger.info("whatsapp store directory sent", { storeCount: stores.length });
+}
+
+/** Ranks active stores against a free-text query (name / category / code). */
+async function searchStores(query: string) {
+  const stores = await prisma.merchant.findMany({
+    where: { active: true },
+    select: {
+      id: true,
+      name: true,
+      category: true,
+      storeCode: true,
+      description: true,
+    },
+  });
+  return stores
+    .map((store) => ({
+      store,
+      score: Math.max(
+        searchScore(query, store.name),
+        searchScore(query, store.category ?? ""),
+        searchScore(query, store.storeCode)
+      ),
+    }))
+    .filter((entry) => entry.score >= SEARCH_THRESHOLD)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 9)
+    .map((entry) => entry.store);
+}
+
+/** Interactive list of stores matching a query (WhatsApp 10-row cap safe). */
+async function sendStoreSearchResults(
+  waId: string,
+  query: string
+): Promise<void> {
+  const stores = await searchStores(query);
+  if (!stores.length) {
+    await sendText(
+      waId,
+      `No stores match "${query}". Reply "stores" to see every shop, or try another name.`
+    );
+    return;
+  }
+  await sendList(
+    waId,
+    `Stores matching "${query}":`,
+    "Choose store",
+    stores.map((store) => ({
+      id: `store:${store.id}`,
+      title: store.name.slice(0, 24),
+      description: `${store.category ?? "Store"} · ${store.storeCode}`,
+    }))
+  );
+  logger.info("whatsapp store search sent", {
+    query: query.slice(0, 40),
+    matchCount: stores.length,
+  });
+}
+
+/** Ranks a store's in-stock products against a query and lists the matches. */
+async function sendProductSearchResults(
+  waId: string,
+  context: StoreContext,
+  query: string
+): Promise<void> {
+  const products = await prisma.product.findMany({
+    where: {
+      merchantId: context.merchant.id,
+      active: true,
+      stockQuantity: { gt: 0 },
+    },
+    select: {
+      id: true,
+      name: true,
+      description: true,
+      priceKobo: true,
+      aliases: true,
+      category: true,
+    },
+  });
+  const matches = products
+    .map((product) => ({
+      product,
+      score: Math.max(
+        searchScore(query, product.name),
+        searchScore(query, product.category ?? ""),
+        ...product.aliases.map((alias) => searchScore(query, alias))
+      ),
+    }))
+    .filter((entry) => entry.score >= SEARCH_THRESHOLD)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 9)
+    .map((entry) => entry.product);
+
+  if (!matches.length) {
+    await sendText(
+      waId,
+      `No products match "${query}" in ${context.merchant.name}. Send MENU to browse everything, or try another word.`
+    );
+    return;
+  }
+  await sendList(
+    waId,
+    `Products matching "${query}":`,
+    "Choose product",
+    [
+      ...matches.map((product) => ({
+        id: `commerce:product:${product.id}`,
+        title: product.name.slice(0, 24),
+        description: `${formatNaira(product.priceKobo)}${product.description ? ` · ${product.description}` : ""}`,
+      })),
+      { id: "commerce:menu", title: "Back to categories" },
+    ].slice(0, 10)
+  );
+  logger.info("whatsapp product search sent", {
+    merchantId: context.merchant.id,
+    query: query.slice(0, 40),
+    matchCount: matches.length,
+  });
 }
 
 async function upsertStoreContext(
@@ -290,7 +413,12 @@ async function sendCatalogue(
       title: "All products",
       description: `${products.length} available item${products.length === 1 ? "" : "s"}`,
     },
-    ...categories.slice(0, 8).map((category) => ({
+    {
+      id: "commerce:search_prompt",
+      title: "Search products",
+      description: "Find an item by name",
+    },
+    ...categories.slice(0, 6).map((category) => ({
       id: `commerce:category:${encodeLabel(category)}`,
       title: category,
       description: `${products.filter((product) => product.category === category).length} products`,
@@ -721,6 +849,18 @@ export async function preprocessCommerceMessage(
     return { handled: true };
   }
 
+  if (interactiveId === "commerce:search_prompt") {
+    if (context) {
+      await sendText(
+        message.from,
+        `To search ${context.merchant.name}, type: *search <product name>*\n\ne.g. "search polo" or "find hoodie".`
+      );
+    } else {
+      await sendStoreDirectory(message.from);
+    }
+    return { handled: true };
+  }
+
   if (interactiveId.startsWith("commerce:category:")) {
     if (!context) {
       await sendStoreDirectory(message.from);
@@ -803,6 +943,19 @@ export async function preprocessCommerceMessage(
   }
 
   const text = message.text?.trim() ?? "";
+
+  // Explicit search: products when inside a store, stores otherwise.
+  const searchMatch = text.match(SEARCH_COMMAND);
+  if (searchMatch?.[1]) {
+    const query = searchMatch[1].trim();
+    if (context) {
+      await sendProductSearchResults(message.from, context, query);
+    } else {
+      await sendStoreSearchResults(message.from, query);
+    }
+    return { handled: true };
+  }
+
   if (DIRECTORY_COMMAND.test(text)) {
     if (context && !/^(stores|shops|store|change store|switch store)[.!?]?$/i.test(text)) {
       await sendCatalogue(message.from, context);
@@ -810,6 +963,17 @@ export async function preprocessCommerceMessage(
       await sendStoreDirectory(message.from);
     }
     return { handled: true };
+  }
+
+  // No active store and free text that isn't a greeting: try to match it to a
+  // store by name. Only claims the message when there ARE matches — otherwise
+  // it falls through to the engine's welcome + full store list.
+  if (!context && text && text.length >= 2 && text.split(/\s+/).length <= 5) {
+    const stores = await searchStores(text);
+    if (stores.length) {
+      await sendStoreSearchResults(message.from, text);
+      return { handled: true };
+    }
   }
 
   return { handled: false };

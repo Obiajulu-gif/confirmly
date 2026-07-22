@@ -5,6 +5,7 @@ import {
   normalizeColour,
   normalizeSize,
   scoreMatch,
+  searchScore,
   singularize,
   CONFIDENT,
   AMBIGUOUS,
@@ -79,5 +80,27 @@ describe("confidence policy", () => {
 
   it("thresholds are ordered sanely", () => {
     expect(CONFIDENT).toBeGreaterThan(AMBIGUOUS);
+  });
+});
+
+describe("searchScore (store/product finder ranking)", () => {
+  it("boosts a substring fragment above the 0.5 search threshold", () => {
+    // "ada" is a fragment of "Ada Styles" — token overlap alone would miss it.
+    expect(searchScore("ada", "Ada Styles")).toBeGreaterThanOrEqual(0.8);
+    expect(searchScore("polo", "Classic Polo Shirt")).toBeGreaterThanOrEqual(0.5);
+  });
+
+  it("ranks a closer candidate above a weaker one", () => {
+    const strong = searchScore("hoodie", "Premium Hoodie");
+    const weak = searchScore("hoodie", "Canvas Tote Bag");
+    expect(strong).toBeGreaterThan(weak);
+  });
+
+  it("scores an unrelated query near zero", () => {
+    expect(searchScore("laptop", "Classic Polo Shirt")).toBeLessThan(0.5);
+  });
+
+  it("handles empty candidates without throwing", () => {
+    expect(searchScore("anything", "")).toBe(0);
   });
 });

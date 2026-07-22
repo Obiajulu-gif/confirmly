@@ -83,6 +83,20 @@ export function scoreMatch(searchTerm: string, candidate: string): number {
   return (2 * overlap) / (a.length + b.length);
 }
 
+/**
+ * Search ranking for the WhatsApp store/product finders: token-overlap
+ * (scoreMatch) plus a substring-containment boost so a fragment query
+ * ("ada" → "Ada Styles", "polo" → "Classic Polo Shirt") still surfaces.
+ */
+export function searchScore(query: string, candidate: string): number {
+  if (!candidate) return 0;
+  const base = scoreMatch(query, candidate);
+  const nq = normalize(query);
+  const nc = normalize(candidate);
+  if (nq && nc.includes(nq)) return Math.max(base, 0.8);
+  return base;
+}
+
 export interface MatchCandidate<T> {
   item: T;
   score: number;

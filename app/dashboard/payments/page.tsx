@@ -6,16 +6,48 @@ import { prisma } from "@/lib/db";
 import { env } from "@/lib/env";
 import { formatNaira } from "@/lib/money";
 import { Badge, Card, EmptyState, stateTone } from "@/components/ui";
+import type { PaymentState, Prisma } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Payments" };
 
-export default async function PaymentsPage() {
+const FILTERS: Array<{ value: string; label: string }> = [
+  { value: "", label: "All" },
+  { value: "PAID", label: "Paid" },
+  { value: "PENDING", label: "Pending" },
+  { value: "FAILED", label: "Failed" },
+  { value: "EXPIRED", label: "Expired" },
+  { value: "PARTIALLY_PAID", label: "Partially paid" },
+  { value: "OVERPAID", label: "Overpaid" },
+  { value: "REVERSED", label: "Reversed" },
+];
+
+export default async function PaymentsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string; state?: string }>;
+}) {
   const session = await getMerchantSession();
   if (!session) redirect("/login");
+  const { q, state } = await searchParams;
+
+  const where: Prisma.PaymentWhereInput = {
+    order: { merchantId: session.merchantId },
+  };
+  if (state && FILTERS.some((f) => f.value === state)) {
+    where.state = state as PaymentState;
+  }
+  if (q) {
+    where.OR = [
+      { order: { reference: { contains: q, mode: "insensitive" } } },
+      { paymentReference: { contains: q, mode: "insensitive" } },
+      { transactionReference: { contains: q, mode: "insensitive" } },
+      { invoiceReference: { contains: q, mode: "insensitive" } },
+    ];
+  }
 
   const payments = await prisma.payment.findMany({
-    where: { order: { merchantId: session.merchantId } },
+    where,
     include: {
       order: { select: { id: true, reference: true } },
       settlement: true,
@@ -47,11 +79,42 @@ export default async function PaymentsPage() {
       ) : null}
 
       <Card>
-        {payments.length === 0 ? (
-          <EmptyState
-            title="No payments yet"
-            hint="Payments appear when customers confirm orders on WhatsApp."
+        <form method="GET" className="flex flex-col gap-3 sm:flex-row">
+          <input
+            type="search"
+            name="q"
+            defaultValue={q ?? ""}
+            placeholder="Search order or transaction reference…"
+            aria-label="Search payments"
+            className="flex-1 rounded-lg border border-ink-900/10 bg-surface px-3 py-2 text-sm"
           />
+          <select
+            name="state"
+            defaultValue={state ?? ""}
+            aria-label="Filter by payment state"
+            className="rounded-lg border border-ink-900/10 bg-surface px-3 py-2 text-sm"
+          >
+            {FILTERS.map((f) => (
+              <option key={f.value} value={f.value}>
+                {f.label}
+              </option>
+            ))}
+          </select>
+          <button
+            type="submit"
+            className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
+          >
+            Filter
+          </button>
+        </form>
+
+        {payments.length === 0 ? (
+          <div className="mt-6">
+            <EmptyState
+              title={q || state ? "No payments match" : "No payments yet"}
+              hint="Payments appear when customers confirm orders on WhatsApp."
+            />
+          </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[880px] text-left text-sm">
