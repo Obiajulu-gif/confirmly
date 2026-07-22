@@ -398,6 +398,109 @@ describe("conversation engine", () => {
   });
 });
 
+describe("conversation engine — Phase 1 UX", () => {
+  const waId = "2348055556666";
+
+  beforeAll(async () => {
+    await prisma.waSession.upsert({
+      where: { waId },
+      update: { activeMerchantId: merchantId },
+      create: { waId, activeMerchantId: merchantId },
+    });
+  });
+
+  afterAll(async () => {
+    await prisma.waSession.deleteMany({ where: { waId } }).catch(() => {});
+  });
+
+  function inboundFrom(
+    text: string,
+    opts: { kind?: ParsedInboundMessage["kind"]; rawType?: string } = {}
+  ): ParsedInboundMessage {
+    messageCounter += 1;
+    return {
+      providerMessageId: `wamid.UX-${Date.now()}-${messageCounter}`,
+      from: waId,
+      profileName: "UX Tester",
+      timestamp: new Date(),
+      kind: opts.kind ?? "text",
+      text: opts.kind === "unsupported" ? null : text,
+      interactiveId: null,
+      location: null,
+      flowResponse: null,
+      rawType: opts.rawType ?? "text",
+    };
+  }
+
+  it("answers a price question from the catalogue instead of handing over", async () => {
+    const { processInboundMessage } = await import("@/lib/orders/engine");
+    nextIntent = {
+      merchantCode: null,
+      intent: "BUSINESS_QUESTION",
+      items: [{ searchTerm: "polo", quantity: 1, size: null, colour: null }],
+      deliveryMethod: null,
+      deliveryAddress: null,
+      deliveryArea: null,
+      customerName: null,
+      notes: null,
+      missingFields: [],
+    };
+    outboundLog.length = 0;
+    await processInboundMessage(inboundFrom("how much is the polo?"));
+    nextIntent = null;
+
+    const reply = outboundLog.at(-1);
+    expect(reply?.text).toContain("Classic Polo Shirt");
+    expect(reply?.text).toContain("NGN 12,000");
+    // It answered — it did not hand the chat to a human.
+    const conversation = await prisma.conversation.findFirstOrThrow({
+      where: { merchantId, customer: { waId } },
+    });
+    expect(conversation.automationMode).toBe("AUTO");
+  });
+
+  it("answers a delivery-fee question from the merchant's zones", async () => {
+    const { processInboundMessage } = await import("@/lib/orders/engine");
+    nextIntent = {
+      merchantCode: null,
+      intent: "BUSINESS_QUESTION",
+      items: [],
+      deliveryMethod: null,
+      deliveryAddress: null,
+      deliveryArea: "Yaba",
+      customerName: null,
+      notes: null,
+      missingFields: [],
+    };
+    outboundLog.length = 0;
+    await processInboundMessage(inboundFrom("how much is delivery to Yaba?"));
+    nextIntent = null;
+
+    const reply = outboundLog.at(-1);
+    expect(reply?.text).toContain("Yaba");
+    expect(reply?.text).toContain("NGN 2,500");
+  });
+
+  it("redirects an unsupported photo with a Browse button, no dead-end", async () => {
+    const { processInboundMessage } = await import("@/lib/orders/engine");
+    outboundLog.length = 0;
+    await processInboundMessage(
+      inboundFrom("", { kind: "unsupported", rawType: "image" })
+    );
+    const reply = outboundLog.at(-1);
+    expect(reply?.kind).toBe("buttons");
+    expect(reply?.text.toLowerCase()).toContain("photo");
+  });
+
+  it("shows an empty-cart message when there is no draft", async () => {
+    const { processInboundMessage } = await import("@/lib/orders/engine");
+    outboundLog.length = 0;
+    await processInboundMessage(inboundFrom("cart"));
+    const reply = outboundLog.at(-1);
+    expect(reply?.text.toLowerCase()).toContain("empty");
+  });
+});
+
 describe("reconciliation", () => {
   it("recovers a payment whose webhook was missed", async () => {
     const client = await import("@/lib/monnify/client");

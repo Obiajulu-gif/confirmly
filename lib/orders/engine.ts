@@ -40,6 +40,7 @@ const COMMAND_CANCEL = /^(cancel|cancel order)[.!]?$/i;
 const COMMAND_HELP = /^(help|menu)[.!?]?$/i;
 const COMMAND_CHECK_PAYMENT = /^(check payment|payment status)[.!?]?$/i;
 const COMMAND_RESUME = /^(resume|start over)[.!?]?$/i;
+const COMMAND_VIEW_CART = /^(cart|view cart|view order|my cart|show cart|basket)[.!?]?$/i;
 // Store selection (one shared WhatsApp number serves every merchant).
 const COMMAND_STORE = /^(?:start|store)\s+([a-z0-9-]{2,24})[.!]?$/i;
 const COMMAND_STORE_LIST = /^(stores|shops|switch|change (store|shop))[.!?]?$/i;
@@ -463,10 +464,7 @@ async function processScopedMessage(
       return;
     }
     if (message.kind === "unsupported") {
-      await reply(
-        ctx,
-        "I can only read text messages for now. Please type your order — e.g. \"2 black polo shirts, large, deliver to Yaba\"."
-      );
+      await handleUnsupportedMedia(ctx, message.rawType);
       return;
     }
     await handleText(ctx, message.text ?? "");
@@ -509,6 +507,10 @@ async function handleText(ctx: EngineContext, text: string): Promise<void> {
   }
   if (COMMAND_CHECK_PAYMENT.test(trimmed)) {
     await checkPaymentStatus(ctx);
+    return;
+  }
+  if (COMMAND_VIEW_CART.test(trimmed)) {
+    await showCart(ctx);
     return;
   }
   if (COMMAND_RESUME.test(trimmed)) {
@@ -604,10 +606,7 @@ async function handleText(ctx: EngineContext, text: string): Promise<void> {
       await checkPaymentStatus(ctx);
       return;
     case "BUSINESS_QUESTION":
-      await reply(
-        ctx,
-        "I'm the ordering assistant, so I might not know that one! Reply \"human\" and the merchant will answer you directly. If you'd like to order something, just tell me what you need."
-      );
+      await answerBusinessQuestion(ctx, intent, trimmed);
       return;
     case "OTHER":
       await reply(
@@ -620,6 +619,169 @@ async function handleText(ctx: EngineContext, text: string): Promise<void> {
       await applyOrderIntent(ctx, intent);
       return;
   }
+}
+
+/**
+ * Answers a catalogue-answerable question (price, sizes/colours, stock,
+ * delivery fees) directly from the database before ever falling back to a
+ * human. Only genuinely unknowable questions hand over.
+ */
+async function answerBusinessQuestion(
+  ctx: EngineContext,
+  intent: OrderIntent,
+  rawText: string
+): Promise<void> {
+  const lower = rawText.toLowerCase();
+  const asksDelivery =
+    /\b(deliver|delivery|shipping|ship|how much to|fee|drop off|dropoff)\b/.test(
+      lower
+    );
+  const asksPrice = /\b(price|cost|how much|how many naira|amount|charge)\b/.test(
+    lower
+  );
+  const asksVariants =
+    /\b(size|sizes|colour|colours|color|colors|variant|variants|available in|options)\b/.test(
+      lower
+    );
+  const asksStock = /\b(in stock|stock|available|availability|do you have|have any|left)\b/.test(
+    lower
+  );
+
+  // Delivery-fee questions are answered from the merchant's zones. Delivery
+  // keywords win even when "how much" (a price signal) is also present, since
+  // "how much is delivery to Yaba" is unambiguously a delivery question.
+  if (asksDelivery) {
+    const zones = await prisma.deliveryZone.findMany({
+      where: { merchantId: ctx.merchantId, active: true },
+      orderBy: { feeKobo: "asc" },
+    });
+    const deliveryZones = zones.filter(
+      (z) => z.name.toLowerCase() !== "pickup"
+    );
+    if (!deliveryZones.length) {
+      await reply(
+        ctx,
+        "This shop hasn't set up delivery areas yet. Reply \"human\" and the merchant will help you directly."
+      );
+      return;
+    }
+    // If they named an area, answer with that specific fee.
+    const named = intent.deliveryArea ?? rawText;
+    const match = matchAgainst(named, deliveryZones, (z) => [z.name, ...z.aliases]);
+    if (match.best && match.status !== "none") {
+      await reply(
+        ctx,
+        `Delivery to *${match.best.item.name}* is ${formatNaira(match.best.item.feeKobo)}. Want to order? Just tell me what you'd like.`
+      );
+      return;
+    }
+    const lines = deliveryZones
+      .slice(0, 8)
+      .map((z) => `• ${z.name}: ${formatNaira(z.feeKobo)}`)
+      .join("\n");
+    await reply(
+      ctx,
+      `Here are our delivery areas and fees:\n${lines}\n\nTell me what you'd like to order and where, and I'll add it up.`
+    );
+    return;
+  }
+
+  // Otherwise, try to answer about a specific product.
+  const products = await activeProducts(ctx.merchantId);
+  const term = intent.items[0]?.searchTerm ?? rawText;
+  const match = matchAgainst(term, products, (p) => [p.name, ...p.aliases]);
+  const product =
+    match.best && match.status !== "none" ? match.best.item : null;
+
+  if (!product) {
+    // Couldn't tie it to a product — offer to browse, then a human.
+    await sendToCustomer({
+      merchantId: ctx.merchantId,
+      customer: ctx.customer,
+      conversationId: ctx.conversation.id,
+      kind: "buttons",
+      text: "I can help with prices, sizes, colours, stock and delivery fees for this shop. Browse the catalogue, or I can call the merchant for anything else.",
+      buttons: [
+        { id: "commerce:menu", title: "Browse catalogue" },
+        { id: "talk_merchant", title: "Ask the merchant" },
+      ],
+    });
+    return;
+  }
+
+  const colours = [
+    ...new Set(product.variants.map((v) => v.colour).filter(Boolean)),
+  ] as string[];
+  const sizes = [
+    ...new Set(product.variants.map((v) => v.size).filter(Boolean)),
+  ] as string[];
+  const inStock = product.variants.length
+    ? product.variants.reduce((s, v) => s + v.stockQuantity, 0)
+    : product.stockQuantity;
+
+  const parts: string[] = [`*${product.name}* — ${formatNaira(product.priceKobo)}`];
+  if (asksVariants || (!asksPrice && !asksStock)) {
+    if (colours.length) parts.push(`Colours: ${colours.join(", ")}`);
+    if (sizes.length) parts.push(`Sizes: ${sizes.join(", ")}`);
+  }
+  if (asksStock || (!asksPrice && !asksVariants)) {
+    parts.push(inStock > 0 ? `In stock: ${inStock}` : "Currently out of stock");
+  }
+  parts.push("");
+  parts.push(
+    inStock > 0
+      ? `Want it? Just say e.g. "1 ${product.name}".`
+      : "Reply \"human\" if you'd like the merchant to restock or help."
+  );
+  await reply(ctx, parts.join("\n"));
+}
+
+/** Read-only view of the current draft; resurfaces the next step or summary. */
+async function showCart(ctx: EngineContext): Promise<void> {
+  const draft = parseDraft(ctx.conversation.draft);
+  if (!draft.items.length) {
+    await reply(
+      ctx,
+      "🛒 Your order is empty right now. Just tell me what you'd like — e.g. \"2 black polo shirts, large\"."
+    );
+    return;
+  }
+  const products = await activeProducts(ctx.merchantId);
+  const zones = await prisma.deliveryZone.findMany({
+    where: { merchantId: ctx.merchantId, active: true },
+  });
+  // recalcAndRespond re-presents exactly where we are: the next question when
+  // something is missing, or the full summary with confirm buttons when ready.
+  await recalcAndRespond(ctx, draft, products, zones);
+}
+
+/** Friendly, media-aware redirect for photos, voice notes and documents. */
+async function handleUnsupportedMedia(
+  ctx: EngineContext,
+  rawType: string
+): Promise<void> {
+  const kind = rawType.toLowerCase();
+  const message =
+    kind === "image" || kind === "sticker"
+      ? "I can't view photos yet — but tell me the item's name and I'll find it, or tap Browse to see the catalogue with pictures."
+      : kind === "audio" || kind === "voice"
+        ? "I can't listen to voice notes yet — please type your order in a few words, e.g. \"2 black polo shirts, large\"."
+        : kind === "video"
+          ? "I can't watch videos yet — just type what you'd like to order, or tap Browse to see the catalogue."
+          : kind === "document"
+            ? "I can't open documents here — type your order in plain words, or tap Browse to see the catalogue."
+            : "I can only read text for now — type your order in a few words, or tap Browse to see the catalogue.";
+  await sendToCustomer({
+    merchantId: ctx.merchantId,
+    customer: ctx.customer,
+    conversationId: ctx.conversation.id,
+    kind: "buttons",
+    text: message,
+    buttons: [
+      { id: "commerce:menu", title: "Browse catalogue" },
+      { id: "talk_merchant", title: "Talk to merchant" },
+    ],
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -877,14 +1039,23 @@ async function recalcAndRespond(
   }
 
   if (draft.deliveryMethod === "DELIVERY" && !draft.deliveryZoneId) {
+    const hasPickup = zones.some((z) => z.name.toLowerCase() === "pickup");
+    // Leave room (10-row list cap) for a Pickup escape and a human escape so a
+    // customer in an unserved area is never trapped re-guessing area names.
     const zoneRows = zones
       .filter((z) => z.name.toLowerCase() !== "pickup")
-      .slice(0, 10)
+      .slice(0, hasPickup ? 8 : 9)
       .map((z) => ({
         id: `zone:${z.id}`,
         title: z.name.slice(0, 24),
         description: formatNaira(z.feeKobo),
       }));
+    const escapeRows = [
+      ...(hasPickup
+        ? [{ id: "delivery:PICKUP", title: "Pick up instead" }]
+        : []),
+      { id: "talk_merchant", title: "Ask the merchant" },
+    ];
     await setConversation(ctx, { state: "NEEDS_CLARIFICATION", draft });
     await sendToCustomer({
       merchantId: ctx.merchantId,
@@ -892,10 +1063,10 @@ async function recalcAndRespond(
       conversationId: ctx.conversation.id,
       kind: "list",
       text: draft.deliveryArea
-        ? `I don't deliver to "${draft.deliveryArea}" yet. Which area should I use?`
+        ? `I don't deliver to "${draft.deliveryArea}" yet. Pick a listed area, choose pickup, or ask the merchant.`
         : "Which area should we deliver to?",
       listButtonLabel: "Choose area",
-      rows: zoneRows,
+      rows: [...zoneRows, ...escapeRows].slice(0, 10),
     });
     return;
   }
@@ -1134,7 +1305,17 @@ async function handleInteractiveReply(
     }
     return;
   }
-  await reply(ctx, "Sorry, that button has expired. Type \"help\" to see options.");
+  // Expired/unknown button: instead of dead-ending, resurface the current step
+  // (re-asks the pending question or re-shows the summary) when there's a draft,
+  // otherwise nudge toward browsing.
+  if (draft.items.length) {
+    await recalcAndRespond(ctx, draft, products, zones);
+    return;
+  }
+  await reply(
+    ctx,
+    "That option has expired. Type \"menu\" to browse the catalogue, \"help\" for options, or just tell me what you'd like to order."
+  );
 }
 
 // ---------------------------------------------------------------------------

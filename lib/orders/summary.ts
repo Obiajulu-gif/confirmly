@@ -83,6 +83,8 @@ export const HELP_TEXT = [
   "",
   "🛍️ Send your order in plain words",
   '    _e.g. "2 black polo shirts, large, deliver to Yaba"_',
+  "🧾 *menu* — browse the catalogue",
+  "🛒 *cart* — see your current order",
   "🏬 *stores* — see every store, *START <code>* to switch",
   "💳 *check payment* — live payment status",
   "❌ *cancel* — cancel the current order",
