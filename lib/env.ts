@@ -99,6 +99,9 @@ const envSchema = z.object({
     .string()
     .transform((value) => value === "true" || value === "1")
     .default("false"),
+
+  /** Comma-separated allowlist of emails granted the platform admin console. */
+  ADMIN_EMAILS: z.string().optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;

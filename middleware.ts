@@ -20,9 +20,25 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
   try {
-    await jwtVerify(token, new TextEncoder().encode(process.env.AUTH_SECRET), {
-      issuer: "confirmly",
-    });
+    const { payload } = await jwtVerify(
+      token,
+      new TextEncoder().encode(process.env.AUTH_SECRET),
+      { issuer: "confirmly" }
+    );
+    // Defence in depth for the platform admin console: the layout's
+    // getAdminSession() is the authoritative gate, but block non-admins here
+    // too so admin pages never even render for them.
+    if (request.nextUrl.pathname.startsWith("/admin")) {
+      const allowlist = (process.env.ADMIN_EMAILS ?? "")
+        .split(",")
+        .map((email) => email.trim().toLowerCase())
+        .filter(Boolean);
+      const email =
+        typeof payload.email === "string" ? payload.email.toLowerCase() : "";
+      if (!email || !allowlist.includes(email)) {
+        return NextResponse.redirect(new URL("/dashboard", request.url));
+      }
+    }
     return NextResponse.next();
   } catch {
     const response = NextResponse.redirect(loginUrl);
@@ -32,5 +48,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/dashboard/:path*"],
+  matcher: ["/dashboard/:path*", "/admin/:path*"],
 };

@@ -3,7 +3,7 @@ import { SignJWT, jwtVerify } from "jose";
 import { compare, hash } from "bcryptjs";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/db";
-import { requireEnv } from "@/lib/env";
+import { env, requireEnv } from "@/lib/env";
 import { logger } from "@/lib/logger";
 
 export const SESSION_COOKIE = "confirmly_session";
@@ -84,6 +84,31 @@ export async function getMerchantSession(): Promise<
   });
   if (!membership) return null;
   return { ...session, merchantId: session.merchantId };
+}
+
+/** Parsed, lowercased platform-admin allowlist (from ADMIN_EMAILS). */
+export function adminEmailAllowlist(): string[] {
+  return (env().ADMIN_EMAILS ?? "")
+    .split(",")
+    .map((email) => email.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+/** True when the email is on the platform-admin allowlist. */
+export function isAdminEmail(email: string | null | undefined): boolean {
+  if (!email) return false;
+  return adminEmailAllowlist().includes(email.trim().toLowerCase());
+}
+
+/**
+ * Session for the platform admin console. Returns null unless the signed-in
+ * user's email is on the ADMIN_EMAILS allowlist. The console is cross-tenant,
+ * so every admin page and action must gate on this.
+ */
+export async function getAdminSession(): Promise<SessionPayload | null> {
+  const session = await getSession();
+  if (!session || !isAdminEmail(session.email)) return null;
+  return session;
 }
 
 export class InvalidCredentialsError extends Error {

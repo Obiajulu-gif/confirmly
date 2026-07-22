@@ -1,14 +1,17 @@
 import { afterAll, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/db";
 import {
+  adminEmailAllowlist,
   authenticate,
   createSessionToken,
   EmailInUseError,
   InvalidCredentialsError,
+  isAdminEmail,
   reauthenticate,
   registerUser,
   verifySessionToken,
 } from "@/lib/auth";
+import { resetEnvCache } from "@/lib/env";
 import { createBusinessForUser } from "@/lib/merchants/service";
 
 const email = `auth-test-${Date.now()}@example.com`;
@@ -21,6 +24,30 @@ afterAll(async () => {
     await prisma.merchant.delete({ where: { id: merchantId } }).catch(() => {});
   }
   await prisma.user.deleteMany({ where: { email } });
+});
+
+describe("platform admin allowlist", () => {
+  afterAll(() => {
+    delete process.env.ADMIN_EMAILS;
+    resetEnvCache();
+  });
+
+  it("recognizes allowlisted emails case-insensitively", () => {
+    process.env.ADMIN_EMAILS = "boss@confirmly.app, Ops@Confirmly.app";
+    resetEnvCache();
+    expect(isAdminEmail("boss@confirmly.app")).toBe(true);
+    expect(isAdminEmail("OPS@confirmly.app")).toBe(true);
+    expect(isAdminEmail("stranger@example.com")).toBe(false);
+    expect(isAdminEmail(null)).toBe(false);
+    expect(isAdminEmail(undefined)).toBe(false);
+  });
+
+  it("grants no one when ADMIN_EMAILS is unset", () => {
+    delete process.env.ADMIN_EMAILS;
+    resetEnvCache();
+    expect(adminEmailAllowlist()).toEqual([]);
+    expect(isAdminEmail("anyone@example.com")).toBe(false);
+  });
 });
 
 describe("registration and sessions", () => {

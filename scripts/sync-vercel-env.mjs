@@ -54,6 +54,7 @@ const PUSH_KEYS = [
   "MONNIFY_PLATFORM_FEE_PERCENT",
   "CRON_SECRET",
   "DEMO_MODE",
+  "ADMIN_EMAILS",
 ];
 
 const envFile = path.join(process.cwd(), ".env.local");

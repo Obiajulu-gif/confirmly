@@ -261,6 +261,7 @@ Names only — values live in `.env.local` (git-ignored) or Vercel.
 | `NVIDIA_API_KEY` / `NVIDIA_BASE_URL` / `NVIDIA_ORDER_MODEL` | NIM extraction |
 | `MONNIFY_BASE_URL` / `MONNIFY_API_KEY` / `MONNIFY_SECRET_KEY` / `MONNIFY_CONTRACT_CODE` | Payments (contract code ≠ wallet account number!) |
 | `DEMO_MODE` | `true` only for fixture-based review — shows a banner |
+| `ADMIN_EMAILS` | Comma-separated emails granted the `/admin` platform console (blank = disabled) |
 | `CRON_SECRET` | Optional: authorizes the Vercel reconciliation cron |
 
 ### Provider setup
