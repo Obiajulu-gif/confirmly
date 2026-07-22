@@ -360,6 +360,8 @@ model Conversation {
   pendingQuestion   String?
   lastInboundAt     DateTime?
   lastOutboundAt    DateTime?
+  /** Set when an abandoned-order nudge was sent — throttles to one per cycle. */
+  lastNudgeAt       DateTime?
   createdAt         DateTime          @default(now())
   updatedAt         DateTime          @updatedAt
 

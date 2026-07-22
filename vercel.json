@@ -13,6 +13,10 @@
     {
       "path": "/api/payments/reconcile",
       "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/conversations/nudge",
+      "schedule": "0 * * * *"
     }
   ]
 }

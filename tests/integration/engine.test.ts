@@ -572,6 +572,19 @@ describe("conversation engine — Phase 1 UX", () => {
   });
 });
 
+describe("abandoned-order nudge", () => {
+  it("sends nothing and never queries when NUDGE_ENABLED is off", async () => {
+    // Default flag is off — the guard must short-circuit before any send,
+    // so the feature can ship dark without touching real conversations.
+    const { sendAbandonedOrderNudges } = await import("@/lib/orders/nudge");
+    outboundLog.length = 0;
+    const result = await sendAbandonedOrderNudges();
+    expect(result.enabled).toBe(false);
+    expect(result.sent).toBe(0);
+    expect(outboundLog).toHaveLength(0);
+  });
+});
+
 describe("reconciliation", () => {
   it("recovers a payment whose webhook was missed", async () => {
     const client = await import("@/lib/monnify/client");

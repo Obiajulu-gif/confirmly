@@ -21,6 +21,7 @@ export const AUDIT = {
   HUMAN_TAKEOVER: "Human takeover",
   AUTOMATION_RESUMED: "Automation resumed",
   RECONCILIATION_RUN: "Reconciliation run",
+  NUDGE_SENT: "Abandoned-order nudge sent",
 } as const;
 
 export async function recordAudit(input: {

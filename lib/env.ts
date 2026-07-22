@@ -102,6 +102,12 @@ const envSchema = z.object({
 
   /** Comma-separated allowlist of emails granted the platform admin console. */
   ADMIN_EMAILS: z.string().optional(),
+
+  /** Abandoned-order nudge (outbound). Off by default — sends real messages. */
+  NUDGE_ENABLED: z
+    .string()
+    .transform((value) => value === "true" || value === "1")
+    .default("false"),
 });
 
 export type Env = z.infer<typeof envSchema>;

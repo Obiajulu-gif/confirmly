@@ -55,6 +55,7 @@ const PUSH_KEYS = [
   "CRON_SECRET",
   "DEMO_MODE",
   "ADMIN_EMAILS",
+  "NUDGE_ENABLED",
 ];
 
 const envFile = path.join(process.cwd(), ".env.local");
