@@ -3,7 +3,7 @@
   "framework": "nextjs",
   "buildCommand": "npm run vercel-build",
   "env": {
-    "APP_URL": "https://confirmliy.com"
+    "APP_URL": "https://www.confirmliy.com"
   },
   "crons": [
     {

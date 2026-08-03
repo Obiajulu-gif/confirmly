@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 
-const siteUrl = "https://confirmliy.com";
+const siteUrl = "https://www.confirmliy.com";
 const siteTitle = "Confirmly — Turn WhatsApp orders into verified payments";
 const siteDescription =
   "Confirmly converts WhatsApp conversations into structured, payment-ready orders, verifies payment through Monnify, and sends a trusted digital receipt.";
