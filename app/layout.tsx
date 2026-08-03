@@ -16,6 +16,9 @@ export const metadata: Metadata = {
     template: "%s · Confirmly",
   },
   description: siteDescription,
+  alternates: {
+    canonical: siteUrl,
+  },
   keywords: [
     "WhatsApp order management",
     "WhatsApp payments",
