@@ -3,7 +3,7 @@
   "framework": "nextjs",
   "buildCommand": "npm run vercel-build",
   "env": {
-    "APP_URL": "https://confirmly-alpha.vercel.app"
+    "APP_URL": "https://confirmliy.com"
   },
   "crons": [
     {
@@ -16,7 +16,7 @@
     },
     {
       "path": "/api/conversations/nudge",
-      "schedule": "0 * * * *"
+      "schedule": "0 12 * * *"
     }
   ]
 }
