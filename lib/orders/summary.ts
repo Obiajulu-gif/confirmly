@@ -18,9 +18,18 @@ export interface SummaryInput {
   deliveryFeeKobo: number;
   totalKobo: number;
   deliveryAddress?: string | null;
+  customerName?: string | null;
+  customerPhone?: string | null;
 }
 
 const RULE = "━━━━━━━━━━━━";
+
+/** Light phone formatting for display: ensures a leading + on a bare number. */
+function formatPhone(value: string): string {
+  const trimmed = value.trim();
+  if (/^\+/.test(trimmed)) return trimmed;
+  return /^\d{6,}$/.test(trimmed) ? `+${trimmed}` : trimmed;
+}
 
 /** Builds the WhatsApp order-summary text shown before confirmation. */
 export function buildOrderSummaryText(input: SummaryInput): string {
@@ -37,6 +46,15 @@ export function buildOrderSummaryText(input: SummaryInput): string {
     parts.push(`    📍 ${input.deliveryAddress}`);
   }
   parts.push(`    ${formatNaira(input.deliveryFeeKobo)}`);
+  // Customer contact block — name + phone so the merchant can fulfil.
+  const contact = [
+    input.customerName ? `👤 ${input.customerName}` : null,
+    input.customerPhone ? `📞 ${formatPhone(input.customerPhone)}` : null,
+  ].filter((line): line is string => Boolean(line));
+  if (contact.length) {
+    parts.push("");
+    parts.push(...contact);
+  }
   parts.push(RULE);
   parts.push(`💰 *TOTAL: ${formatNaira(input.totalKobo)}*`);
   parts.push("");

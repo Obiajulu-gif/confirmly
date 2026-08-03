@@ -524,6 +524,44 @@ async function handleText(ctx: EngineContext, text: string): Promise<void> {
     return;
   }
 
+  // Mid-order detail capture (delivery address, then name if still missing).
+  if (ctx.conversation.pendingQuestion === "order:address") {
+    if (trimmed.length >= 3) {
+      const draft = parseDraft(ctx.conversation.draft);
+      draft.deliveryAddress = trimmed.slice(0, 200);
+      const products = await activeProducts(ctx.merchantId);
+      const zones = await prisma.deliveryZone.findMany({
+        where: { merchantId: ctx.merchantId, active: true },
+      });
+      await setConversation(ctx, { pendingQuestion: null, draft });
+      await recalcAndRespond(ctx, draft, products, zones);
+      return;
+    }
+    await reply(
+      ctx,
+      "Please send a bit more detail — street, house number and a nearby landmark."
+    );
+    return;
+  }
+  if (ctx.conversation.pendingQuestion === "order:name") {
+    if (looksLikeName(trimmed)) {
+      ctx.customer = await prisma.customer.update({
+        where: { id: ctx.customer.id },
+        data: { name: trimmed.slice(0, 80) },
+      });
+      const draft = parseDraft(ctx.conversation.draft);
+      const products = await activeProducts(ctx.merchantId);
+      const zones = await prisma.deliveryZone.findMany({
+        where: { merchantId: ctx.merchantId, active: true },
+      });
+      await setConversation(ctx, { pendingQuestion: null, draft });
+      await recalcAndRespond(ctx, draft, products, zones);
+      return;
+    }
+    await reply(ctx, "What name should we put on the order? (just your name)");
+    return;
+  }
+
   // In-chat onboarding answers (asked right after store selection).
   if (ctx.conversation.pendingQuestion === "onboard:name") {
     if (looksLikeName(trimmed)) {
@@ -1076,6 +1114,36 @@ async function recalcAndRespond(
     return;
   }
 
+  // Delivery orders need a specific address (street/landmark), not just a zone.
+  // Returning customers whose saved address matches the zone skip this.
+  if (
+    draft.deliveryMethod === "DELIVERY" &&
+    draft.deliveryZoneId &&
+    !draft.deliveryAddress
+  ) {
+    await setConversation(ctx, {
+      state: "NEEDS_CLARIFICATION",
+      draft,
+      pendingQuestion: "order:address",
+    });
+    await reply(
+      ctx,
+      `📍 What's the delivery address in *${draft.deliveryZoneName}*?\nPlease send the street, house number and a landmark so the rider can find you.`
+    );
+    return;
+  }
+
+  // Make sure we have a name to put on the order before summarizing.
+  if (!ctx.customer.name) {
+    await setConversation(ctx, {
+      state: "NEEDS_CLARIFICATION",
+      draft,
+      pendingQuestion: "order:name",
+    });
+    await reply(ctx, "Almost there — what name should we put on this order?");
+    return;
+  }
+
   // --- Everything resolved: compute totals (server-side) and summarize --------
   const totals = calculateOrderTotal({
     items: draft.items.map((i) => ({
@@ -1099,6 +1167,8 @@ async function recalcAndRespond(
     deliveryFeeKobo: totals.deliveryFeeKobo,
     totalKobo: totals.totalKobo,
     deliveryAddress: draft.deliveryAddress,
+    customerName: ctx.customer.name,
+    customerPhone: ctx.customer.phoneNumber,
   });
 
   await setConversation(ctx, { state: "AWAITING_CONFIRMATION", draft });

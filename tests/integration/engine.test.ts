@@ -124,7 +124,7 @@ describe("conversation engine", () => {
       intent: "PLACE_ORDER",
       items: [{ searchTerm: "polo", quantity: 2, size: "large", colour: "black" }],
       deliveryMethod: "DELIVERY",
-      deliveryAddress: null,
+      deliveryAddress: "12 Test Road, Yaba",
       deliveryArea: "Yaba",
       customerName: null,
       notes: null,
@@ -132,7 +132,7 @@ describe("conversation engine", () => {
     };
     outboundLog.length = 0;
     await processInboundMessage(
-      inbound("I need two black polo shirts, large size, delivered to Yaba.")
+      inbound("2 black polo shirts, large, deliver to 12 Test Road, Yaba.")
     );
     nextIntent = null;
 
@@ -147,6 +147,10 @@ describe("conversation engine", () => {
     expect(summary?.text).toContain("NGN 24,000");
     expect(summary?.text).toContain("NGN 2,500");
     expect(summary?.text).toContain("NGN 26,500");
+    // Contact block: name, phone and specific address are shown.
+    expect(summary?.text).toContain("Engine Tester");
+    expect(summary?.text).toContain("+2348011112222");
+    expect(summary?.text).toContain("12 Test Road");
   });
 
   it("confirms the order once — a duplicate webhook delivery creates no second order", async () => {
@@ -582,6 +586,78 @@ describe("abandoned-order nudge", () => {
     expect(result.enabled).toBe(false);
     expect(result.sent).toBe(0);
     expect(outboundLog).toHaveLength(0);
+  });
+});
+
+describe("customer details capture", () => {
+  const waId = "2348099990000";
+
+  beforeAll(async () => {
+    await prisma.waSession.upsert({
+      where: { waId },
+      update: { activeMerchantId: merchantId },
+      create: { waId, activeMerchantId: merchantId },
+    });
+  });
+
+  afterAll(async () => {
+    await prisma.waSession.deleteMany({ where: { waId } }).catch(() => {});
+  });
+
+  function msg(text: string): ParsedInboundMessage {
+    messageCounter += 1;
+    return {
+      providerMessageId: `wamid.ADDR-${Date.now()}-${messageCounter}`,
+      from: waId,
+      profileName: "Addr Tester",
+      timestamp: new Date(),
+      kind: "text",
+      text,
+      interactiveId: null,
+      location: null,
+      flowResponse: null,
+      rawType: "text",
+    };
+  }
+
+  it("asks for a specific delivery address when only a zone is chosen, then summarizes with name/phone/address", async () => {
+    const { processInboundMessage } = await import("@/lib/orders/engine");
+    nextIntent = {
+      merchantCode: null,
+      intent: "PLACE_ORDER",
+      items: [{ searchTerm: "polo", quantity: 1, size: "M", colour: "Black" }],
+      deliveryMethod: "DELIVERY",
+      deliveryAddress: null,
+      deliveryArea: "Yaba",
+      customerName: null,
+      notes: null,
+      missingFields: [],
+    };
+    outboundLog.length = 0;
+    await processInboundMessage(msg("1 black polo M to Yaba"));
+    nextIntent = null;
+
+    const askAddr = outboundLog.at(-1);
+    expect(askAddr?.text.toLowerCase()).toContain("address");
+    let conv = await prisma.conversation.findFirstOrThrow({
+      where: { merchantId, customer: { waId } },
+    });
+    expect(conv.pendingQuestion).toBe("order:address");
+
+    // The free-text address reply is captured and the flow reaches the summary.
+    outboundLog.length = 0;
+    await processInboundMessage(msg("7 Akoka Road, near the bus stop"));
+
+    const summary = outboundLog.at(-1);
+    expect(summary?.kind).toBe("buttons");
+    expect(summary?.text).toContain("7 Akoka Road");
+    expect(summary?.text).toContain("Addr Tester");
+    expect(summary?.text).toContain("+2348099990000");
+    conv = await prisma.conversation.findFirstOrThrow({
+      where: { merchantId, customer: { waId } },
+    });
+    expect(conv.state).toBe("AWAITING_CONFIRMATION");
+    expect(conv.pendingQuestion).toBeNull();
   });
 });
 
