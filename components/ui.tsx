@@ -127,7 +127,7 @@ export function Input({
       <input
         id={id}
         {...props}
-        className={`w-full rounded-lg border border-ink-900/10 bg-surface-raised px-3 py-2 text-ink-900 placeholder:text-ink-500/60 focus:border-brand-500 ${className}`}
+        className={`w-full rounded-lg border border-ink-900/10 bg-surface-raised px-3 py-2.5 text-ink-900 placeholder:text-ink-500/60 transition focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/25 ${className}`}
       />
     </label>
   );

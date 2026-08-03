@@ -6,6 +6,7 @@ import { z } from "zod";
 import {
   authenticate,
   InvalidCredentialsError,
+  isAdminEmail,
   SESSION_COOKIE,
   sessionCookieOptions,
 } from "@/lib/auth";
@@ -57,6 +58,9 @@ export async function loginAction(
     }
     return { error: "Sign-in is temporarily unavailable. Try again shortly." };
   }
+  // A platform admin with no store of their own lands on the admin console
+  // rather than being pushed through merchant onboarding.
+  if (!hasMerchant && isAdminEmail(email)) redirect("/admin");
   if (!hasMerchant) redirect("/onboarding");
   redirect(next.startsWith("/dashboard") || next === "/" ? next : "/dashboard");
 }
