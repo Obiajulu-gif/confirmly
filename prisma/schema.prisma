@@ -141,6 +141,57 @@ enum ProductImageStatus {
   FAILED
 }
 
+// --- Multi-branch business / merchant roles --------------------------------
+
+/**
+ * v1 roles. MERCHANT = business owner; BRANCH_AGENT = scoped to one branch.
+ */
+enum BusinessRole {
+  MERCHANT
+  BRANCH_AGENT
+}
+
+enum MembershipStatus {
+  ACTIVE
+  INVITED
+  SUSPENDED
+  REVOKED
+}
+
+/**
+ * Lifecycle of a branch (the Merchant model). `active` mirrors ACTIVE.
+ */
+enum BranchStatus {
+  ACTIVE
+  SUSPENDED
+  CLOSED
+}
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  REVOKED
+  EXPIRED
+}
+
+enum LedgerEntryType {
+  PAYMENT_CREDIT
+  REFUND_DEBIT
+  CHARGEBACK_DEBIT
+  WITHDRAWAL_DEBIT
+  WITHDRAWAL_REVERSAL
+  ADJUSTMENT_CREDIT
+  ADJUSTMENT_DEBIT
+}
+
+enum WithdrawalStatus {
+  REQUESTED
+  PROCESSING
+  COMPLETED
+  FAILED
+  REVERSED
+}
+
 // ---------------------------------------------------------------------------
 // Models
 // ---------------------------------------------------------------------------
@@ -154,8 +205,11 @@ model User {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
-  memberships MerchantMembership[]
-  resetTokens PasswordResetToken[]
+  memberships          MerchantMembership[]
+  resetTokens          PasswordResetToken[]
+  businessMemberships  BusinessMembership[]
+  invitationsSent      BranchAgentInvitation[] @relation("InvitedBy")
+  withdrawalsRequested Withdrawal[]            @relation("RequestedBy")
 }
 
 model MerchantMembership {
@@ -183,12 +237,23 @@ model PasswordResetToken {
   @@index([userId])
 }
 
+/**
+ * A Merchant is a BRANCH/store in the multi-branch model. `businessId` groups
+ * branches under one owning Business (nullable until backfilled).
+ */
 model Merchant {
-  id           String    @id @default(cuid())
+  id           String       @id @default(cuid())
+  /**
+   * Owning Business (the top-level account). Nullable during rollout.
+   */
+  businessId   String?
+  business     Business?    @relation(fields: [businessId], references: [id], onDelete: SetNull)
   name         String
-  slug         String    @unique
-  /** WhatsApp store code customers type to select this shop (e.g. ADASTYLES). */
-  storeCode    String    @unique
+  slug         String       @unique
+  /**
+   * WhatsApp store code customers type to select this shop (e.g. ADASTYLES).
+   */
+  storeCode    String       @unique
   email        String
   category     String?
   description  String?
@@ -197,23 +262,35 @@ model Merchant {
   phoneNumber  String?
   address      String?
   stateRegion  String?
-  country      String    @default("Nigeria")
-  currency     String    @default("NGN")
-  active       Boolean   @default(true)
+  country      String       @default("Nigeria")
+  currency     String       @default("NGN")
+  /**
+   * `active` stays the customer-facing on/off (WhatsApp filters on it).
+   */
+  active       Boolean      @default(true)
+  /**
+   * Branch lifecycle; ACTIVE mirrors active=true, SUSPENDED/CLOSED => false.
+   */
+  status       BranchStatus @default(ACTIVE)
   onboardedAt  DateTime?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
 
-  memberships     MerchantMembership[]
-  paymentProfiles MerchantPaymentProfile[]
-  products        Product[]
-  deliveryZones   DeliveryZone[]
-  customers       Customer[]
-  conversations   Conversation[]
-  messages        WhatsAppMessage[]
-  orders          Order[]
-  settlements     Settlement[]
-  auditEvents     AuditEvent[]
+  memberships       MerchantMembership[]
+  paymentProfiles   MerchantPaymentProfile[]
+  products          Product[]
+  deliveryZones     DeliveryZone[]
+  customers         Customer[]
+  conversations     Conversation[]
+  messages          WhatsAppMessage[]
+  orders            Order[]
+  settlements       Settlement[]
+  auditEvents       AuditEvent[]
+  branchAssignments BranchAssignment[]
+  invitations       BranchAgentInvitation[]
+  ledgerEntries     WalletLedgerEntry[]
+
+  @@index([businessId, active])
 }
 
 model MerchantPaymentProfile {
@@ -222,10 +299,14 @@ model MerchantPaymentProfile {
   merchant            Merchant             @relation(fields: [merchantId], references: [id], onDelete: Cascade)
   bankCode            String
   bankName            String
-  /** AES-256-GCM ciphertext — never stored or shown in plaintext. */
+  /**
+   * AES-256-GCM ciphertext — never stored or shown in plaintext.
+   */
   accountNumberEnc    String
   accountNumberMasked String
-  /** Name resolved by Monnify account enquiry — never free-typed. */
+  /**
+   * Name resolved by Monnify account enquiry — never free-typed.
+   */
   accountName         String?
   validationStatus    PaymentProfileStatus @default(PENDING_VALIDATION)
   subAccountCode      String?              @unique
@@ -239,8 +320,10 @@ model MerchantPaymentProfile {
   @@index([merchantId, active])
 }
 
-/** Maps a WhatsApp user to their currently selected store (one shared
- *  business number serves every merchant in the hackathon build). */
+/**
+ * Maps a WhatsApp user to their currently selected store (one shared
+ * business number serves every merchant in the hackathon build).
+ */
 model WaSession {
   id               String   @id @default(cuid())
   waId             String   @unique
@@ -251,27 +334,27 @@ model WaSession {
 }
 
 model Product {
-  id            String   @id @default(cuid())
-  merchantId    String
-  merchant      Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
-  name          String
-  description   String?
-  category      String?
-  priceKobo     Int
-  aliases       String[] @default([])
-  stockQuantity Int      @default(0)
-  active        Boolean  @default(true)
+  id                 String              @id @default(cuid())
+  merchantId         String
+  merchant           Merchant            @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  name               String
+  description        String?
+  category           String?
+  priceKobo          Int
+  aliases            String[]            @default([])
+  stockQuantity      Int                 @default(0)
+  active             Boolean             @default(true)
   imageUrl           String?
   imageSource        ProductImageSource?
-  imageStatus        ProductImageStatus @default(NONE)
+  imageStatus        ProductImageStatus  @default(NONE)
   imageAltText       String?
   imagePrompt        String?
   imageGeneratedAt   DateTime?
   imageApprovedAt    DateTime?
   imageFailureReason String?
   imageContentHash   String?
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
 
   variants   ProductVariant[]
   orderItems OrderItem[]
@@ -360,8 +443,16 @@ model Conversation {
   pendingQuestion   String?
   lastInboundAt     DateTime?
   lastOutboundAt    DateTime?
-  /** Set when an abandoned-order nudge was sent — throttles to one per cycle. */
+  /**
+   * Set when an abandoned-order nudge was sent — throttles to one per cycle.
+   */
   lastNudgeAt       DateTime?
+  /**
+   * Human takeover attribution (branch-scoped): who holds this chat now.
+   */
+  takenOverByUserId String?
+  takenOverAt       DateTime?
+  releasedAt        DateTime?
   createdAt         DateTime          @default(now())
   updatedAt         DateTime          @updatedAt
 
@@ -396,18 +487,18 @@ model WhatsAppMessage {
 }
 
 model Order {
-  id              String     @id @default(cuid())
-  reference       String     @unique
+  id              String        @id @default(cuid())
+  reference       String        @unique
   merchantId      String
-  merchant        Merchant   @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  merchant        Merchant      @relation(fields: [merchantId], references: [id], onDelete: Cascade)
   customerId      String
-  customer        Customer   @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  customer        Customer      @relation(fields: [customerId], references: [id], onDelete: Restrict)
   conversationId  String?
   conversation    Conversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
-  state           OrderState @default(DRAFT)
+  state           OrderState    @default(DRAFT)
   subtotalKobo    Int
-  deliveryFeeKobo Int        @default(0)
-  discountKobo    Int        @default(0)
+  deliveryFeeKobo Int           @default(0)
+  discountKobo    Int           @default(0)
   totalKobo       Int
   deliveryMethod  String?
   deliveryAddress String?
@@ -416,8 +507,8 @@ model Order {
   confirmedAt     DateTime?
   paidAt          DateTime?
   fulfilledAt     DateTime?
-  createdAt       DateTime   @default(now())
-  updatedAt       DateTime   @updatedAt
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
 
   items       OrderItem[]
   payment     Payment?
@@ -429,45 +520,49 @@ model Order {
 }
 
 model OrderItem {
-  id                  String  @id @default(cuid())
-  orderId             String
-  order               Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  productId           String?
-  product             Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+  id                    String   @id @default(cuid())
+  orderId               String
+  order                 Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId             String?
+  product               Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
   // Immutable snapshots taken at confirmation time.
-  productNameSnapshot String
+  productNameSnapshot   String
   unitPriceKoboSnapshot Int
-  quantity            Int
-  variantSnapshot     String?
-  lineTotalKobo       Int
+  quantity              Int
+  variantSnapshot       String?
+  lineTotalKobo         Int
 
   @@index([orderId])
 }
 
 model Payment {
-  id                   String          @id @default(cuid())
-  orderId              String          @unique
-  order                Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  provider             PaymentProvider @default(MONNIFY)
-  state                PaymentState    @default(CREATED)
-  invoiceReference     String          @unique
-  paymentReference     String?         @unique
-  transactionReference String?         @unique
-  attempt              Int             @default(1)
-  expectedAmountKobo   Int
-  paidAmountKobo       Int             @default(0)
-  method               String?
-  checkoutUrl          String?
-  virtualAccount       Json?
-  /** Merchant subaccount used at checkout — snapshot, never recomputed. */
-  subAccountCodeSnapshot   String?
-  splitPercentageSnapshot  Int?
-  /** True when the checkout fell back to the platform default account. */
-  routedToPlatform     Boolean         @default(false)
-  sanitizedResponse    Json?
-  verifiedAt           DateTime?
-  createdAt            DateTime        @default(now())
-  updatedAt            DateTime        @updatedAt
+  id                      String          @id @default(cuid())
+  orderId                 String          @unique
+  order                   Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  provider                PaymentProvider @default(MONNIFY)
+  state                   PaymentState    @default(CREATED)
+  invoiceReference        String          @unique
+  paymentReference        String?         @unique
+  transactionReference    String?         @unique
+  attempt                 Int             @default(1)
+  expectedAmountKobo      Int
+  paidAmountKobo          Int             @default(0)
+  method                  String?
+  checkoutUrl             String?
+  virtualAccount          Json?
+  /**
+   * Merchant subaccount used at checkout — snapshot, never recomputed.
+   */
+  subAccountCodeSnapshot  String?
+  splitPercentageSnapshot Int?
+  /**
+   * True when the checkout fell back to the platform default account.
+   */
+  routedToPlatform        Boolean         @default(false)
+  sanitizedResponse       Json?
+  verifiedAt              DateTime?
+  createdAt               DateTime        @default(now())
+  updatedAt               DateTime        @updatedAt
 
   settlement Settlement?
 
@@ -532,4 +627,150 @@ model AuditEvent {
 
   @@index([merchantId, createdAt])
   @@index([orderId, createdAt])
+}
+
+// ---------------------------------------------------------------------------
+// Multi-branch business, roles, invitations, wallet
+// ---------------------------------------------------------------------------
+
+/**
+ * Top-level account that owns one or more branches (the Merchant model).
+ */
+model Business {
+  id           String   @id @default(cuid())
+  name         String
+  slug         String   @unique
+  legalName    String?
+  supportEmail String?
+  supportPhone String?
+  address      String?
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  memberships   BusinessMembership[]
+  branches      Merchant[]
+  invitations   BranchAgentInvitation[]
+  auditEvents   BusinessAuditEvent[]
+  ledgerEntries WalletLedgerEntry[]
+  withdrawals   Withdrawal[]
+}
+
+/**
+ * A user's role within a Business. One row per (business, user).
+ */
+model BusinessMembership {
+  id         String           @id @default(cuid())
+  businessId String
+  business   Business         @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role       BusinessRole
+  status     MembershipStatus @default(ACTIVE)
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+
+  branchAssignments BranchAssignment[]
+
+  @@unique([businessId, userId])
+  @@index([userId, status])
+}
+
+/**
+ * Branch Agent → branch link. v1 enforces one active branch per agent.
+ */
+model BranchAssignment {
+  id           String             @id @default(cuid())
+  membershipId String
+  membership   BusinessMembership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  branchId     String
+  branch       Merchant           @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  active       Boolean            @default(true)
+  assignedAt   DateTime           @default(now())
+  revokedAt    DateTime?
+
+  @@unique([membershipId, branchId])
+  @@index([branchId, active])
+}
+
+/**
+ * Secure email invitation for a Branch Agent. Token is stored hashed only.
+ */
+model BranchAgentInvitation {
+  id              String           @id @default(cuid())
+  businessId      String
+  business        Business         @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  branchId        String
+  branch          Merchant         @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  email           String
+  tokenHash       String           @unique
+  status          InvitationStatus @default(PENDING)
+  expiresAt       DateTime
+  acceptedAt      DateTime?
+  revokedAt       DateTime?
+  invitedByUserId String
+  invitedBy       User             @relation("InvitedBy", fields: [invitedByUserId], references: [id], onDelete: Cascade)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  @@index([businessId, status])
+  @@index([email])
+}
+
+/**
+ * Business-level audit trail (branch/agent/payout/withdrawal actions).
+ */
+model BusinessAuditEvent {
+  id          String   @id @default(cuid())
+  businessId  String
+  business    Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  event       String
+  actorUserId String?
+  branchId    String?
+  metadata    Json?
+  createdAt   DateTime @default(now())
+
+  @@index([businessId, createdAt])
+}
+
+/**
+ * Append-only wallet ledger. Amounts are signed integer kobo (credit +/debit −).
+ */
+model WalletLedgerEntry {
+  id           String          @id @default(cuid())
+  businessId   String
+  business     Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  branchId     String?
+  branch       Merchant?       @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  type         LedgerEntryType
+  amountKobo   Int
+  paymentId    String?
+  withdrawalId String?
+  memo         String?
+  createdAt    DateTime        @default(now())
+
+  @@unique([type, paymentId])
+  @@index([businessId, createdAt])
+  @@index([branchId, createdAt])
+}
+
+/**
+ * Merchant-initiated withdrawal request (no real payout transfer in v1).
+ */
+model Withdrawal {
+  id                String           @id @default(cuid())
+  businessId        String
+  business          Business         @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  requestedByUserId String
+  requestedBy       User             @relation("RequestedBy", fields: [requestedByUserId], references: [id], onDelete: Cascade)
+  amountKobo        Int
+  status            WithdrawalStatus @default(REQUESTED)
+  destinationMasked String?
+  reference         String           @unique
+  failureReason     String?
+  createdAt         DateTime         @default(now())
+  completedAt       DateTime?
+  updatedAt         DateTime         @updatedAt
+
+  @@index([businessId, status])
 }
