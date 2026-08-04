@@ -84,12 +84,6 @@ export function ForgotForm({ token }: { token?: string }) {
             ? "Set new password"
             : "Send reset link"}
       </Button>
-      <p className="text-center text-sm text-ink-500">
-        Remembered it?{" "}
-        <Link href="/login" className="font-semibold text-brand-700 hover:underline">
-          Back to login
-        </Link>
-      </p>
     </form>
   );
 }

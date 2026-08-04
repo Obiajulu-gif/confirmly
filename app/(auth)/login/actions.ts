@@ -14,6 +14,8 @@ import { rateLimit } from "@/lib/rate-limit";
 
 export interface LoginState {
   error: string | null;
+  /** Echoed back so the email field survives a failed submit. */
+  email?: string;
 }
 
 const loginSchema = z.object({
@@ -26,13 +28,15 @@ export async function loginAction(
   _prev: LoginState,
   formData: FormData
 ): Promise<LoginState> {
+  // Echoed back on any failure so the typed email survives the re-render.
+  const rawEmail = String(formData.get("email") ?? "").slice(0, 200);
   const parsed = loginSchema.safeParse({
     email: formData.get("email"),
     password: formData.get("password"),
     next: formData.get("next") ?? "/dashboard",
   });
   if (!parsed.success) {
-    return { error: "Enter a valid email and password." };
+    return { error: "Enter a valid email and password.", email: rawEmail };
   }
   const { email, password, next } = parsed.data;
 
@@ -43,6 +47,7 @@ export async function loginAction(
   if (!limited.ok) {
     return {
       error: `Too many attempts. Try again in ${limited.retryAfterSeconds}s.`,
+      email: rawEmail,
     };
   }
 
@@ -54,9 +59,12 @@ export async function loginAction(
     store.set(SESSION_COOKIE, token, sessionCookieOptions());
   } catch (err) {
     if (err instanceof InvalidCredentialsError) {
-      return { error: "Invalid email or password." };
+      return { error: "Invalid email or password.", email: rawEmail };
     }
-    return { error: "Sign-in is temporarily unavailable. Try again shortly." };
+    return {
+      error: "Sign-in is temporarily unavailable. Try again shortly.",
+      email: rawEmail,
+    };
   }
   // A platform admin with no store of their own lands on the admin console
   // rather than being pushed through merchant onboarding.
