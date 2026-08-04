@@ -289,21 +289,21 @@ export interface WalletSummary {
 }
 
 export async function walletSummary(businessId: string): Promise<WalletSummary> {
-  const [entriesAgg, credits, withdrawals] = await Promise.all([
-    prisma.walletLedgerEntry.aggregate({
-      _sum: { amountKobo: true },
-      where: { businessId },
-    }),
-    prisma.walletLedgerEntry.groupBy({
-      by: ["branchId"],
-      _sum: { amountKobo: true },
-      where: { businessId, type: "PAYMENT_CREDIT" },
-    }),
-    prisma.withdrawal.findMany({
-      where: { businessId },
-      select: { amountKobo: true, status: true },
-    }),
-  ]);
+  // Sequential (not Promise.all): the free-tier DB connection is unreliable
+  // under concurrent-query bursts, so the hot wallet path stays serial.
+  const entriesAgg = await prisma.walletLedgerEntry.aggregate({
+    _sum: { amountKobo: true },
+    where: { businessId },
+  });
+  const credits = await prisma.walletLedgerEntry.groupBy({
+    by: ["branchId"],
+    _sum: { amountKobo: true },
+    where: { businessId, type: "PAYMENT_CREDIT" },
+  });
+  const withdrawals = await prisma.withdrawal.findMany({
+    where: { businessId },
+    select: { amountKobo: true, status: true },
+  });
 
   const branchIds = credits.map((c) => c.branchId).filter((x): x is string => Boolean(x));
   const branchNames = new Map(
