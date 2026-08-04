@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { getMerchantSession } from "@/lib/auth";
+import { getBranchContext } from "@/lib/business/scope";
 import { prisma } from "@/lib/db";
 import { defer } from "@/lib/defer";
 import { prewarmProductImages } from "@/lib/ai/product-image-prewarm";
@@ -83,7 +83,7 @@ export async function createProductAction(
   _prev: ProductFormState,
   formData: FormData
 ): Promise<ProductFormState> {
-  const session = await getMerchantSession();
+  const session = await getBranchContext();
   if (!session) return { error: "unauthorized", ok: false };
   const parsed = productSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) {
@@ -102,7 +102,7 @@ export async function createProductAction(
 
   const product = await prisma.product.create({
     data: {
-      merchantId: session.merchantId,
+      merchantId: session.branchId,
       ...productData(data),
       active: true,
       variants: variants.length ? { create: variants } : undefined,
@@ -111,7 +111,7 @@ export async function createProductAction(
 
   defer(() =>
     prewarmProductImages({
-      merchantId: session.merchantId,
+      merchantId: session.branchId,
       productIds: [product.id],
       limit: 1,
       autoApprove: true,
@@ -129,7 +129,7 @@ export async function updateProductAction(
   _prev: ProductFormState,
   formData: FormData
 ): Promise<ProductFormState> {
-  const session = await getMerchantSession();
+  const session = await getBranchContext();
   if (!session) return { error: "unauthorized", ok: false };
   const id = String(formData.get("id") ?? "");
   const parsed = productSchema.safeParse(Object.fromEntries(formData));
@@ -141,7 +141,7 @@ export async function updateProductAction(
   }
 
   const existing = await prisma.product.findFirst({
-    where: { id, merchantId: session.merchantId },
+    where: { id, merchantId: session.branchId },
     select: { id: true },
   });
   if (!existing) return { error: "product not found", ok: false };
@@ -168,7 +168,7 @@ export async function updateProductAction(
 
   defer(() =>
     prewarmProductImages({
-      merchantId: session.merchantId,
+      merchantId: session.branchId,
       productIds: [id],
       limit: 1,
       autoApprove: true,
@@ -183,18 +183,18 @@ export async function updateProductAction(
 }
 
 export async function duplicateProductAction(formData: FormData): Promise<void> {
-  const session = await getMerchantSession();
+  const session = await getBranchContext();
   if (!session) return;
   const id = String(formData.get("id") ?? "");
   const product = await prisma.product.findFirst({
-    where: { id, merchantId: session.merchantId },
+    where: { id, merchantId: session.branchId },
     include: { variants: true },
   });
   if (!product) return;
 
   await prisma.product.create({
     data: {
-      merchantId: session.merchantId,
+      merchantId: session.branchId,
       name: `${product.name} Copy`.slice(0, 120),
       description: product.description,
       category: product.category,
@@ -227,11 +227,11 @@ export async function duplicateProductAction(formData: FormData): Promise<void> 
 }
 
 export async function toggleProductActiveAction(formData: FormData): Promise<void> {
-  const session = await getMerchantSession();
+  const session = await getBranchContext();
   if (!session) return;
   const id = String(formData.get("id") ?? "");
   const product = await prisma.product.findFirst({
-    where: { id, merchantId: session.merchantId },
+    where: { id, merchantId: session.branchId },
   });
   if (!product) return;
   await prisma.product.update({
@@ -256,7 +256,7 @@ export async function createZoneAction(
   _prev: ZoneFormState,
   formData: FormData
 ): Promise<ZoneFormState> {
-  const session = await getMerchantSession();
+  const session = await getBranchContext();
   if (!session) return { error: "unauthorized", ok: false };
   const parsed = zoneCreateSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) {
@@ -269,7 +269,7 @@ export async function createZoneAction(
   try {
     await prisma.deliveryZone.create({
       data: {
-        merchantId: session.merchantId,
+        merchantId: session.branchId,
         name: parsed.data.name,
         aliases: parseAliases(parsed.data.aliases),
         feeKobo: nairaAmountToKobo(parsed.data.feeNaira),
@@ -290,23 +290,23 @@ const zoneSchema = z.object({
 });
 
 export async function updateZoneFeeAction(formData: FormData): Promise<void> {
-  const session = await getMerchantSession();
+  const session = await getBranchContext();
   if (!session) return;
   const parsed = zoneSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return;
   await prisma.deliveryZone.updateMany({
-    where: { id: parsed.data.id, merchantId: session.merchantId },
+    where: { id: parsed.data.id, merchantId: session.branchId },
     data: { feeKobo: nairaAmountToKobo(parsed.data.feeNaira) },
   });
   revalidatePath("/dashboard/products");
 }
 
 export async function toggleZoneActiveAction(formData: FormData): Promise<void> {
-  const session = await getMerchantSession();
+  const session = await getBranchContext();
   if (!session) return;
   const id = String(formData.get("id") ?? "");
   const zone = await prisma.deliveryZone.findFirst({
-    where: { id, merchantId: session.merchantId },
+    where: { id, merchantId: session.branchId },
   });
   if (!zone) return;
   await prisma.deliveryZone.update({

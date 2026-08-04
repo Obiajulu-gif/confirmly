@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { getMerchantSession } from "@/lib/auth";
+import { canAccessBranch, getBusinessSession } from "@/lib/authz/business-access";
 import {
   verifyAndApplyPayment,
   sendPaidNotification,
@@ -17,15 +17,16 @@ export async function POST(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await getMerchantSession();
+  const session = await getBusinessSession();
   if (!session) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
   const { id } = await params;
-  const payment = await prisma.payment.findFirst({
-    where: { id, order: { merchantId: session.merchantId } },
+  const payment = await prisma.payment.findUnique({
+    where: { id },
+    include: { order: { select: { merchantId: true } } },
   });
-  if (!payment) {
+  if (!payment || !(await canAccessBranch(session, payment.order.merchantId))) {
     return NextResponse.json({ error: "not found" }, { status: 404 });
   }
   try {

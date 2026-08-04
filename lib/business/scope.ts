@@ -60,3 +60,39 @@ export async function getDashboardScope(): Promise<DashboardScope | null> {
 export function scopedBranchIds(scope: DashboardScope): string[] {
   return scope.activeBranchId ? [scope.activeBranchId] : scope.branchIds;
 }
+
+export interface BranchContext {
+  userId: string;
+  email: string;
+  role: "MERCHANT" | "BRANCH_AGENT";
+  /** The single branch this page edits. */
+  branchId: string;
+  branchName: string;
+  /** True when the Merchant is viewing "All Branches" and this defaulted. */
+  defaulted: boolean;
+  branches: ScopeBranch[];
+  activeBranchId: string | null;
+}
+
+/**
+ * Resolves the single branch a per-branch editing page targets, authorized for
+ * the caller. A Branch Agent gets their assigned branch; a Merchant gets the
+ * selected branch (or the first branch when in "All Branches" mode).
+ */
+export async function getBranchContext(): Promise<BranchContext | null> {
+  const scope = await getDashboardScope();
+  if (!scope) return null;
+  const branchId = scope.activeBranchId ?? scope.branchIds[0] ?? null;
+  if (!branchId) return null;
+  const branchName = scope.branches.find((b) => b.id === branchId)?.name ?? "Branch";
+  return {
+    userId: scope.session.userId,
+    email: scope.session.email,
+    role: scope.role,
+    branchId,
+    branchName,
+    defaulted: scope.role === "MERCHANT" && !scope.activeBranchId,
+    branches: scope.branches,
+    activeBranchId: scope.activeBranchId,
+  };
+}

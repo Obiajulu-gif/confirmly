@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { getMerchantSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { canAccessBranch, getBusinessSession } from "@/lib/authz/business-access";
 import { formatNaira } from "@/lib/money";
 import { maskReference } from "@/lib/receipts";
 import { Badge, Card, stateTone } from "@/components/ui";
@@ -15,12 +15,12 @@ export default async function OrderDetailsPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const session = await getMerchantSession();
-  if (!session) redirect("/login");
+  const session = await getBusinessSession();
+  if (!session) redirect("/dashboard");
   const { id } = await params;
 
-  const order = await prisma.order.findFirst({
-    where: { id, merchantId: session.merchantId },
+  const order = await prisma.order.findUnique({
+    where: { id },
     include: {
       customer: true,
       items: true,
@@ -31,6 +31,7 @@ export default async function OrderDetailsPage({
     },
   });
   if (!order) notFound();
+  if (!(await canAccessBranch(session, order.merchantId))) notFound();
 
   return (
     <div className="space-y-6">

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { getMerchantSession } from "@/lib/auth";
+import { canAccessBranch, getBusinessSession } from "@/lib/authz/business-access";
 import { createPaymentForOrder } from "@/lib/payments/service";
 import { sendToCustomer } from "@/lib/orders/outbound";
 import { buildPaymentLinkText } from "@/lib/orders/summary";
@@ -17,16 +17,16 @@ export async function POST(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await getMerchantSession();
+  const session = await getBusinessSession();
   if (!session) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
   const { id } = await params;
-  const order = await prisma.order.findFirst({
-    where: { id, merchantId: session.merchantId },
+  const order = await prisma.order.findUnique({
+    where: { id },
     include: { customer: true },
   });
-  if (!order) {
+  if (!order || !(await canAccessBranch(session, order.merchantId))) {
     return NextResponse.json({ error: "not found" }, { status: 404 });
   }
   if (order.state === "PAID" || order.state === "COMPLETED") {
@@ -41,14 +41,14 @@ export async function POST(
     if (checkoutUrl) {
       try {
         await sendToCustomer({
-          merchantId: session.merchantId,
+          merchantId: order.merchantId,
           customer: order.customer,
           conversationId: order.conversationId,
           kind: "text",
           text: buildPaymentLinkText(order.totalKobo, order.reference, checkoutUrl),
         });
         await recordAudit({
-          merchantId: session.merchantId,
+          merchantId: order.merchantId,
           orderId: order.id,
           event: AUDIT.PAYMENT_LINK_SENT,
           actor: "MERCHANT",

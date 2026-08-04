@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
-import { getMerchantSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { getBranchContext } from "@/lib/business/scope";
 import { formatNaira } from "@/lib/money";
 import { Badge, Card, EmptyState } from "@/components/ui";
 import { ProductForm, ZoneForm } from "./product-forms";
@@ -37,21 +37,22 @@ function imageBadge(product: {
 }
 
 export default async function ProductsPage() {
-  const session = await getMerchantSession();
-  if (!session) redirect("/login");
+  const ctx = await getBranchContext();
+  if (!ctx) redirect("/dashboard");
+  const branchId = ctx.branchId;
 
   const [merchant, products, zones] = await Promise.all([
     prisma.merchant.findUnique({
-      where: { id: session.merchantId },
+      where: { id: branchId },
       select: { name: true, storeCode: true },
     }),
     prisma.product.findMany({
-      where: { merchantId: session.merchantId },
+      where: { merchantId: branchId },
       include: { variants: true },
       orderBy: [{ category: "asc" }, { name: "asc" }],
     }),
     prisma.deliveryZone.findMany({
-      where: { merchantId: session.merchantId },
+      where: { merchantId: branchId },
       orderBy: [{ active: "desc" }, { feeKobo: "asc" }],
     }),
   ]);

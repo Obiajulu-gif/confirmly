@@ -2,35 +2,50 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { getMerchantSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { AUDIT, recordAudit } from "@/lib/orders/audit";
+import {
+  canAccessBranch,
+  getBusinessSession,
+} from "@/lib/authz/business-access";
 import { sendToCustomer } from "@/lib/orders/outbound";
+import {
+  releaseConversation,
+  takeoverConversation,
+} from "@/lib/business/conversations";
 
+/** Resolves + authorizes a conversation for the caller's branch access. */
+async function authorizeConversation(conversationId: string) {
+  const session = await getBusinessSession();
+  if (!session) return null;
+  const conversation = await prisma.conversation.findUnique({
+    where: { id: conversationId },
+    include: { customer: true },
+  });
+  if (!conversation) return null;
+  if (!(await canAccessBranch(session, conversation.merchantId))) return null;
+  return { session, conversation };
+}
+
+/** Take over (to HUMAN) or release (to AUTO), branch-scoped + audited. */
 export async function toggleAutomationAction(formData: FormData): Promise<void> {
-  const session = await getMerchantSession();
-  if (!session) return;
   const id = String(formData.get("conversationId") ?? "");
-  const conversation = await prisma.conversation.findFirst({
-    where: { id, merchantId: session.merchantId },
-  });
-  if (!conversation) return;
+  const ctx = await authorizeConversation(id);
+  if (!ctx) return;
 
-  const toHuman = conversation.automationMode === "AUTO";
-  await prisma.conversation.update({
-    where: { id: conversation.id },
-    data: {
-      automationMode: toHuman ? "HUMAN" : "AUTO",
-      state: toHuman ? "HUMAN_ACTIVE" : "COLLECTING_ORDER",
-    },
-  });
-  await recordAudit({
-    merchantId: session.merchantId,
-    conversationId: conversation.id,
-    event: toHuman ? AUDIT.HUMAN_TAKEOVER : AUDIT.AUTOMATION_RESUMED,
-    actor: "MERCHANT",
-  });
-  revalidatePath(`/dashboard/conversations/${conversation.id}`);
+  if (ctx.conversation.automationMode === "AUTO") {
+    await takeoverConversation({
+      conversationId: id,
+      userId: ctx.session.userId,
+      businessId: ctx.session.businessId,
+    });
+  } else {
+    await releaseConversation({
+      conversationId: id,
+      userId: ctx.session.userId,
+      businessId: ctx.session.businessId,
+    });
+  }
+  revalidatePath(`/dashboard/conversations/${id}`);
   revalidatePath("/dashboard/conversations");
 }
 
@@ -48,25 +63,20 @@ export async function sendMerchantReplyAction(
   _prev: ReplyState,
   formData: FormData
 ): Promise<ReplyState> {
-  const session = await getMerchantSession();
-  if (!session) return { error: "unauthorized", ok: false };
   const parsed = replySchema.safeParse({
     conversationId: formData.get("conversationId"),
     text: formData.get("text"),
   });
   if (!parsed.success) return { error: "enter a message", ok: false };
 
-  const conversation = await prisma.conversation.findFirst({
-    where: { id: parsed.data.conversationId, merchantId: session.merchantId },
-    include: { customer: true },
-  });
-  if (!conversation) return { error: "conversation not found", ok: false };
+  const ctx = await authorizeConversation(parsed.data.conversationId);
+  if (!ctx) return { error: "conversation not found", ok: false };
 
   try {
     await sendToCustomer({
-      merchantId: session.merchantId,
-      customer: conversation.customer,
-      conversationId: conversation.id,
+      merchantId: ctx.conversation.merchantId,
+      customer: ctx.conversation.customer,
+      conversationId: ctx.conversation.id,
       kind: "text",
       text: parsed.data.text,
     });
@@ -76,6 +86,6 @@ export async function sendMerchantReplyAction(
       ok: false,
     };
   }
-  revalidatePath(`/dashboard/conversations/${conversation.id}`);
+  revalidatePath(`/dashboard/conversations/${ctx.conversation.id}`);
   return { error: null, ok: true };
 }

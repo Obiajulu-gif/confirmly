@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { getMerchantSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { canAccessBranch, getBusinessSession } from "@/lib/authz/business-access";
 import { Badge, Card, stateTone } from "@/components/ui";
 import { toggleAutomationAction } from "../actions";
 import { ReplyForm } from "./reply-form";
@@ -14,12 +14,12 @@ export default async function ConversationDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const session = await getMerchantSession();
-  if (!session) redirect("/login");
+  const session = await getBusinessSession();
+  if (!session) redirect("/dashboard");
   const { id } = await params;
 
-  const conversation = await prisma.conversation.findFirst({
-    where: { id, merchantId: session.merchantId },
+  const conversation = await prisma.conversation.findUnique({
+    where: { id },
     include: {
       customer: true,
       messages: { orderBy: { createdAt: "asc" }, take: 200 },
@@ -27,6 +27,7 @@ export default async function ConversationDetailPage({
     },
   });
   if (!conversation) notFound();
+  if (!(await canAccessBranch(session, conversation.merchantId))) notFound();
 
   return (
     <div className="space-y-6">

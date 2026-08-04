@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { getMerchantSession } from "@/lib/auth";
+import { canAccessBranch, getBusinessSession } from "@/lib/authz/business-access";
 import { AUDIT, recordAudit } from "@/lib/orders/audit";
 
 export const runtime = "nodejs";
@@ -14,15 +14,13 @@ export async function POST(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await getMerchantSession();
+  const session = await getBusinessSession();
   if (!session) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
   const { id } = await params;
-  const order = await prisma.order.findFirst({
-    where: { id, merchantId: session.merchantId },
-  });
-  if (!order) {
+  const order = await prisma.order.findUnique({ where: { id } });
+  if (!order || !(await canAccessBranch(session, order.merchantId))) {
     return NextResponse.json({ error: "not found" }, { status: 404 });
   }
 
@@ -47,7 +45,7 @@ export async function POST(
     },
   });
   await recordAudit({
-    merchantId: session.merchantId,
+    merchantId: order.merchantId,
     orderId: order.id,
     conversationId: order.conversationId,
     event:
@@ -57,7 +55,7 @@ export async function POST(
   });
   if (order.state === "NEEDS_ATTENTION") {
     await recordAudit({
-      merchantId: session.merchantId,
+      merchantId: order.merchantId,
       orderId: order.id,
       event: AUDIT.PAYMENT_EXCEPTION,
       actor: "MERCHANT",

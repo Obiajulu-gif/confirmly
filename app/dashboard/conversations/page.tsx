@@ -1,20 +1,23 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { getMerchantSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { Badge, Card, EmptyState, stateTone } from "@/components/ui";
+import { getDashboardScope, scopedBranchIds } from "@/lib/business/scope";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Conversations" };
 
 export default async function ConversationsPage() {
-  const session = await getMerchantSession();
-  if (!session) redirect("/login");
+  const scope = await getDashboardScope();
+  if (!scope) redirect("/dashboard");
+  const branchIds = scopedBranchIds(scope);
+  const showBranch = branchIds.length > 1;
 
   const conversations = await prisma.conversation.findMany({
-    where: { merchantId: session.merchantId },
+    where: { merchantId: { in: branchIds } },
     include: {
       customer: true,
+      merchant: { select: { name: true } },
       messages: { orderBy: { createdAt: "desc" }, take: 1 },
     },
     orderBy: { updatedAt: "desc" },
@@ -46,6 +49,11 @@ export default async function ConversationsPage() {
                         conversation.customer.phoneNumber}
                     </p>
                     <p className="truncate text-sm text-ink-500">
+                      {showBranch ? (
+                        <span className="mr-1 font-medium text-ink-400">
+                          {conversation.merchant.name} ·
+                        </span>
+                      ) : null}
                       {conversation.messages[0]?.textBody ?? "…"}
                     </p>
                   </div>
