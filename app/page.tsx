@@ -4,6 +4,9 @@ import {
   ArrowRight,
   BadgeCheck,
   Banknote,
+  CheckCircle2,
+  ChevronDown,
+  Clock,
   FileWarning,
   Landmark,
   ListChecks,
@@ -183,6 +186,40 @@ const trust = [
   },
 ];
 
+const metrics = [
+  { value: "100%", label: "Payments verified with Monnify, server-side" },
+  { value: "0", label: "Screenshots ever accepted as proof" },
+  { value: "7", label: "Monnify APIs integrated end to end" },
+  { value: "24/7", label: "Automated ordering on WhatsApp" },
+];
+
+const faqs = [
+  {
+    q: "Do my customers need to download an app?",
+    a: "No. Customers order in the WhatsApp thread they already use. They pick your store with a short code, then chat in plain language — nothing to install or learn.",
+  },
+  {
+    q: "How is a payment actually confirmed?",
+    a: "Only a server-to-server verification against Monnify can mark an order paid. Screenshots, redirects and unsigned callbacks are never trusted — the provider is the single source of truth.",
+  },
+  {
+    q: "Where does my money settle?",
+    a: "Into your own bank account. Each merchant gets a dedicated Monnify subaccount, and every checkout carries your income split, so Confirmly never holds a float.",
+  },
+  {
+    q: "What does the AI decide?",
+    a: "Only what the customer meant — the product, variant, quantity and delivery area. Every price, fee and total comes from your catalogue and is computed server-side in integer kobo.",
+  },
+  {
+    q: "Can one WhatsApp number serve several branches?",
+    a: "Yes. One shared number serves every branch; customers select a branch before ordering, and catalogues, stock and orders stay scoped to that branch.",
+  },
+  {
+    q: "Is my bank information safe?",
+    a: "Account numbers are encrypted at rest, shown only masked, and never presented to a customer as a payment destination.",
+  },
+];
+
 export default function LandingPage() {
   return (
     <div className="flex min-h-screen flex-col bg-night-900 text-white">
@@ -195,10 +232,10 @@ export default function LandingPage() {
           <nav className="flex items-center gap-1 sm:gap-2">
             {(
               [
-                ["#product", "Product"],
                 ["#how-it-works", "How it works"],
                 ["#for-merchants", "For merchants"],
                 ["#security", "Security"],
+                ["#faq", "FAQ"],
               ] as const
             ).map(([href, label]) => (
               <Link
@@ -245,16 +282,8 @@ export default function LandingPage() {
 
           <div className="relative mx-auto grid w-full max-w-6xl gap-14 px-4 pb-20 pt-14 sm:px-6 sm:pt-20 lg:grid-cols-[1.05fr_0.95fr] lg:items-center">
             <div>
-              <p
-                className="anim-fade-up inline-flex items-center gap-2 rounded-full border border-brand-500/30 bg-brand-500/10 px-3.5 py-1.5 text-xs font-semibold uppercase tracking-widest text-brand-300"
-                style={{ "--d": "0.05s" } as React.CSSProperties}
-              >
-                <span className="h-1.5 w-1.5 rounded-full bg-brand-400 [animation:glow-pulse_2.2s_ease-in-out_infinite]" />
-                Multi-merchant · WhatsApp × Monnify × NVIDIA NIM
-              </p>
-
               <h1
-                className="anim-fade-up mt-6 text-[2.5rem] font-extrabold leading-[1.05] tracking-tight sm:text-6xl lg:text-[3.9rem]"
+                className="anim-fade-up text-[2.5rem] font-extrabold leading-[1.05] tracking-tight sm:text-6xl lg:text-[3.9rem]"
                 style={{ "--d": "0.15s" } as React.CSSProperties}
               >
                 Turn WhatsApp orders into{" "}
@@ -314,6 +343,22 @@ export default function LandingPage() {
             >
               <PhoneDemo />
             </div>
+          </div>
+        </section>
+
+        {/* ------------------------------------------------ metrics band */}
+        <section className="border-y border-white/5 bg-white/[0.015]">
+          <div className="mx-auto grid w-full max-w-6xl grid-cols-2 divide-x divide-y divide-white/5 px-0 sm:px-6 lg:grid-cols-4 lg:divide-y-0">
+            {metrics.map((m) => (
+              <div key={m.label} className="px-4 py-9 text-center sm:py-11">
+                <p className="text-gradient text-3xl font-extrabold tracking-tight sm:text-4xl">
+                  {m.value}
+                </p>
+                <p className="mx-auto mt-2 max-w-[15rem] text-xs leading-relaxed text-white/50 sm:text-sm">
+                  {m.label}
+                </p>
+              </div>
+            ))}
           </div>
         </section>
 
@@ -409,6 +454,70 @@ export default function LandingPage() {
           </div>
         </section>
 
+        {/* ------------------------------------- payment ≠ settlement spotlight */}
+        <section className="border-t border-white/5 bg-white/[0.02] py-24">
+          <div className="mx-auto w-full max-w-6xl px-4 sm:px-6">
+            <Reveal>
+              <p className="text-xs font-bold uppercase tracking-[0.25em] text-brand-400">
+                The distinction that protects your money
+              </p>
+              <h2 className="mt-3 max-w-3xl text-3xl font-extrabold tracking-tight sm:text-4xl">
+                &ldquo;They paid&rdquo; and &ldquo;I have the money&rdquo; are two
+                different facts.
+              </h2>
+              <p className="mt-4 max-w-2xl leading-relaxed text-white/55">
+                Most tools stop at &ldquo;transaction successful.&rdquo; Confirmly
+                tracks payment and settlement as separate, verified states — so you
+                only ship against money that has actually arrived.
+              </p>
+            </Reveal>
+
+            <div className="mt-12 grid gap-5 lg:grid-cols-2">
+              <Reveal>
+                <div className="glass-card h-full rounded-2xl border-brand-500/20 p-7">
+                  <span className="inline-flex items-center gap-2 rounded-full bg-brand-500/15 px-3 py-1 text-xs font-bold uppercase tracking-wider text-brand-300">
+                    <CheckCircle2 className="h-3.5 w-3.5" aria-hidden />
+                    Verified · Payment
+                  </span>
+                  <h3 className="mt-4 text-lg font-bold">
+                    The customer&apos;s money left their account
+                  </h3>
+                  <p className="mt-2 leading-relaxed text-white/55">
+                    Established only by a server-side Monnify verification. No client
+                    redirect, no screenshot, and no unsigned webhook can set it.
+                  </p>
+                </div>
+              </Reveal>
+              <Reveal delay={0.08}>
+                <div className="glass-card h-full rounded-2xl border-amber-400/20 p-7">
+                  <span className="inline-flex items-center gap-2 rounded-full bg-amber-400/15 px-3 py-1 text-xs font-bold uppercase tracking-wider text-amber-300">
+                    <Clock className="h-3.5 w-3.5" aria-hidden />
+                    Pending · Settlement
+                  </span>
+                  <h3 className="mt-4 text-lg font-bold">
+                    Your bank has not been credited yet
+                  </h3>
+                  <p className="mt-2 leading-relaxed text-white/55">
+                    Stays pending until a Monnify settlement event confirms payout.
+                    Your dashboard shows both, so the two are never confused.
+                  </p>
+                </div>
+              </Reveal>
+            </div>
+
+            <Reveal>
+              <div className="mt-5 flex items-start gap-3 rounded-2xl border border-white/8 bg-white/[0.03] p-5 text-sm text-white/55">
+                <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-brand-400" aria-hidden />
+                <p className="leading-relaxed">
+                  A scheduled reconciliation pass re-verifies against Monnify to
+                  recover any payment whose webhook was dropped — so a missed
+                  delivery degrades into a delay, never a lost order.
+                </p>
+              </div>
+            </Reveal>
+          </div>
+        </section>
+
         {/* ------------------------------------------------ for merchants */}
         <section id="for-merchants" className="relative py-10 pb-24">
           <div className="orb pointer-events-none absolute inset-x-0 top-0 mx-auto h-[400px] max-w-4xl" />
@@ -420,6 +529,10 @@ export default function LandingPage() {
               <h2 className="mt-3 max-w-2xl text-3xl font-extrabold tracking-tight sm:text-4xl">
                 A back office for the shop you run from your phone.
               </h2>
+              <p className="mt-4 max-w-2xl leading-relaxed text-white/55">
+                Everything you need to run verified WhatsApp commerce — catalogue,
+                settlement, conversations and reporting — in one dashboard.
+              </p>
             </Reveal>
             <div className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
               {[
@@ -473,6 +586,10 @@ export default function LandingPage() {
               <h2 className="mt-3 max-w-2xl text-3xl font-extrabold tracking-tight sm:text-4xl">
                 Trust, engineered in.
               </h2>
+              <p className="mt-4 max-w-2xl leading-relaxed text-white/55">
+                The rules that make a payment real are enforced by the server, not
+                by convention — so fraud is designed out, not policed after the fact.
+              </p>
             </Reveal>
             <div className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
               {trust.map((t, i) => {
@@ -491,6 +608,34 @@ export default function LandingPage() {
                   </Reveal>
                 );
               })}
+            </div>
+          </div>
+        </section>
+
+        {/* ------------------------------------------------ FAQ */}
+        <section id="faq" className="border-t border-white/5 py-24">
+          <div className="mx-auto w-full max-w-3xl px-4 sm:px-6">
+            <Reveal>
+              <p className="text-xs font-bold uppercase tracking-[0.25em] text-brand-400">
+                FAQ
+              </p>
+              <h2 className="mt-3 text-3xl font-extrabold tracking-tight sm:text-4xl">
+                Questions, answered.
+              </h2>
+            </Reveal>
+            <div className="mt-10 divide-y divide-white/[0.08] border-y border-white/[0.08]">
+              {faqs.map((f) => (
+                <details key={f.q} className="group">
+                  <summary className="flex cursor-pointer list-none items-center justify-between gap-4 py-5 font-semibold text-white/90 transition hover:text-white [&::-webkit-details-marker]:hidden">
+                    {f.q}
+                    <ChevronDown
+                      className="h-5 w-5 shrink-0 text-brand-400 transition-transform duration-300 group-open:rotate-180"
+                      aria-hidden
+                    />
+                  </summary>
+                  <p className="pb-5 pr-9 leading-relaxed text-white/55">{f.a}</p>
+                </details>
+              ))}
             </div>
           </div>
         </section>
@@ -529,13 +674,78 @@ export default function LandingPage() {
       </main>
 
       {/* ------------------------------------------------ footer */}
-      <footer className="border-t border-white/5 py-10">
-        <div className="mx-auto flex w-full max-w-6xl flex-col items-center justify-between gap-5 px-4 text-sm text-white/40 sm:flex-row sm:px-6">
-          <ConfirmlyLogo tone="dark" className="opacity-90" />
-          <span>
-            © {new Date().getFullYear()} Confirmly · Payments by Monnify ·
-            Orders understood by NVIDIA NIM
-          </span>
+      <footer className="border-t border-white/5 bg-white/[0.015]">
+        <div className="mx-auto w-full max-w-6xl px-4 py-14 sm:px-6">
+          <div className="grid gap-10 md:grid-cols-[1.6fr_1fr_1fr_1fr]">
+            <div>
+              <ConfirmlyLogo tone="dark" />
+              <p className="mt-4 max-w-xs text-sm leading-relaxed text-white/45">
+                From chat to confirmed payment. WhatsApp-native ordering with
+                Monnify-verified settlement.
+              </p>
+            </div>
+
+            <div>
+              <p className="text-xs font-bold uppercase tracking-widest text-white/40">
+                Product
+              </p>
+              <ul className="mt-4 space-y-2.5 text-sm">
+                {(
+                  [
+                    ["#how-it-works", "How it works"],
+                    ["#for-merchants", "For merchants"],
+                    ["#security", "Security"],
+                    ["#faq", "FAQ"],
+                  ] as const
+                ).map(([href, label]) => (
+                  <li key={label}>
+                    <Link href={href} className="text-white/55 transition hover:text-white">
+                      {label}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <div>
+              <p className="text-xs font-bold uppercase tracking-widest text-white/40">
+                Get started
+              </p>
+              <ul className="mt-4 space-y-2.5 text-sm">
+                {(
+                  [
+                    ["/signup", "Create business account"],
+                    ["/start", "Order from a store"],
+                    ["/login", "Log in"],
+                  ] as const
+                ).map(([href, label]) => (
+                  <li key={label}>
+                    <Link href={href} className="text-white/55 transition hover:text-white">
+                      {label}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <div>
+              <p className="text-xs font-bold uppercase tracking-widest text-white/40">
+                Powered by
+              </p>
+              <ul className="mt-4 space-y-2.5 text-sm text-white/55">
+                <li>Monnify · payments &amp; settlement</li>
+                <li>NVIDIA NIM · order understanding</li>
+                <li>WhatsApp Cloud API</li>
+              </ul>
+            </div>
+          </div>
+
+          <div className="mt-12 flex flex-col items-center justify-between gap-4 border-t border-white/[0.08] pt-6 text-sm text-white/40 sm:flex-row">
+            <span>© {new Date().getFullYear()} Confirmly. All rights reserved.</span>
+            <span className="text-white/35">
+              Payments by Monnify · Orders understood by NVIDIA NIM
+            </span>
+          </div>
         </div>
       </footer>
     </div>
