@@ -119,7 +119,8 @@ export async function acceptInvitation(input: {
     throw new AgentError("This invitation was sent to a different email address.");
   }
 
-  await prisma.$transaction(async (tx) => {
+  await prisma.$transaction(
+    async (tx) => {
     // Re-check inside the tx to prevent double-accept races.
     const fresh = await tx.branchAgentInvitation.findUnique({
       where: { id: invitation.id },
@@ -166,7 +167,10 @@ export async function acceptInvitation(input: {
       branchId: invitation.branchId,
       tx,
     });
-  });
+    },
+    // The remote DB is high-latency; give the multi-write accept room.
+    { timeout: 25_000, maxWait: 10_000 }
+  );
 
   return { businessId: invitation.businessId, branchId: invitation.branchId };
 }
