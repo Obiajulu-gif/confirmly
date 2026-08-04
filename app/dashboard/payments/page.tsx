@@ -1,11 +1,11 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { TriangleAlert } from "lucide-react";
-import { getMerchantSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { env } from "@/lib/env";
 import { formatNaira } from "@/lib/money";
 import { Badge, Card, EmptyState, stateTone } from "@/components/ui";
+import { getDashboardScope, scopedBranchIds } from "@/lib/business/scope";
 import type { PaymentState, Prisma } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
@@ -27,12 +27,13 @@ export default async function PaymentsPage({
 }: {
   searchParams: Promise<{ q?: string; state?: string }>;
 }) {
-  const session = await getMerchantSession();
-  if (!session) redirect("/login");
+  const scope = await getDashboardScope();
+  if (!scope) redirect("/dashboard");
+  if (scope.role !== "MERCHANT") redirect("/dashboard");
   const { q, state } = await searchParams;
 
   const where: Prisma.PaymentWhereInput = {
-    order: { merchantId: session.merchantId },
+    order: { merchantId: { in: scopedBranchIds(scope) } },
   };
   if (state && FILTERS.some((f) => f.value === state)) {
     where.state = state as PaymentState;

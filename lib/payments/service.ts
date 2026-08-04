@@ -255,7 +255,7 @@ export async function applyVerifiedTransaction(
     throw new Error(`unexpected currency: ${verified.currencyCode}`);
   }
 
-  return prisma.$transaction(
+  const result = await prisma.$transaction(
     async (tx) => {
     const payment = await tx.payment.findUniqueOrThrow({
       where: { id: paymentId },
@@ -398,6 +398,14 @@ export async function applyVerifiedTransaction(
     // survive high-latency links to the database.
     { timeout: 25_000, maxWait: 10_000 }
   );
+
+  // Credit the business wallet once, after the payment is durably PAID.
+  // Idempotent (unique type+paymentId); no-op when the branch has no Business.
+  if (result.transitionedToPaid) {
+    const { creditPaymentToLedger } = await import("@/lib/business/service");
+    await creditPaymentToLedger(paymentId).catch(() => {});
+  }
+  return result;
 }
 
 // --- Verification entry points --------------------------------------------------

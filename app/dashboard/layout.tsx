@@ -1,12 +1,13 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { getMerchantSession, getSession } from "@/lib/auth";
+import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { isDemoMode } from "@/lib/env";
+import { getDashboardScope } from "@/lib/business/scope";
 import { ConfirmlyLogo } from "@/components/logo";
 import { logoutAction } from "@/app/(auth)/login/actions";
 import { NavLinks } from "./nav-links";
-import { StoreSwitcher } from "./store-switcher";
+import { BranchSwitcher } from "./branch-switcher";
 
 export default async function DashboardLayout({
   children,
@@ -15,26 +16,15 @@ export default async function DashboardLayout({
 }) {
   const authed = await getSession();
   if (!authed) redirect("/login?next=/dashboard");
-  const session = await getMerchantSession();
-  if (!session) redirect("/onboarding");
+  const scope = await getDashboardScope();
+  if (!scope) redirect("/onboarding");
 
-  const [merchant, memberships] = await Promise.all([
-    prisma.merchant.findUnique({
-      where: { id: session.merchantId },
-    }),
-    prisma.merchantMembership.findMany({
-      where: { userId: session.userId },
-      include: {
-        merchant: {
-          select: { id: true, name: true, active: true },
-        },
-      },
-      orderBy: { createdAt: "asc" },
-    }),
-  ]);
-  const stores = memberships
-    .map((membership) => membership.merchant)
-    .filter((store) => store.active);
+  const business = await prisma.business.findUnique({
+    where: { id: scope.session.businessId },
+    select: { name: true },
+  });
+  const isMerchant = scope.role === "MERCHANT";
+  const agentBranch = scope.branches.find((b) => b.id === scope.activeBranchId);
 
   return (
     <div className="flex min-h-screen flex-col lg:flex-row">
@@ -47,17 +37,24 @@ export default async function DashboardLayout({
           <div className="min-w-0 flex-1 lg:block">
             <p className="mt-0 flex items-center gap-1.5 text-xs text-white/50 lg:mt-3">
               <span className="h-1.5 w-1.5 rounded-full bg-brand-400" />
-              {merchant?.name ?? "Merchant"}
+              {business?.name ?? "Business"}
             </p>
-            {stores.length > 1 ? (
-              <StoreSwitcher
-                currentMerchantId={session.merchantId}
-                stores={stores}
+            <p className="mt-1 text-[11px] font-medium uppercase tracking-wide text-white/35">
+              {isMerchant ? "Merchant" : "Branch Agent"}
+            </p>
+            {isMerchant ? (
+              <BranchSwitcher
+                branches={scope.branches}
+                activeBranchId={scope.activeBranchId}
               />
+            ) : agentBranch ? (
+              <p className="mt-3 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-white/80">
+                {agentBranch.name}
+              </p>
             ) : null}
           </div>
         </div>
-        <NavLinks />
+        <NavLinks role={scope.role} />
         <div className="relative mt-auto hidden p-4 lg:block">
           <form action={logoutAction}>
             <button
@@ -66,7 +63,7 @@ export default async function DashboardLayout({
             >
               Sign out
               <span className="block truncate text-[11px] font-normal text-white/40">
-                {session.email}
+                {scope.session.email}
               </span>
             </button>
           </form>

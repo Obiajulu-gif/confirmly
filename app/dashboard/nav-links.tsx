@@ -4,36 +4,52 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   Activity,
+  Banknote,
+  Boxes,
   CreditCard,
-  Landmark,
   LayoutDashboard,
   MessagesSquare,
   Package,
   Receipt,
   Settings,
   Store,
+  UserCog,
+  Wallet,
 } from "lucide-react";
+import type { BusinessRole } from "@/lib/authz/policy";
 
-const links = [
+type NavItem = {
+  href: string;
+  label: string;
+  icon: typeof LayoutDashboard;
+  exact?: boolean;
+  merchantOnly?: boolean;
+};
+
+const links: NavItem[] = [
   { href: "/dashboard", label: "Overview", icon: LayoutDashboard, exact: true },
-  { href: "/dashboard/stores", label: "Stores", icon: Store },
-  { href: "/dashboard/orders", label: "Orders", icon: Receipt },
-  { href: "/dashboard/payments", label: "Payments", icon: CreditCard },
-  { href: "/dashboard/products", label: "Products", icon: Package },
+  { href: "/dashboard/branches", label: "Branches", icon: Store, merchantOnly: true },
   { href: "/dashboard/conversations", label: "Conversations", icon: MessagesSquare },
-  { href: "/dashboard/settlement", label: "Settlement account", icon: Landmark },
-  { href: "/dashboard/health", label: "Integration health", icon: Activity },
-  { href: "/dashboard/settings", label: "Settings", icon: Settings },
+  { href: "/dashboard/orders", label: "Orders", icon: Receipt },
+  { href: "/dashboard/products", label: "Products", icon: Package },
+  { href: "/dashboard/inventory", label: "Inventory", icon: Boxes },
+  { href: "/dashboard/payments", label: "Payments", icon: CreditCard, merchantOnly: true },
+  { href: "/dashboard/withdrawals", label: "Withdrawals", icon: Wallet, merchantOnly: true },
+  { href: "/dashboard/agents", label: "Agents", icon: UserCog, merchantOnly: true },
+  { href: "/dashboard/reports", label: "Reports", icon: Banknote },
+  { href: "/dashboard/health", label: "Integrations", icon: Activity, merchantOnly: true },
+  { href: "/dashboard/settings", label: "Settings", icon: Settings, merchantOnly: true },
 ];
 
-export function NavLinks() {
+export function NavLinks({ role }: { role: BusinessRole }) {
   const pathname = usePathname();
+  const visible = links.filter((l) => role === "MERCHANT" || !l.merchantOnly);
   return (
     <nav
       aria-label="Dashboard navigation"
       className="relative flex gap-1 overflow-x-auto px-3 pb-3 lg:flex-col lg:px-3 lg:pb-0"
     >
-      {links.map((link) => {
+      {visible.map((link) => {
         const Icon = link.icon;
         const active = link.exact
           ? pathname === link.href

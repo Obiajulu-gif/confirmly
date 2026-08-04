@@ -1,9 +1,9 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { getMerchantSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { formatNaira } from "@/lib/money";
 import { Badge, Card, EmptyState, stateTone } from "@/components/ui";
+import { getDashboardScope, scopedBranchIds } from "@/lib/business/scope";
 import type { OrderState, Prisma } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
@@ -24,11 +24,13 @@ export default async function OrdersPage({
 }: {
   searchParams: Promise<{ q?: string; state?: string }>;
 }) {
-  const session = await getMerchantSession();
-  if (!session) redirect("/login");
+  const scope = await getDashboardScope();
+  if (!scope) redirect("/dashboard");
   const { q, state } = await searchParams;
+  const branchIds = scopedBranchIds(scope);
+  const showBranch = branchIds.length > 1;
 
-  const where: Prisma.OrderWhereInput = { merchantId: session.merchantId };
+  const where: Prisma.OrderWhereInput = { merchantId: { in: branchIds } };
   if (state && FILTERS.some((f) => f.value === state)) {
     where.state = state as OrderState;
   }
@@ -43,7 +45,12 @@ export default async function OrdersPage({
 
   const orders = await prisma.order.findMany({
     where,
-    include: { customer: true, items: true, payment: true },
+    include: {
+      customer: true,
+      items: true,
+      payment: true,
+      merchant: { select: { name: true } },
+    },
     orderBy: { createdAt: "desc" },
     take: 100,
   });
@@ -95,6 +102,9 @@ export default async function OrdersPage({
               <thead>
                 <tr className="border-b border-ink-900/10 text-xs uppercase tracking-wide text-ink-500">
                   <th className="py-2 pr-4 font-semibold">Reference</th>
+                  {showBranch ? (
+                    <th className="py-2 pr-4 font-semibold">Branch</th>
+                  ) : null}
                   <th className="py-2 pr-4 font-semibold">Customer</th>
                   <th className="py-2 pr-4 font-semibold">Items</th>
                   <th className="py-2 pr-4 font-semibold">Amount</th>
@@ -114,6 +124,9 @@ export default async function OrdersPage({
                         {order.reference}
                       </Link>
                     </td>
+                    {showBranch ? (
+                      <td className="py-3 pr-4 text-ink-600">{order.merchant.name}</td>
+                    ) : null}
                     <td className="py-3 pr-4 text-ink-700">
                       {order.customer.name ?? order.customer.phoneNumber}
                     </td>

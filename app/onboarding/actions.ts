@@ -18,6 +18,7 @@ import {
   seedStarterCatalogue,
   validateSettlementAccount,
 } from "@/lib/merchants/service";
+import { createBusinessForOwner } from "@/lib/business/service";
 
 export interface WizardState {
   error: string | null;
@@ -191,6 +192,24 @@ export async function finishOnboardingAction(): Promise<void> {
   await prisma.merchant.update({
     where: { id: session.merchantId },
     data: { onboardedAt: new Date() },
+  });
+  // Wrap this owner's branches in a Business and make them its Merchant
+  // (idempotent — reuses an existing Business if one already exists).
+  const [owned, branch] = await Promise.all([
+    prisma.merchantMembership.findMany({
+      where: { userId: session.userId, role: "OWNER" },
+      select: { merchantId: true },
+    }),
+    prisma.merchant.findUnique({
+      where: { id: session.merchantId },
+      select: { name: true },
+    }),
+  ]);
+  await createBusinessForOwner({
+    userId: session.userId,
+    email: session.email,
+    name: branch?.name ?? "My Business",
+    branchIds: owned.map((o) => o.merchantId),
   });
   redirect("/dashboard");
 }
