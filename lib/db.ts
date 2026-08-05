@@ -16,7 +16,8 @@ const RETRYABLE_CODES = new Set(["P1001", "P1002", "P1008", "P1017"]);
 const RETRYABLE_MESSAGE =
   /can't reach database server|server has closed the connection|connection (closed|reset|refused)|timed out|ECONNREFUSED|ETIMEDOUT|Response from the Engine was empty|Timed out fetching a new connection/i;
 
-function isRetryable(error: unknown): boolean {
+/** True for transient connection-class failures worth retrying. */
+export function isRetryableDbError(error: unknown): boolean {
   if (error instanceof Prisma.PrismaClientInitializationError) return true;
   if (error instanceof Prisma.PrismaClientKnownRequestError) {
     return RETRYABLE_CODES.has(error.code);
@@ -27,6 +28,30 @@ function isRetryable(error: unknown): boolean {
 
 const MAX_ATTEMPTS = 5;
 
+/**
+ * Runs a DB operation, retrying transient connection failures with backoff.
+ * Non-retryable errors surface immediately. Exported for testing.
+ */
+export async function runWithDbRetry<T>(
+  operation: () => Promise<T>,
+  opts: { maxAttempts?: number; baseDelayMs?: number } = {}
+): Promise<T> {
+  const maxAttempts = opts.maxAttempts ?? MAX_ATTEMPTS;
+  const baseDelayMs = opts.baseDelayMs ?? 500;
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return await operation();
+    } catch (error) {
+      lastError = error;
+      if (attempt === maxAttempts || !isRetryableDbError(error)) throw error;
+      // Back off while the paused database resumes (~5s cold-start).
+      await new Promise((resolve) => setTimeout(resolve, baseDelayMs * attempt));
+    }
+  }
+  throw lastError;
+}
+
 function createClient() {
   const base = new PrismaClient({
     log:
@@ -34,19 +59,8 @@ function createClient() {
   });
   return base.$extends({
     query: {
-      async $allOperations({ args, query }) {
-        let lastError: unknown;
-        for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-          try {
-            return await query(args);
-          } catch (error) {
-            lastError = error;
-            if (attempt === MAX_ATTEMPTS || !isRetryable(error)) throw error;
-            // Back off while the paused database resumes (~5s cold-start).
-            await new Promise((resolve) => setTimeout(resolve, 500 * attempt));
-          }
-        }
-        throw lastError;
+      $allOperations({ args, query }) {
+        return runWithDbRetry(() => query(args));
       },
     },
   });
