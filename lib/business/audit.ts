@@ -1,5 +1,5 @@
 import "server-only";
-import { prisma } from "@/lib/db";
+import { prisma, type TxClient } from "@/lib/db";
 import type { Prisma } from "@prisma/client";
 
 /** Canonical business-level audit event names. */
@@ -33,7 +33,7 @@ export async function recordBusinessAudit(input: {
   actorUserId?: string | null;
   branchId?: string | null;
   metadata?: Prisma.InputJsonValue;
-  tx?: Prisma.TransactionClient;
+  tx?: TxClient;
 }): Promise<void> {
   const db = input.tx ?? prisma;
   await db.businessAuditEvent.create({

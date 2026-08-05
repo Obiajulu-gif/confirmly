@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/db";
+import { prisma, type TxClient } from "@/lib/db";
 import type { AuditActor, Prisma } from "@prisma/client";
 
 /** Canonical audit event names — the order-details timeline renders these. */
@@ -31,7 +31,7 @@ export async function recordAudit(input: {
   orderId?: string | null;
   conversationId?: string | null;
   metadata?: Prisma.InputJsonValue;
-  tx?: Prisma.TransactionClient;
+  tx?: TxClient;
 }) {
   const db = input.tx ?? prisma;
   await db.auditEvent.create({

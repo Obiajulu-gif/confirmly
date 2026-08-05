@@ -1,9 +1,8 @@
 import "server-only";
 import { createHmac } from "crypto";
-import { prisma } from "@/lib/db";
+import { prisma, type TxClient } from "@/lib/db";
 import { requireEnv, appUrl } from "@/lib/env";
 import { generateReceiptToken } from "@/lib/references";
-import type { Prisma } from "@prisma/client";
 
 /**
  * Receipts carry a high-entropy random token. We store an HMAC-signed lookup
@@ -26,10 +25,7 @@ export function tokenDigest(token: string): string {
 }
 
 /** Creates the order's receipt exactly once; returns the existing one on retry. */
-export async function issueReceipt(
-  orderId: string,
-  tx?: Prisma.TransactionClient
-) {
+export async function issueReceipt(orderId: string, tx?: TxClient) {
   const db = tx ?? prisma;
   const existing = await db.receipt.findUnique({ where: { orderId } });
   if (existing) return { receipt: existing, created: false };
