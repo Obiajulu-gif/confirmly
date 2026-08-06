@@ -1,0 +1,511 @@
+{
+  "version": "7.1",
+  "data_api_version": "3.0",
+  "routing_model": {
+    "START": [
+      "SEARCH"
+    ],
+    "SEARCH": [
+      "STORE"
+    ],
+    "STORE": [
+      "ITEM"
+    ],
+    "ITEM": [
+      "DELIVERY"
+    ],
+    "DELIVERY": [
+      "REVIEW"
+    ],
+    "REVIEW": []
+  },
+  "screens": [
+    {
+      "id": "START",
+      "title": "Order on WhatsApp",
+      "terminal": false,
+      "layout": {
+        "type": "SingleColumnLayout",
+        "children": [
+          {
+            "type": "Image",
+            "src": "iVBORw0KGgoAAAANSUhEUgAAAoAAAAFACAIAAACjr1pdAAAE90lEQVR4nO3VMREAIBDAsF8QiyH04oIO5C4CunXW2QDAY5MXAMCHDBgAAgYMAAEDBoCAAQNAwIABIGDAABAwYAAIGDAABAwYAAIGDAABAwaAgAEDQMCAASBgwAAQMGAACBgwAAQMGAACBgwAAQMGgIABA0DAgAEgYMAAEDBgAAgYMAAEDBgAAgYMAAEDBoCAAQNAwIABIGDAABAwYAAIGDAABAwYAAIGDAABAwaAgAEDQMCAASBgwAAQMGAACBgwAAQMGAACBgwAAQMGgIABA0DAgAEgYMAAEDBgAAgYMAAEDBgAAgYMAAEDBoCAAQNAwIABIGDAABAwYAAIGDAABAwYAAIGDAABAwaAgAEDQMCAASBgwAAQMGAACBgwAAQMGAACBgwAAQMGgIABA0DAgAEgYMAAEDBgAAgYMAAEDBgAAgYMAAEDBoCAAQNAwIABIGDAABAwYAAIGDAABAwYAAIGDAABAwaAgAEDQMCAASBgwAAQMGAACBgwAAQMGAACBgwAAQMGgIABA0DAgAEgYMAAEDBgAAgYMAAEDBgAAgYMAAEDBoCAAQNAwIABIGDAABAwYAAIGDAABAwYAAIGDAABAwaAgAEDQMCAASBgwAAQMGAACBgwAAQMGAACBgwAAQMGgIABA0DAgAEgYMAAEDBgAAgYMAAEDBgAAgYMAAEDBoCAAQNAwIABIGDAABAwYAAIGDAABAwYAAIGDAABAwaAgAEDQMCAASBgwAAQMGAACBgwAAQMGAACBgwAAQMGgIABA0DAgAEgYMAAEDBgAAgYMAAEDBgAAgYMAAEDBoCAAQNAwIABIGDAABAwYAAIGDAABAwYAAIGDAABAwaAgAEDQMCAASBgwAAQMGAACBgwAAQMGAACBgwAAQMGgIABA0DAgAEgYMAAEDBgAAgYMAAEDBgAAgYMAAEDBoCAAQNAwIABIGDAABAwYAAIGDAABAwYAAIGDAABAwaAgAEDQMCAASBgwAAQMGAACBgwAAQMGAACBgwAAQMGgIABA0DAgAEgYMAAEDBgAAgYMAAEDBgAAgYMAAEDBoCAAQNAwIABIGDAABAwYAAIGDAABAwYAAIGDAABAwaAgAEDQMCAASBgwAAQMGAACBgwAAQMGAACBgwAAQMGgIABA0DAgAEgYMAAEDBgAAgYMAAEDBgAAgYMAAEDBoCAAQNAwIABIGDAABAwYAAIGDAABAwYAAIGDAABAwaAgAEDQMCAASBgwAAQMGAACBgwAAQMGAACBgwAAQMGgIABA0DAgAEgYMAAEDBgAAgYMAAEDBgAAgYMAAEDBoCAAQNAwIABIGDAABAwYAAIGDAABAwYAAIGDAABAwaAgAEDQMCAASBgwAAQMGAACBgwAAQMGAACBgwAAQMGgIABA0DAgAEgYMAAEDBgAAgYMAAEDBgAAgYMAAEDBoCAAQNAwIABIGDAABAwYAAIGDAABAwYAAIGDAABAwaAgAEDQMCAASBgwAAQMGAACBgwAAQMGAACBgwAAQMGgIABA0DAgAEgYMAAEDBgAAgYMAAEDBgAAgYMAAEDBoCAAQNAwIABIGDAABAwYAAIGDAABAwYAAIGDAABAwaAgAEDQMCAASBgwAAQMGAACBgwAAQMGAACBgwAAQMGgIABA0DAgAEgYMAAEDBgAAgYMAAEDBgAAgYMAAEDBoCAAQNAwIABIGDAABC4joyvlZofPwMAAAAASUVORK5CYII=",
+            "height": 200,
+            "scale-type": "cover",
+            "alt-text": "Confirmly — order from local stores on WhatsApp"
+          },
+          {
+            "type": "TextHeading",
+            "text": "What do you want to order?"
+          },
+          {
+            "type": "TextBody",
+            "text": "Find a store and check out without leaving WhatsApp. Payments settle securely through Monnify."
+          },
+          {
+            "type": "RadioButtonsGroup",
+            "name": "entry_point",
+            "label": "Select an option",
+            "required": true,
+            "media-size": "regular",
+            "data-source": [
+              {
+                "id": "search",
+                "title": "Search",
+                "description": "Find a store by name or code",
+                "image": "iVBORw0KGgoAAAANSUhEUgAAAGAAAABgCAIAAABt+uBvAAAApElEQVR4nO3QQQ0AIBDAsJOAZWThDgd82aPJBCyddbYezfeDeIAAAQIEKBwgQIAAAQoHCBAgQIDCAQIECBCgcIAAAQIEKBwgQIAAAQoHCBAgQIDCAQIECBCgcIAAAQIEKBwgQIAAAQoHCBAgQIDCAQIECBCgcIAAAQIEKBwgQIAAAQoHCBAgQIDCAQIECBCgcIAAAQIEKBwgQIAAAQoHCBAgQD+7Z6lqs/UA9+QAAAAASUVORK5CYII=",
+                "alt-text": "Search"
+              },
+              {
+                "id": "marketplace",
+                "title": "Marketplace",
+                "description": "Browse nearby stores",
+                "image": "iVBORw0KGgoAAAANSUhEUgAAAGAAAABgCAIAAABt+uBvAAAApElEQVR4nO3QMQ0AIBDAwB/wiBXk44CVDpdUQHOzztaj+X4QDxAgQIAAhQMECBAgQOEAAQIECFA4QIAAAQIUDhAgQIAAhQMECBAgQOEAAQIECFA4QIAAAQIUDhAgQIAAhQMECBAgQOEAAQIECFA4QIAAAQIUDhAgQIAAhQMECBAgQOEAAQIECFA4QIAAAQIUDhAgQIAAhQMECBAgQOEAAQIE6GcXOuWttKmO1/UAAAAASUVORK5CYII=",
+                "alt-text": "Marketplace"
+              }
+            ]
+          },
+          {
+            "type": "Footer",
+            "label": "Continue",
+            "enabled": "${form.entry_point}",
+            "on-click-action": {
+              "name": "data_exchange",
+              "payload": {
+                "entry_point": "${form.entry_point}"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "SEARCH",
+      "title": "Choose a store",
+      "terminal": false,
+      "data": {
+        "search_hint": {
+          "type": "string",
+          "__example__": "Type a store name or code, then tap Continue."
+        },
+        "stores": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              }
+            }
+          },
+          "__example__": [
+            {
+              "id": "store_example",
+              "title": "Ada Styles",
+              "description": "Fashion · ADASTYLES"
+            }
+          ]
+        }
+      },
+      "layout": {
+        "type": "SingleColumnLayout",
+        "children": [
+          {
+            "type": "TextBody",
+            "text": "${data.search_hint}"
+          },
+          {
+            "type": "TextInput",
+            "name": "store_query",
+            "label": "Store name or code",
+            "input-type": "text",
+            "required": false
+          },
+          {
+            "type": "RadioButtonsGroup",
+            "name": "store_id",
+            "label": "Stores",
+            "required": false,
+            "data-source": "${data.stores}"
+          },
+          {
+            "type": "Footer",
+            "label": "Continue",
+            "on-click-action": {
+              "name": "data_exchange",
+              "payload": {
+                "store_query": "${form.store_query}",
+                "store_id": "${form.store_id}"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "STORE",
+      "title": "Catalogue",
+      "terminal": false,
+      "data": {
+        "store_name": {
+          "type": "string",
+          "__example__": "Ada Styles"
+        },
+        "products": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              }
+            }
+          },
+          "__example__": [
+            {
+              "id": "product_example",
+              "title": "Cotton Polo",
+              "description": "₦12,000 · 8 in stock"
+            }
+          ]
+        }
+      },
+      "layout": {
+        "type": "SingleColumnLayout",
+        "children": [
+          {
+            "type": "TextHeading",
+            "text": "${data.store_name}"
+          },
+          {
+            "type": "TextBody",
+            "text": "Choose a product to order."
+          },
+          {
+            "type": "RadioButtonsGroup",
+            "name": "product_id",
+            "label": "Products",
+            "required": true,
+            "data-source": "${data.products}"
+          },
+          {
+            "type": "Footer",
+            "label": "Continue",
+            "on-click-action": {
+              "name": "data_exchange",
+              "payload": {
+                "product_id": "${form.product_id}"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "ITEM",
+      "title": "Item details",
+      "terminal": false,
+      "data": {
+        "product_name": {
+          "type": "string",
+          "__example__": "Cotton Polo"
+        },
+        "price_label": {
+          "type": "string",
+          "__example__": "₦12,000 each"
+        },
+        "has_image": {
+          "type": "boolean",
+          "__example__": false
+        },
+        "product_image": {
+          "type": "string",
+          "__example__": ""
+        },
+        "quantities": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              }
+            }
+          },
+          "__example__": [
+            {
+              "id": "1",
+              "title": "1"
+            },
+            {
+              "id": "2",
+              "title": "2"
+            }
+          ]
+        },
+        "has_sizes": {
+          "type": "boolean",
+          "__example__": true
+        },
+        "sizes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              }
+            }
+          },
+          "__example__": [
+            {
+              "id": "M",
+              "title": "M"
+            },
+            {
+              "id": "L",
+              "title": "L"
+            }
+          ]
+        },
+        "has_colours": {
+          "type": "boolean",
+          "__example__": true
+        },
+        "colours": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              }
+            }
+          },
+          "__example__": [
+            {
+              "id": "Black",
+              "title": "Black"
+            },
+            {
+              "id": "Blue",
+              "title": "Blue"
+            }
+          ]
+        }
+      },
+      "layout": {
+        "type": "SingleColumnLayout",
+        "children": [
+          {
+            "type": "If",
+            "condition": "${data.has_image}",
+            "then": [
+              {
+                "type": "Image",
+                "src": "${data.product_image}",
+                "height": 180,
+                "scale-type": "contain",
+                "alt-text": "${data.product_name}"
+              }
+            ]
+          },
+          {
+            "type": "TextHeading",
+            "text": "${data.product_name}"
+          },
+          {
+            "type": "TextBody",
+            "text": "${data.price_label}"
+          },
+          {
+            "type": "Dropdown",
+            "name": "quantity",
+            "label": "Quantity",
+            "required": true,
+            "data-source": "${data.quantities}"
+          },
+          {
+            "type": "If",
+            "condition": "${data.has_sizes}",
+            "then": [
+              {
+                "type": "RadioButtonsGroup",
+                "name": "size",
+                "label": "Size",
+                "required": true,
+                "data-source": "${data.sizes}"
+              }
+            ]
+          },
+          {
+            "type": "If",
+            "condition": "${data.has_colours}",
+            "then": [
+              {
+                "type": "RadioButtonsGroup",
+                "name": "colour",
+                "label": "Colour",
+                "required": true,
+                "data-source": "${data.colours}"
+              }
+            ]
+          },
+          {
+            "type": "Footer",
+            "label": "Continue",
+            "on-click-action": {
+              "name": "data_exchange",
+              "payload": {
+                "quantity": "${form.quantity}",
+                "size": "${form.size}",
+                "colour": "${form.colour}"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "DELIVERY",
+      "title": "Delivery",
+      "terminal": false,
+      "data": {
+        "zones": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              }
+            }
+          },
+          "__example__": [
+            {
+              "id": "zone_example",
+              "title": "Lekki",
+              "description": "₦1,500 delivery"
+            },
+            {
+              "id": "PICKUP",
+              "title": "Store pickup",
+              "description": "Free"
+            }
+          ]
+        }
+      },
+      "layout": {
+        "type": "SingleColumnLayout",
+        "children": [
+          {
+            "type": "TextHeading",
+            "text": "Where should we deliver?"
+          },
+          {
+            "type": "Dropdown",
+            "name": "delivery_zone",
+            "label": "Delivery area",
+            "required": true,
+            "data-source": "${data.zones}"
+          },
+          {
+            "type": "TextArea",
+            "name": "address",
+            "label": "Delivery address",
+            "helper-text": "House number, street and landmark. Leave blank for store pickup.",
+            "required": false
+          },
+          {
+            "type": "Footer",
+            "label": "Continue",
+            "on-click-action": {
+              "name": "data_exchange",
+              "payload": {
+                "delivery_zone": "${form.delivery_zone}",
+                "address": "${form.address}"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "REVIEW",
+      "title": "Review order",
+      "terminal": true,
+      "data": {
+        "summary": {
+          "type": "string",
+          "__example__": "2 × Cotton Polo (M, Black)\nDeliver to Lekki\n12 Admiralty Way"
+        },
+        "total_label": {
+          "type": "string",
+          "__example__": "Total: ₦25,500"
+        },
+        "flow_token": {
+          "type": "string",
+          "__example__": "flow-token-example"
+        }
+      },
+      "layout": {
+        "type": "SingleColumnLayout",
+        "children": [
+          {
+            "type": "TextHeading",
+            "text": "Review your order"
+          },
+          {
+            "type": "TextBody",
+            "text": "${data.summary}"
+          },
+          {
+            "type": "TextSubheading",
+            "text": "${data.total_label}"
+          },
+          {
+            "type": "TextCaption",
+            "text": "Tapping Confirm sends your order to the store. You will get a secure Monnify payment link to complete checkout."
+          },
+          {
+            "type": "Footer",
+            "label": "Confirm order",
+            "on-click-action": {
+              "name": "complete",
+              "payload": {
+                "flow_token": "${data.flow_token}"
+              }
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

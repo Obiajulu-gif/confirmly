@@ -19,6 +19,8 @@
     "db:seed": "prisma db seed",
     "db:bootstrap": "prisma migrate deploy && prisma db seed",
     "images:prewarm": "node scripts/prewarm-product-images.mjs",
+    "flow:build": "node scripts/build-flow-json.mjs",
+    "flow:check": "node scripts/build-flow-json.mjs --check",
     "secrets:import": "node scripts/import-local-secrets.mjs",
     "secrets:scan": "node scripts/verify-no-secrets.mjs",
     "vercel:env": "node scripts/sync-vercel-env.mjs",

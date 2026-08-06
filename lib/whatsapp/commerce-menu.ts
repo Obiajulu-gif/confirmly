@@ -1,5 +1,4 @@
 import "server-only";
-import { randomBytes } from "node:crypto";
 import { defer } from "@/lib/defer";
 import { prewarmProductImages } from "@/lib/ai/product-image-prewarm";
 import { prisma } from "@/lib/db";
@@ -9,12 +8,17 @@ import { formatNaira } from "@/lib/money";
 import { scoreMatch, searchScore } from "@/lib/orders/matching";
 import {
   sendButtons,
-  sendFlow,
   sendImageByUrl,
   sendList,
   sendText,
   type ListRow,
 } from "@/lib/whatsapp/client";
+import { maybeSendOrderFlow } from "@/lib/whatsapp/flow";
+import {
+  completeFlowSession,
+  hashFlowToken,
+  readFlowState,
+} from "@/lib/whatsapp/flow-session";
 import type { ParsedInboundMessage } from "@/lib/whatsapp/types";
 
 const DIRECTORY_COMMAND =
@@ -83,6 +87,16 @@ async function sendStoreDirectory(waId: string): Promise<void> {
     }))
   );
   logger.info("whatsapp store directory sent", { storeCount: stores.length });
+}
+
+/**
+ * The ordering entry point. Launches the native WhatsApp Flow when it is
+ * configured and healthy; otherwise falls back to the interactive store
+ * directory — the exact behaviour from before the Flow existed.
+ */
+async function presentOrderEntry(waId: string): Promise<void> {
+  if (await maybeSendOrderFlow(waId)) return;
+  await sendStoreDirectory(waId);
 }
 
 /** Ranks active stores against a free-text query (name / category / code). */
@@ -371,32 +385,6 @@ async function sendCatalogue(
       ]
     );
     return;
-  }
-
-  const settings = env();
-  if (settings.WHATSAPP_FLOW_ENABLED && settings.WHATSAPP_ORDER_FLOW_ID) {
-    try {
-      await sendFlow(waId, {
-        flowId: settings.WHATSAPP_ORDER_FLOW_ID,
-        flowToken: randomBytes(24).toString("base64url"),
-        bodyText: `Shop from ${context.merchant.name} using the guided order form.`,
-        cta: "Start order",
-        screen: "CATEGORY_SELECTION",
-        data: {
-          store_id: context.merchant.id,
-          store_name: context.merchant.name,
-        },
-      });
-      logger.info("whatsapp order Flow sent", {
-        merchantId: context.merchant.id,
-      });
-      return;
-    } catch (error) {
-      logger.warn("whatsapp Flow send failed; using interactive list fallback", {
-        merchantId: context.merchant.id,
-        reason: error instanceof Error ? error.message : "unknown",
-      });
-    }
   }
 
   const categories = [
@@ -725,63 +713,99 @@ async function sendQuantityOptions(
   );
 }
 
+/**
+ * Completion of the native ordering Flow. The submitted payload carries only a
+ * flow_token — every price, quantity, variant and delivery value was resolved
+ * server-side by the data-exchange endpoint and stored on the session, so we
+ * rebuild the order from PostgreSQL and hand it to the existing engine (which
+ * re-grounds it against the catalogue and drives the unchanged Monnify path).
+ */
 async function handleFlowReply(
   message: ParsedInboundMessage
 ): Promise<CommerceMenuResult> {
   const response = message.flowResponse;
-  if (!response) {
-    await sendText(message.from, "That order form response was incomplete. Send MENU to try again.");
+  const token =
+    response && typeof response.flow_token === "string"
+      ? response.flow_token
+      : "";
+  if (!token) {
+    await sendText(
+      message.from,
+      "That order form response was incomplete. Send MENU to try again."
+    );
     return { handled: true };
   }
 
-  const storeId = typeof response.store_id === "string" ? response.store_id : null;
-  const productId =
-    typeof response.product_id === "string" ? response.product_id : null;
-  const quantity = Math.max(
-    1,
-    Math.min(99, Number(response.quantity) || 1)
-  );
-  if (!storeId || !productId) {
-    await sendText(message.from, "Please reopen the order form and select a store and product.");
+  const session = await prisma.whatsAppFlowSession.findUnique({
+    where: { tokenHash: hashFlowToken(token) },
+  });
+  if (!session || session.completedAt) {
+    await sendText(
+      message.from,
+      "That order form has expired or was already submitted. Send MENU to start again."
+    );
     return { handled: true };
   }
 
-  const context = await upsertStoreContext(message, storeId);
+  const state = readFlowState(session);
+  if (!state.merchantId || !state.productId || !state.quantity) {
+    await sendText(
+      message.from,
+      "Please reopen the order form and complete your selection."
+    );
+    return { handled: true };
+  }
+
+  // Consume the session so a replayed token cannot re-submit the same order.
+  await completeFlowSession(session.id);
+
+  const context = await upsertStoreContext(message, state.merchantId);
   if (!context) {
-    await sendText(message.from, "That store is no longer available. Send STORES to choose another one.");
+    await sendText(
+      message.from,
+      "That store is no longer available. Send STORES to choose another one."
+    );
     return { handled: true };
   }
+
   const product = await prisma.product.findFirst({
-    where: {
-      id: productId,
-      merchantId: context.merchant.id,
-      active: true,
-      stockQuantity: { gte: quantity },
-    },
+    where: { id: state.productId, merchantId: context.merchant.id, active: true },
     select: { name: true },
   });
   if (!product) {
-    await sendText(message.from, "That product or quantity is no longer available. Send MENU to browse again.");
+    await sendText(
+      message.from,
+      "That product is no longer available. Send MENU to browse again."
+    );
     return { handled: true };
   }
 
-  const size = typeof response.size === "string" ? response.size : "";
-  const colour = typeof response.colour === "string" ? response.colour : "";
-  const area =
-    typeof response.delivery_area === "string" ? response.delivery_area : "";
+  const quantity = Math.max(1, Math.min(99, state.quantity ?? 1));
+  const isPickup = (state.deliveryZoneName ?? "").toLowerCase() === "pickup";
+  const orderText = [
+    `I want ${quantity} ${product.name}`,
+    state.colour ?? "",
+    state.size ?? "",
+    state.deliveryZoneName
+      ? `${isPickup ? "pickup at" : "deliver to"} ${state.deliveryZoneName}`
+      : "",
+    !isPickup && state.address ? `at ${state.address}` : "",
+  ]
+    .filter(Boolean)
+    .join(", ");
+
+  logger.info("whatsapp Flow order submitted", {
+    merchantId: context.merchant.id,
+    productId: state.productId,
+    quantity,
+  });
+
   return {
     handled: false,
     forwardedMessage: {
       ...message,
       kind: "text",
-      text: [
-        `I want ${quantity} ${product.name}`,
-        colour,
-        size,
-        area ? `deliver to ${area}` : "",
-      ]
-        .filter(Boolean)
-        .join(", "),
+      text: orderText,
       interactiveId: null,
       location: null,
       flowResponse: null,
@@ -831,7 +855,7 @@ export async function preprocessCommerceMessage(
       update: { activeMerchantId: null },
       create: { waId: message.from },
     });
-    await sendStoreDirectory(message.from);
+    await presentOrderEntry(message.from);
     return { handled: true };
   }
 
@@ -960,7 +984,7 @@ export async function preprocessCommerceMessage(
     if (context && !/^(stores|shops|store|change store|switch store)[.!?]?$/i.test(text)) {
       await sendCatalogue(message.from, context);
     } else {
-      await sendStoreDirectory(message.from);
+      await presentOrderEntry(message.from);
     }
     return { handled: true };
   }

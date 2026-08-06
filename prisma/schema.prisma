@@ -333,6 +333,28 @@ model WaSession {
   updatedAt        DateTime @updatedAt
 }
 
+/**
+ * A native WhatsApp Flow ordering session. The raw flow_token is never stored
+ * (only its SHA-256), and the data endpoint validates it before every screen.
+ * `state` accumulates the customer's server-resolved selections across screens.
+ */
+model WhatsAppFlowSession {
+  id            String    @id @default(cuid())
+  tokenHash     String    @unique
+  waId          String
+  merchantId    String?
+  customerId    String?
+  currentScreen String    @default("START")
+  state         Json?
+  completedAt   DateTime?
+  expiresAt     DateTime
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([waId])
+  @@index([expiresAt])
+}
+
 model Product {
   id                 String              @id @default(cuid())
   merchantId         String
