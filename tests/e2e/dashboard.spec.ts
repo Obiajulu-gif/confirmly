@@ -128,6 +128,21 @@ test("the store directory deep-links every store into WhatsApp", async ({
   expect(decodeURIComponent(href ?? "")).toMatch(/START [A-Z0-9]+/);
 });
 
+test("the store directory can be searched and cleared", async ({ page }) => {
+  // Seed-independent: asserts the search plumbing, not any particular store.
+  await page.goto("/start?q=zzzz-no-such-store");
+  await expect(page.getByText("No stores found")).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "browse every store" })
+  ).toBeVisible();
+
+  await page.getByRole("link", { name: "Clear" }).click();
+  await expect(page).toHaveURL(/\/start$/);
+  await expect(page.getByRole("searchbox", { name: "Search stores" })).toHaveValue(
+    ""
+  );
+});
+
 test("an unknown receipt token shows RECEIPT NOT FOUND", async ({ page }) => {
   await page.goto("/verify/receipt/this-token-does-not-exist-123456789");
   await expect(page.getByText("RECEIPT NOT FOUND")).toBeVisible();

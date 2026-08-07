@@ -1,6 +1,5 @@
 import Link from "next/link";
 import {
-  ArrowDown,
   ArrowRight,
   BadgeCheck,
   Banknote,
@@ -11,6 +10,8 @@ import {
   Landmark,
   ListChecks,
   Lock,
+  Menu,
+  MessageCircle,
   MessageSquareText,
   QrCode,
   Receipt,
@@ -18,11 +19,19 @@ import {
   ShieldCheck,
   Store,
   Users,
+  X,
 } from "lucide-react";
 import { ConfirmlyLogo, ConfirmlyMark } from "@/components/logo";
 import { PhoneDemo } from "@/components/phone-demo";
 import { Reveal } from "@/components/reveal";
 import { WhatsAppQr } from "@/components/whatsapp-qr";
+
+const navLinks = [
+  ["#how-it-works", "How it works"],
+  ["#for-merchants", "For merchants"],
+  ["#security", "Security"],
+  ["#faq", "FAQ"],
+] as const;
 
 const flowStrip = [
   "WhatsApp order",
@@ -34,14 +43,14 @@ const flowStrip = [
 
 const problems = [
   {
+    icon: FileWarning,
+    title: "Fake screenshots",
+    body: "Edited payment screenshots pass for proof, and goods leave the shop before money ever arrives.",
+  },
+  {
     icon: MessageSquareText,
     title: "Scattered orders",
     body: "Order details buried across dozens of chats — quantities, sizes and addresses lost in the scroll.",
-  },
-  {
-    icon: FileWarning,
-    title: "Fake screenshots",
-    body: "Edited payment screenshots pass for proof, and goods leave before money ever arrives.",
   },
   {
     icon: ListChecks,
@@ -69,7 +78,7 @@ const steps = [
   {
     n: "01",
     title: "Register your business",
-    body: "Sign up, register the business, and add a settlement bank account. Monnify validates the account name and issues a dedicated subaccount.",
+    body: "Sign up, register the business, and add a settlement bank account. Monnify validates the account name and issues a dedicated subaccount. Free — no setup fee.",
     visual: (
       <div className="space-y-2 font-mono text-xs">
         <div className="rounded-xl border border-brand-500/30 bg-brand-500/10 px-4 py-2.5 text-brand-300">
@@ -87,14 +96,14 @@ const steps = [
     body: "A customer picks your store with its code, then orders in plain language — English, Nigerian English, or Pidgin. No app to download.",
     visual: (
       <div className="rounded-2xl rounded-br-md bg-[#d7fbe4] px-4 py-3 text-sm text-ink-900 shadow-lg">
-        START ADASTYLES — I need two black polo shirts, large, to Yaba
+        START ADASTYLES — abeg give me two black polo, large, bring am come Yaba
       </div>
     ),
   },
   {
     n: "03",
     title: "Confirmly structures the order",
-    body: "NVIDIA NIM extracts intent, your catalogue supplies every price, and the server does the maths in integer kobo. One summary, one explicit confirmation.",
+    body: "The AI works out what the customer meant. Your catalogue supplies every price, and the server does the maths. One summary, one explicit confirmation.",
     visual: (
       <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-5 py-4 font-mono text-sm text-white/80">
         <div className="flex justify-between gap-8">
@@ -115,14 +124,11 @@ const steps = [
   {
     n: "04",
     title: "Monnify collects and verifies",
-    body: "The customer pays a Monnify-generated checkout — never your personal account. The webhook is signature-checked, then the transaction is re-verified server-to-server.",
+    body: "The customer pays a Monnify-generated checkout — never your personal account. Confirmly then asks Monnify directly whether the money arrived. A screenshot can never answer that question.",
     visual: (
       <div className="space-y-2 font-mono text-xs">
         <div className="rounded-xl border border-brand-500/30 bg-brand-500/10 px-4 py-2.5 text-brand-300">
-          monnify-signature · HMAC-SHA512 valid
-        </div>
-        <div className="rounded-xl border border-brand-500/30 bg-brand-500/10 px-4 py-2.5 text-brand-300">
-          GET /v2/transactions/… → PAID
+          Monnify says: PAID ✓
         </div>
         <div className="rounded-xl border border-red-400/30 bg-red-500/10 px-4 py-2.5 text-red-300">
           screenshot.jpg → REJECTED
@@ -133,12 +139,12 @@ const steps = [
   {
     n: "05",
     title: "Settlement routed to you",
-    body: "Every checkout carries your subaccount in its income split, so Monnify settles your share straight to your registered bank account — tracked separately from payment verification.",
+    body: "Every checkout carries your subaccount, so Monnify settles your share straight to your registered bank account — tracked separately from payment verification.",
     visual: (
       <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-5 py-4 font-mono text-xs text-white/80">
         <div className="flex justify-between gap-6">
-          <span>splitPercentage</span>
-          <span className="text-brand-300">100</span>
+          <span>your share</span>
+          <span className="text-brand-300">100%</span>
         </div>
         <div className="flex justify-between gap-6">
           <span>payment</span>
@@ -156,59 +162,63 @@ const steps = [
 const trust = [
   {
     icon: FileWarning,
-    title: "Screenshots never count as proof",
-    body: "Only a server-verified Monnify transaction can mark an order paid. Claims and images are checked against the provider, not believed.",
+    title: "Nobody can fake a payment to you",
+    body: "An order is only marked paid when Confirmly has asked Monnify directly and Monnify said yes. Screenshots and “I have sent it” messages change nothing.",
   },
   {
     icon: Store,
-    title: "Your catalogue controls prices",
-    body: "The AI extracts intent only. Every price, fee and total comes from your database, calculated server-side in integer kobo.",
-  },
-  {
-    icon: ShieldCheck,
-    title: "Monnify verified server-side",
-    body: "Signed webhooks, idempotent events, and a second server-to-server verification before any state changes.",
+    title: "Your prices, never the AI's",
+    body: "The AI only works out what the customer wanted. Every price, delivery fee and total comes from your own catalogue — the AI is never allowed to name a figure.",
   },
   {
     icon: Lock,
-    title: "Settlement details protected",
-    body: "Bank account numbers are encrypted at rest, shown only masked, and never displayed as a checkout destination.",
+    title: "Customers never see your bank details",
+    body: "Your account number is scrambled in storage, shown only as ••••1234, and never given to a customer as somewhere to pay.",
+  },
+  {
+    icon: ShieldCheck,
+    title: "Wrong totals become impossible",
+    body: "Every sum is worked out by the server in whole kobo, from your catalogue — so rounding errors and mental-arithmetic mistakes simply cannot happen.",
   },
   {
     icon: ScanLine,
-    title: "Every event auditable",
-    body: "From first message to settlement, each step lands in a chronological, dispute-ready timeline.",
+    title: "Every order keeps a receipt trail",
+    body: "From first message to settlement, each step is recorded in order with a timestamp. When a customer disputes something, you have the record.",
   },
   {
     icon: QrCode,
-    title: "Receipts anyone can verify",
-    body: "High-entropy tokens and QR codes resolve to VALID, REVOKED, or NOT FOUND — no arguments.",
+    title: "Receipts anyone can check",
+    body: "Each receipt carries a QR code. Scanning it says VALID or NOT VALID — so a customer can prove they paid, and nobody can forge one.",
   },
 ];
 
 const metrics = [
-  { value: "100%", label: "Payments verified with Monnify, server-side" },
-  { value: "0", label: "Screenshots ever accepted as proof" },
-  { value: "7", label: "Monnify APIs integrated end to end" },
-  { value: "24/7", label: "Automated ordering on WhatsApp" },
+  { value: "₦0", label: "To start. No setup fee, no monthly charge." },
+  { value: "0", label: "Screenshots ever accepted as proof of payment" },
+  { value: "24/7", label: "Orders taken, priced and confirmed automatically" },
+  { value: "1", label: "WhatsApp number serves every branch you run" },
 ];
 
 const faqs = [
+  {
+    q: "What does Confirmly cost?",
+    a: "It is free to start. No setup fee and no monthly charge — create a business account, add your settlement bank account, and begin taking orders.",
+  },
   {
     q: "Do my customers need to download an app?",
     a: "No. Customers order in the WhatsApp thread they already use. They pick your store with a short code, then chat in plain language — nothing to install or learn.",
   },
   {
     q: "How is a payment actually confirmed?",
-    a: "Only a server-to-server verification against Monnify can mark an order paid. Screenshots, redirects and unsigned callbacks are never trusted — the provider is the single source of truth.",
+    a: "Confirmly asks Monnify directly whether the money arrived, and only then marks the order paid. Screenshots, redirects and messages claiming payment are never trusted — the bank rail is the only thing that counts.",
   },
   {
     q: "Where does my money settle?",
-    a: "Into your own bank account. Each merchant gets a dedicated Monnify subaccount, and every checkout carries your income split, so Confirmly never holds a float.",
+    a: "Into your own bank account. Each merchant gets a dedicated Monnify subaccount, and every checkout carries your income split, so Confirmly never holds your money.",
   },
   {
     q: "What does the AI decide?",
-    a: "Only what the customer meant — the product, variant, quantity and delivery area. Every price, fee and total comes from your catalogue and is computed server-side in integer kobo.",
+    a: "Only what the customer meant — the product, variant, quantity and delivery area. Every price, fee and total comes from your catalogue and is worked out by the server.",
   },
   {
     q: "Can one WhatsApp number serve several branches?",
@@ -216,9 +226,19 @@ const faqs = [
   },
   {
     q: "Is my bank information safe?",
-    a: "Account numbers are encrypted at rest, shown only masked, and never presented to a customer as a payment destination.",
+    a: "Account numbers are scrambled in storage, shown only masked, and never presented to a customer as a payment destination.",
   },
 ];
+
+const faqJsonLd = {
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  mainEntity: faqs.map((f) => ({
+    "@type": "Question",
+    name: f.q,
+    acceptedAnswer: { "@type": "Answer", text: f.a },
+  })),
+};
 
 export default function LandingPage() {
   return (
@@ -229,23 +249,21 @@ export default function LandingPage() {
           <Link href="/" aria-label="Confirmly home">
             <ConfirmlyLogo tone="dark" />
           </Link>
-          <nav className="flex items-center gap-1 sm:gap-2">
-            {(
-              [
-                ["#how-it-works", "How it works"],
-                ["#for-merchants", "For merchants"],
-                ["#security", "Security"],
-                ["#faq", "FAQ"],
-              ] as const
-            ).map(([href, label]) => (
+
+          {/* desktop nav */}
+          <nav className="hidden items-center gap-1 lg:flex">
+            {navLinks.map(([href, label]) => (
               <Link
                 key={href}
                 href={href}
-                className="hidden rounded-lg px-3 py-2 text-sm font-medium text-white/70 transition hover:text-white lg:block"
+                className="rounded-lg px-3 py-2 text-sm font-medium text-white/70 transition hover:text-white"
               >
                 {label}
               </Link>
             ))}
+          </nav>
+
+          <div className="flex items-center gap-2">
             <Link
               href="/login"
               className="hidden rounded-lg px-3 py-2 text-sm font-medium text-white/70 transition hover:text-white sm:block"
@@ -254,18 +272,62 @@ export default function LandingPage() {
             </Link>
             <Link
               href="/signup"
-              className="hidden rounded-xl border border-white/15 px-4 py-2 text-sm font-semibold text-white/85 transition hover:border-brand-400/50 hover:text-white sm:block"
+              className="cta-glow hidden rounded-xl bg-brand-500 px-4 py-2 text-sm font-semibold text-night-900 transition hover:bg-brand-400 sm:block"
             >
-              Create business account
+              Start free
             </Link>
-            <Link
-              href="/start"
-              className="cta-glow rounded-xl bg-brand-500 px-4 py-2 text-sm font-semibold text-night-900 transition hover:bg-brand-400"
-            >
-              Order from store
-            </Link>
-          </nav>
+
+            {/* mobile menu — CSS-only disclosure, no client JS */}
+            <details className="group relative lg:hidden">
+              <summary
+                className="flex h-10 w-10 cursor-pointer list-none items-center justify-center rounded-xl border border-white/15 text-white/80 transition hover:text-white [&::-webkit-details-marker]:hidden"
+                aria-label="Open menu"
+              >
+                <Menu className="h-5 w-5 group-open:hidden" aria-hidden />
+                <X className="hidden h-5 w-5 group-open:block" aria-hidden />
+              </summary>
+              <nav className="absolute right-0 top-12 z-40 w-60 rounded-2xl border border-white/10 bg-night-800 p-2 shadow-2xl">
+                {navLinks.map(([href, label]) => (
+                  <Link
+                    key={href}
+                    href={href}
+                    className="block rounded-xl px-4 py-3 text-sm font-medium text-white/75 transition hover:bg-white/5 hover:text-white"
+                  >
+                    {label}
+                  </Link>
+                ))}
+                <Link
+                  href="#chat-on-whatsapp"
+                  className="block rounded-xl px-4 py-3 text-sm font-medium text-white/75 transition hover:bg-white/5 hover:text-white"
+                >
+                  Try it on WhatsApp
+                </Link>
+                <div className="my-2 border-t border-white/10" />
+                <Link
+                  href="/login"
+                  className="block rounded-xl px-4 py-3 text-sm font-medium text-white/75 transition hover:bg-white/5 hover:text-white"
+                >
+                  Login
+                </Link>
+                <Link
+                  href="/signup"
+                  className="mt-1 block rounded-xl bg-brand-500 px-4 py-3 text-center text-sm font-bold text-night-900 transition hover:bg-brand-400"
+                >
+                  Start free
+                </Link>
+              </nav>
+            </details>
+          </div>
         </div>
+
+        {/* Closes the disclosure after an in-page jump. The menu is fully
+            functional without this — it just would not close on its own. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              "document.addEventListener('click',function(e){var t=e.target;if(!t||!t.closest)return;var a=t.closest('details nav a');if(a)a.closest('details').open=false})",
+          }}
+        />
       </header>
 
       <main className="flex-1">
@@ -282,21 +344,31 @@ export default function LandingPage() {
 
           <div className="relative mx-auto grid w-full max-w-6xl gap-14 px-4 pb-20 pt-14 sm:px-6 sm:pt-20 lg:grid-cols-[1.05fr_0.95fr] lg:items-center">
             <div>
+              <span
+                className="anim-fade-up inline-flex items-center gap-2 rounded-full border border-brand-400/30 bg-brand-500/10 px-3.5 py-1.5 text-xs font-semibold text-brand-300"
+                style={{ "--d": "0.05s" } as React.CSSProperties}
+              >
+                <BadgeCheck className="h-3.5 w-3.5" aria-hidden />
+                Free to start · No setup fee
+              </span>
+
               <h1
-                className="anim-fade-up text-[2.5rem] font-extrabold leading-[1.05] tracking-tight sm:text-6xl lg:text-[3.9rem]"
+                className="anim-fade-up mt-6 text-[2.5rem] font-extrabold leading-[1.05] tracking-tight sm:text-6xl lg:text-[3.9rem]"
                 style={{ "--d": "0.15s" } as React.CSSProperties}
               >
-                Turn WhatsApp orders into{" "}
-                <span className="text-gradient">verified payments.</span>
+                Never ship against a{" "}
+                <span className="text-gradient">fake payment screenshot</span>{" "}
+                again.
               </h1>
 
               <p
-                className="anim-fade-up mt-6 max-w-xl text-lg leading-relaxed text-white/60"
+                className="anim-fade-up mt-6 max-w-xl text-lg leading-relaxed text-white/70"
                 style={{ "--d": "0.3s" } as React.CSSProperties}
               >
-                Confirmly helps merchants structure customer orders, collect
-                payments through Monnify, and issue trusted receipts without
-                leaving the sales flow they already use.
+                Confirmly turns your WhatsApp chats into clear orders, collects
+                payment through Monnify, and marks an order paid only when the
+                money has actually arrived. No app for your customers, nothing
+                new for you to learn.
               </p>
 
               <div
@@ -307,21 +379,21 @@ export default function LandingPage() {
                   href="/signup"
                   className="cta-glow inline-flex items-center justify-center gap-2 rounded-2xl bg-brand-500 px-7 py-3.5 text-base font-bold text-night-900 transition hover:bg-brand-400"
                 >
-                  Create business account
+                  Start free
                   <ArrowRight className="h-4.5 w-4.5" aria-hidden />
                 </Link>
                 <Link
-                  href="#how-it-works"
+                  href="#chat-on-whatsapp"
                   className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/15 px-7 py-3.5 text-base font-semibold text-white/85 transition hover:border-brand-400/50 hover:text-white"
                 >
-                  View product flow
-                  <ArrowDown className="h-4 w-4" aria-hidden />
+                  <MessageCircle className="h-4.5 w-4.5" aria-hidden />
+                  Try it on WhatsApp
                 </Link>
               </div>
 
               {/* flow strip */}
               <div
-                className="anim-fade-up mt-10 flex flex-wrap items-center gap-2 text-[13px] font-medium text-white/55"
+                className="anim-fade-up mt-10 flex flex-wrap items-center gap-2 text-[13px] font-medium text-white/65"
                 style={{ "--d": "0.6s" } as React.CSSProperties}
               >
                 {flowStrip.map((item, i) => (
@@ -346,6 +418,9 @@ export default function LandingPage() {
           </div>
         </section>
 
+        {/* --------------- live demo — the strongest proof, so it comes early */}
+        <WhatsAppQr />
+
         {/* ------------------------------------------------ metrics band */}
         <section className="border-y border-white/5 bg-white/[0.015]">
           <div className="mx-auto grid w-full max-w-6xl grid-cols-2 divide-x divide-y divide-white/5 px-0 sm:px-6 lg:grid-cols-4 lg:divide-y-0">
@@ -354,7 +429,7 @@ export default function LandingPage() {
                 <p className="text-gradient text-3xl font-extrabold tracking-tight sm:text-4xl">
                   {m.value}
                 </p>
-                <p className="mx-auto mt-2 max-w-[15rem] text-xs leading-relaxed text-white/50 sm:text-sm">
+                <p className="mx-auto mt-2 max-w-[15rem] text-xs leading-relaxed text-white/65 sm:text-sm">
                   {m.label}
                 </p>
               </div>
@@ -383,7 +458,7 @@ export default function LandingPage() {
                         <Icon className="h-5 w-5" aria-hidden />
                       </span>
                       <h3 className="mt-4 font-bold">{p.title}</h3>
-                      <p className="mt-2 text-sm leading-relaxed text-white/55">
+                      <p className="mt-2 text-sm leading-relaxed text-white/65">
                         {p.body}
                       </p>
                     </div>
@@ -404,18 +479,16 @@ export default function LandingPage() {
               <h2 className="mt-3 max-w-2xl text-3xl font-extrabold tracking-tight sm:text-5xl">
                 From registration to settlement, verified at every step.
               </h2>
-              <p className="mt-4 max-w-xl text-white/55">
-                Keep scrolling — each step stacks on the last, exactly like the
-                flow itself.
-              </p>
             </Reveal>
 
             <div className="mt-16">
               {steps.map((step, i) => (
                 <div
                   key={step.n}
-                  className="sticky mb-8"
-                  style={{ top: `${84 + i * 30}px` }}
+                  /* Sticky stacking only where there is vertical room for it —
+                     on short viewports the cards would otherwise overlap. */
+                  className="mb-8 md:sticky"
+                  style={{ top: `${84 + i * 22}px` }}
                 >
                   <article className="stack-card p-7 sm:p-10">
                     <div className="grid items-center gap-8 sm:grid-cols-[1.1fr_0.9fr]">
@@ -428,7 +501,7 @@ export default function LandingPage() {
                             {step.title}
                           </h3>
                         </div>
-                        <p className="mt-4 max-w-md leading-relaxed text-white/60">
+                        <p className="mt-4 max-w-md leading-relaxed text-white/70">
                           {step.body}
                         </p>
                       </div>
@@ -465,10 +538,10 @@ export default function LandingPage() {
                 &ldquo;They paid&rdquo; and &ldquo;I have the money&rdquo; are two
                 different facts.
               </h2>
-              <p className="mt-4 max-w-2xl leading-relaxed text-white/55">
+              <p className="mt-4 max-w-2xl leading-relaxed text-white/70">
                 Most tools stop at &ldquo;transaction successful.&rdquo; Confirmly
-                tracks payment and settlement as separate, verified states — so you
-                only ship against money that has actually arrived.
+                tracks the two separately — so you only ship against money that
+                has actually arrived.
               </p>
             </Reveal>
 
@@ -482,9 +555,9 @@ export default function LandingPage() {
                   <h3 className="mt-4 text-lg font-bold">
                     The customer&apos;s money left their account
                   </h3>
-                  <p className="mt-2 leading-relaxed text-white/55">
-                    Established only by a server-side Monnify verification. No client
-                    redirect, no screenshot, and no unsigned webhook can set it.
+                  <p className="mt-2 leading-relaxed text-white/70">
+                    Established only by asking Monnify directly. No screenshot and
+                    no message claiming payment can set it.
                   </p>
                 </div>
               </Reveal>
@@ -497,8 +570,8 @@ export default function LandingPage() {
                   <h3 className="mt-4 text-lg font-bold">
                     Your bank has not been credited yet
                   </h3>
-                  <p className="mt-2 leading-relaxed text-white/55">
-                    Stays pending until a Monnify settlement event confirms payout.
+                  <p className="mt-2 leading-relaxed text-white/70">
+                    Stays pending until Monnify confirms the payout reached you.
                     Your dashboard shows both, so the two are never confused.
                   </p>
                 </div>
@@ -506,12 +579,12 @@ export default function LandingPage() {
             </div>
 
             <Reveal>
-              <div className="mt-5 flex items-start gap-3 rounded-2xl border border-white/8 bg-white/[0.03] p-5 text-sm text-white/55">
+              <div className="mt-5 flex items-start gap-3 rounded-2xl border border-white/8 bg-white/[0.03] p-5 text-sm text-white/70">
                 <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-brand-400" aria-hidden />
                 <p className="leading-relaxed">
-                  A scheduled reconciliation pass re-verifies against Monnify to
-                  recover any payment whose webhook was dropped — so a missed
-                  delivery degrades into a delay, never a lost order.
+                  If a payment notification ever goes missing, Confirmly checks
+                  again on a schedule and picks it up — so a hiccup becomes a
+                  short delay, never a lost order.
                 </p>
               </div>
             </Reveal>
@@ -529,7 +602,7 @@ export default function LandingPage() {
               <h2 className="mt-3 max-w-2xl text-3xl font-extrabold tracking-tight sm:text-4xl">
                 A back office for the shop you run from your phone.
               </h2>
-              <p className="mt-4 max-w-2xl leading-relaxed text-white/55">
+              <p className="mt-4 max-w-2xl leading-relaxed text-white/70">
                 Everything you need to run verified WhatsApp commerce — catalogue,
                 settlement, conversations and reporting — in one dashboard.
               </p>
@@ -565,7 +638,7 @@ export default function LandingPage() {
                         <Icon className="h-5 w-5" aria-hidden />
                       </span>
                       <h3 className="mt-4 font-bold">{f.title}</h3>
-                      <p className="mt-2 text-sm leading-relaxed text-white/55">
+                      <p className="mt-2 text-sm leading-relaxed text-white/65">
                         {f.body}
                       </p>
                     </div>
@@ -586,9 +659,9 @@ export default function LandingPage() {
               <h2 className="mt-3 max-w-2xl text-3xl font-extrabold tracking-tight sm:text-4xl">
                 Trust, engineered in.
               </h2>
-              <p className="mt-4 max-w-2xl leading-relaxed text-white/55">
-                The rules that make a payment real are enforced by the server, not
-                by convention — so fraud is designed out, not policed after the fact.
+              <p className="mt-4 max-w-2xl leading-relaxed text-white/70">
+                The rules that make a payment real are enforced by the software,
+                not by trust — so fraud is designed out, not chased afterwards.
               </p>
             </Reveal>
             <div className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
@@ -601,7 +674,7 @@ export default function LandingPage() {
                         <Icon className="h-5 w-5" aria-hidden />
                       </span>
                       <h3 className="mt-4 font-bold">{t.title}</h3>
-                      <p className="mt-2 text-sm leading-relaxed text-white/55">
+                      <p className="mt-2 text-sm leading-relaxed text-white/65">
                         {t.body}
                       </p>
                     </div>
@@ -609,11 +682,57 @@ export default function LandingPage() {
                 );
               })}
             </div>
+
+            {/* The technical detail still matters — it just shouldn't be the
+                first thing a merchant has to read. */}
+            <Reveal>
+              <details className="group mt-8 rounded-2xl border border-white/[0.08] bg-white/[0.02]">
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-6 py-5 text-sm font-semibold text-white/80 transition hover:text-white [&::-webkit-details-marker]:hidden">
+                  How it works, for the technically minded
+                  <ChevronDown
+                    className="h-5 w-5 shrink-0 text-brand-400 transition-transform duration-300 group-open:rotate-180"
+                    aria-hidden
+                  />
+                </summary>
+                <div className="grid gap-4 px-6 pb-6 text-sm leading-relaxed text-white/65 sm:grid-cols-2">
+                  <p>
+                    <strong className="text-white/85">Webhooks are signed.</strong>{" "}
+                    Every Monnify and WhatsApp callback is verified against an
+                    HMAC-SHA512 signature and rejected with a 401 on mismatch.
+                    Events are idempotent, so a replayed delivery is a no-op.
+                  </p>
+                  <p>
+                    <strong className="text-white/85">
+                      Verification is server-to-server.
+                    </strong>{" "}
+                    A signed webhook alone never marks an order paid — Confirmly
+                    re-queries the Monnify transaction API and only then writes
+                    the state.
+                  </p>
+                  <p>
+                    <strong className="text-white/85">Money is integer kobo.</strong>{" "}
+                    All arithmetic is done server-side in whole kobo from
+                    PostgreSQL. The AI intent schema has no money fields at all,
+                    so an invented price is structurally unrepresentable.
+                  </p>
+                  <p>
+                    <strong className="text-white/85">Secrets stay server-side.</strong>{" "}
+                    Settlement bank details are AES-256-GCM encrypted at rest,
+                    sessions are bcrypt + HTTP-only JWT, and a pre-push scanner
+                    fails the build on any leaked credential.
+                  </p>
+                </div>
+              </details>
+            </Reveal>
           </div>
         </section>
 
         {/* ------------------------------------------------ FAQ */}
         <section id="faq" className="border-t border-white/5 py-24">
+          <script
+            type="application/ld+json"
+            dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }}
+          />
           <div className="mx-auto w-full max-w-3xl px-4 sm:px-6">
             <Reveal>
               <p className="text-xs font-bold uppercase tracking-[0.25em] text-brand-400">
@@ -633,15 +752,12 @@ export default function LandingPage() {
                       aria-hidden
                     />
                   </summary>
-                  <p className="pb-5 pr-9 leading-relaxed text-white/55">{f.a}</p>
+                  <p className="pb-5 pr-9 leading-relaxed text-white/70">{f.a}</p>
                 </details>
               ))}
             </div>
           </div>
         </section>
-
-        {/* ------------------------------------- scan to chat on WhatsApp */}
-        <WhatsAppQr />
 
         {/* ------------------------------------------------ final CTA */}
         <section className="mx-auto w-full max-w-6xl px-4 pb-24 sm:px-6">
@@ -653,18 +769,22 @@ export default function LandingPage() {
                 <h2 className="mx-auto mt-6 max-w-2xl text-3xl font-extrabold tracking-tight sm:text-4xl">
                   Start selling with clearer orders and verified payments.
                 </h2>
+                <p className="mx-auto mt-4 max-w-md text-white/70">
+                  Free to start. No setup fee, no monthly charge — just add your
+                  catalogue and your settlement account.
+                </p>
                 <div className="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row">
                   <Link
                     href="/signup"
                     className="cta-glow inline-flex items-center justify-center rounded-2xl bg-brand-500 px-7 py-3.5 text-base font-bold text-night-900 transition hover:bg-brand-400"
                   >
-                    Create business account
+                    Start free
                   </Link>
                   <Link
-                    href="/start"
+                    href="#chat-on-whatsapp"
                     className="inline-flex items-center justify-center rounded-2xl border border-white/15 px-7 py-3.5 text-base font-semibold text-white/85 transition hover:border-brand-400/50 hover:text-white"
                   >
-                    Order from a store on WhatsApp
+                    See it work first
                   </Link>
                 </div>
               </div>
@@ -679,27 +799,20 @@ export default function LandingPage() {
           <div className="grid gap-10 md:grid-cols-[1.6fr_1fr_1fr_1fr]">
             <div>
               <ConfirmlyLogo tone="dark" />
-              <p className="mt-4 max-w-xs text-sm leading-relaxed text-white/45">
+              <p className="mt-4 max-w-xs text-sm leading-relaxed text-white/60">
                 From chat to confirmed payment. WhatsApp-native ordering with
                 Monnify-verified settlement.
               </p>
             </div>
 
             <div>
-              <p className="text-xs font-bold uppercase tracking-widest text-white/40">
+              <p className="text-xs font-bold uppercase tracking-widest text-white/55">
                 Product
               </p>
               <ul className="mt-4 space-y-2.5 text-sm">
-                {(
-                  [
-                    ["#how-it-works", "How it works"],
-                    ["#for-merchants", "For merchants"],
-                    ["#security", "Security"],
-                    ["#faq", "FAQ"],
-                  ] as const
-                ).map(([href, label]) => (
+                {navLinks.map(([href, label]) => (
                   <li key={label}>
-                    <Link href={href} className="text-white/55 transition hover:text-white">
+                    <Link href={href} className="text-white/65 transition hover:text-white">
                       {label}
                     </Link>
                   </li>
@@ -708,19 +821,20 @@ export default function LandingPage() {
             </div>
 
             <div>
-              <p className="text-xs font-bold uppercase tracking-widest text-white/40">
+              <p className="text-xs font-bold uppercase tracking-widest text-white/55">
                 Get started
               </p>
               <ul className="mt-4 space-y-2.5 text-sm">
                 {(
                   [
-                    ["/signup", "Create business account"],
+                    ["/signup", "Start free"],
+                    ["#chat-on-whatsapp", "Try it on WhatsApp"],
                     ["/start", "Order from a store"],
                     ["/login", "Log in"],
                   ] as const
                 ).map(([href, label]) => (
                   <li key={label}>
-                    <Link href={href} className="text-white/55 transition hover:text-white">
+                    <Link href={href} className="text-white/65 transition hover:text-white">
                       {label}
                     </Link>
                   </li>
@@ -729,10 +843,10 @@ export default function LandingPage() {
             </div>
 
             <div>
-              <p className="text-xs font-bold uppercase tracking-widest text-white/40">
+              <p className="text-xs font-bold uppercase tracking-widest text-white/55">
                 Powered by
               </p>
-              <ul className="mt-4 space-y-2.5 text-sm text-white/55">
+              <ul className="mt-4 space-y-2.5 text-sm text-white/65">
                 <li>Monnify · payments &amp; settlement</li>
                 <li>NVIDIA NIM · order understanding</li>
                 <li>WhatsApp Cloud API</li>
@@ -740,11 +854,9 @@ export default function LandingPage() {
             </div>
           </div>
 
-          <div className="mt-12 flex flex-col items-center justify-between gap-4 border-t border-white/[0.08] pt-6 text-sm text-white/40 sm:flex-row">
+          <div className="mt-12 flex flex-col items-center justify-between gap-4 border-t border-white/[0.08] pt-6 text-sm text-white/60 sm:flex-row">
             <span>© {new Date().getFullYear()} Confirmly. All rights reserved.</span>
-            <span className="text-white/35">
-              Payments by Monnify · Orders understood by NVIDIA NIM
-            </span>
+            <span>Payments by Monnify · Orders understood by NVIDIA NIM</span>
           </div>
         </div>
       </footer>

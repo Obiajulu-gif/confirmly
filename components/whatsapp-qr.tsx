@@ -34,7 +34,7 @@ export async function WhatsAppQr() {
   return (
     <section
       id="chat-on-whatsapp"
-      className="mx-auto w-full max-w-6xl px-4 pb-24 sm:px-6"
+      className="mx-auto w-full max-w-6xl scroll-mt-20 px-4 pb-16 sm:px-6"
     >
       <Reveal>
         <div className="relative overflow-hidden rounded-3xl border border-brand-500/25 bg-gradient-to-br from-night-700 via-night-800 to-night-900 px-6 py-12 sm:px-12">
@@ -52,7 +52,7 @@ export async function WhatsAppQr() {
                   height={320}
                 />
               </div>
-              <p className="mt-3 text-center text-xs font-medium text-white/45">
+              <p className="mt-3 text-center text-xs font-medium text-white/60">
                 Point your camera here
               </p>
             </div>
@@ -60,19 +60,20 @@ export async function WhatsAppQr() {
             <div>
               <span className="inline-flex items-center gap-2 rounded-full border border-brand-400/30 bg-brand-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-brand-300">
                 <ScanLine className="h-3.5 w-3.5" />
-                Scan to order
+                Live demo · No signup
               </span>
               <h2 className="mt-5 text-3xl font-extrabold tracking-tight sm:text-4xl">
-                Start an order on WhatsApp
+                See it work before you sign up
               </h2>
-              <p className="mt-4 max-w-xl text-base leading-relaxed text-white/60">
+              <p className="mt-4 max-w-xl text-base leading-relaxed text-white/70">
                 Scan the code with your phone camera, or tap the button below on
-                mobile. Confirmly replies with the list of stores — pick one and
-                order right inside the chat.
+                mobile. Confirmly replies with the list of stores — pick one, place
+                a real order, and watch it get priced, paid and receipted inside
+                the chat. Takes about two minutes.
               </p>
 
               <dl className="mt-6">
-                <dt className="text-xs font-semibold uppercase tracking-wider text-white/40">
+                <dt className="text-xs font-semibold uppercase tracking-wider text-white/60">
                   Business number
                 </dt>
                 <dd className="mt-1 font-mono text-xl font-bold text-white">
@@ -90,7 +91,7 @@ export async function WhatsAppQr() {
                   <MessageCircle className="h-5 w-5" />
                   Chat on WhatsApp
                 </a>
-                <span className="inline-flex items-center gap-2 text-sm text-white/45">
+                <span className="inline-flex items-center gap-2 text-sm text-white/65">
                   <ShieldCheck className="h-4 w-4 text-brand-400" />
                   Payments verified by Monnify
                 </span>

@@ -8,6 +8,11 @@ import { logger } from "@/lib/logger";
 import { formatNaira } from "@/lib/money";
 import { scoreMatch, searchScore } from "@/lib/orders/matching";
 import {
+  listStoreCategories,
+  searchStores,
+  type StoreSummary,
+} from "@/lib/stores/directory";
+import {
   sendButtons,
   sendFlow,
   sendImageByUrl,
@@ -53,71 +58,135 @@ function decodeLabel(value: string): string | null {
   }
 }
 
-async function sendStoreDirectory(waId: string): Promise<void> {
-  const stores = await prisma.merchant.findMany({
-    where: { active: true },
-    orderBy: { name: "asc" },
-    take: 10,
-    select: {
-      id: true,
-      name: true,
-      category: true,
-      storeCode: true,
-      description: true,
-    },
-  });
+/** Store rows per page. Leaves room for "Show more" + "Back" inside the 10-row cap. */
+const STORE_PAGE_SIZE = 8;
 
-  if (!stores.length) {
+function storeRow(store: StoreSummary): ListRow {
+  return {
+    id: `store:${store.id}`,
+    title: store.name,
+    description: `${store.category ?? "General store"} · ${store.description ?? store.storeCode}`,
+  };
+}
+
+/**
+ * Entry point for store discovery.
+ *
+ * When everything fits in a single list the stores are shown directly — no
+ * reason to make a customer tap through a menu to reach three shops. Past that
+ * it becomes a menu (all / search / categories), because WhatsApp caps
+ * interactive lists at 10 rows and the rest would otherwise be unreachable.
+ */
+async function sendStoreDirectory(waId: string): Promise<void> {
+  const [{ total }, categories] = await Promise.all([
+    searchStores({ limit: 1 }),
+    listStoreCategories(),
+  ]);
+
+  if (!total) {
     await sendText(waId, "No stores are live right now. Please check back soon.");
     return;
   }
 
+  if (total <= STORE_PAGE_SIZE && categories.length <= 1) {
+    await sendStoreList(waId, { category: null, page: 0 });
+    return;
+  }
+
+  const rows: ListRow[] = [
+    {
+      id: "commerce:stores:all",
+      title: "All stores",
+      description: `${total} live store${total === 1 ? "" : "s"}`,
+    },
+    {
+      id: "commerce:stores:search",
+      title: "Search by name",
+      description: 'e.g. "find ada styles"',
+    },
+    ...categories.slice(0, 8).map((category) => ({
+      id: `commerce:stores:cat:${encodeLabel(category.name)}`,
+      title: category.name,
+      description: `${category.count} store${category.count === 1 ? "" : "s"}`,
+    })),
+  ];
+
   await sendList(
     waId,
-    'Welcome to Confirmly. Choose a store below, or type "find <name>" to search.',
+    'Welcome to Confirmly. Pick a category, browse every store, or type "find <name>" to search.',
     "Browse stores",
-    stores.map((store) => ({
-      id: `store:${store.id}`,
-      title: store.name,
-      description: `${store.category ?? "General store"} · ${store.description ?? store.storeCode}`,
-    }))
+    rows.slice(0, 10)
   );
-  logger.info("whatsapp store directory sent", { storeCount: stores.length });
-}
-
-/** Ranks active stores against a free-text query (name / category / code). */
-async function searchStores(query: string) {
-  const stores = await prisma.merchant.findMany({
-    where: { active: true },
-    select: {
-      id: true,
-      name: true,
-      category: true,
-      storeCode: true,
-      description: true,
-    },
+  logger.info("whatsapp store directory menu sent", {
+    storeCount: total,
+    categoryCount: categories.length,
   });
-  return stores
-    .map((store) => ({
-      store,
-      score: Math.max(
-        searchScore(query, store.name),
-        searchScore(query, store.category ?? ""),
-        searchScore(query, store.storeCode)
-      ),
-    }))
-    .filter((entry) => entry.score >= SEARCH_THRESHOLD)
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 9)
-    .map((entry) => entry.store);
 }
 
-/** Interactive list of stores matching a query (WhatsApp 10-row cap safe). */
+/** One page of stores, optionally filtered to a category. */
+async function sendStoreList(
+  waId: string,
+  { category, page }: { category: string | null; page: number }
+): Promise<void> {
+  const safePage = Number.isFinite(page) && page > 0 ? Math.floor(page) : 0;
+  const { stores, total, hasMore } = await searchStores({
+    category,
+    limit: STORE_PAGE_SIZE,
+    offset: safePage * STORE_PAGE_SIZE,
+  });
+
+  if (!stores.length) {
+    await sendText(
+      waId,
+      category
+        ? `No stores are listed under "${category}" right now. Reply "stores" to see everything.`
+        : "No stores are live right now. Please check back soon."
+    );
+    return;
+  }
+
+  const rows: ListRow[] = stores.map(storeRow);
+  if (hasMore) {
+    const remaining = total - safePage * STORE_PAGE_SIZE - stores.length;
+    rows.push({
+      id: `commerce:stores:page:${encodeLabel(category ?? "")}:${safePage + 1}`,
+      title: "Show more stores",
+      description: `${remaining} more`,
+    });
+  }
+  if (category || safePage > 0) {
+    rows.push({ id: "commerce:stores:menu", title: "Back to all stores" });
+  }
+
+  await sendList(
+    waId,
+    category
+      ? `Stores in ${category} (${total} total):`
+      : `Choose a store (${total} live):`,
+    "Choose store",
+    rows.slice(0, 10)
+  );
+  logger.info("whatsapp store list sent", {
+    category: category ?? null,
+    page: safePage,
+    shown: stores.length,
+    total,
+  });
+}
+
+/** Interactive list of stores matching a query, paginated past the row cap. */
 async function sendStoreSearchResults(
   waId: string,
-  query: string
+  query: string,
+  page = 0
 ): Promise<void> {
-  const stores = await searchStores(query);
+  const safePage = Number.isFinite(page) && page > 0 ? Math.floor(page) : 0;
+  const { stores, total, hasMore } = await searchStores({
+    query,
+    limit: STORE_PAGE_SIZE,
+    offset: safePage * STORE_PAGE_SIZE,
+  });
+
   if (!stores.length) {
     await sendText(
       waId,
@@ -125,19 +194,27 @@ async function sendStoreSearchResults(
     );
     return;
   }
+
+  const rows: ListRow[] = stores.map(storeRow);
+  if (hasMore) {
+    rows.push({
+      id: `commerce:stores:qpage:${encodeLabel(query)}:${safePage + 1}`,
+      title: "Show more results",
+      description: `${total - safePage * STORE_PAGE_SIZE - stores.length} more`,
+    });
+  }
+  rows.push({ id: "commerce:stores:menu", title: "Back to all stores" });
+
   await sendList(
     waId,
-    `Stores matching "${query}":`,
+    `${total} store${total === 1 ? "" : "s"} matching "${query}":`,
     "Choose store",
-    stores.map((store) => ({
-      id: `store:${store.id}`,
-      title: store.name.slice(0, 24),
-      description: `${store.category ?? "Store"} · ${store.storeCode}`,
-    }))
+    rows.slice(0, 10)
   );
   logger.info("whatsapp store search sent", {
     query: query.slice(0, 40),
-    matchCount: stores.length,
+    page: safePage,
+    matchCount: total,
   });
 }
 
@@ -835,6 +912,59 @@ export async function preprocessCommerceMessage(
     return { handled: true };
   }
 
+  // ---- store discovery (works with or without an active store) -------------
+
+  if (interactiveId === "commerce:stores:menu") {
+    await sendStoreDirectory(message.from);
+    return { handled: true };
+  }
+
+  if (interactiveId === "commerce:stores:all") {
+    await sendStoreList(message.from, { category: null, page: 0 });
+    return { handled: true };
+  }
+
+  if (interactiveId === "commerce:stores:search") {
+    await sendText(
+      message.from,
+      'To find a shop, type: *find <store name>*\n\ne.g. "find ada styles" or "search fashion".'
+    );
+    return { handled: true };
+  }
+
+  if (interactiveId.startsWith("commerce:stores:cat:")) {
+    const category = decodeLabel(
+      interactiveId.slice("commerce:stores:cat:".length)
+    );
+    if (!category) {
+      await sendStoreDirectory(message.from);
+      return { handled: true };
+    }
+    await sendStoreList(message.from, { category, page: 0 });
+    return { handled: true };
+  }
+
+  if (interactiveId.startsWith("commerce:stores:page:")) {
+    const parts = interactiveId.split(":");
+    const category = decodeLabel(parts[3] ?? "") || null;
+    await sendStoreList(message.from, {
+      category,
+      page: Number(parts[4] ?? 0),
+    });
+    return { handled: true };
+  }
+
+  if (interactiveId.startsWith("commerce:stores:qpage:")) {
+    const parts = interactiveId.split(":");
+    const query = decodeLabel(parts[3] ?? "");
+    if (!query) {
+      await sendStoreDirectory(message.from);
+      return { handled: true };
+    }
+    await sendStoreSearchResults(message.from, query, Number(parts[4] ?? 0));
+    return { handled: true };
+  }
+
   const context = await contextForWaId(message.from);
 
   if (interactiveId === "commerce:menu") {
@@ -969,8 +1099,8 @@ export async function preprocessCommerceMessage(
   // store by name. Only claims the message when there ARE matches — otherwise
   // it falls through to the engine's welcome + full store list.
   if (!context && text && text.length >= 2 && text.split(/\s+/).length <= 5) {
-    const stores = await searchStores(text);
-    if (stores.length) {
+    const { total } = await searchStores({ query: text, limit: 1 });
+    if (total > 0) {
       await sendStoreSearchResults(message.from, text);
       return { handled: true };
     }
