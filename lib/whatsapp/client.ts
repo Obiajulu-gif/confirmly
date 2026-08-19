@@ -235,14 +235,28 @@ export async function sendFlow(
     cta: string;
     screen?: string;
     data?: Record<string, unknown>;
+    /** Public https image shown as the message header (commerce-card look). */
+    headerImageUrl?: string;
+    /** Optional small footer line under the body. */
+    footerText?: string;
   }
 ): Promise<SendResult> {
+  const headerLink = input.headerImageUrl?.trim();
+  const header =
+    headerLink && /^https:\/\//i.test(headerLink)
+      ? { header: { type: "image" as const, image: { link: headerLink } } }
+      : {};
+  const footer = input.footerText
+    ? { footer: { text: input.footerText.slice(0, 60) } }
+    : {};
   return post({
     to,
     type: "interactive",
     interactive: {
       type: "flow",
+      ...header,
       body: { text: input.bodyText.slice(0, 1024) },
+      ...footer,
       action: {
         name: "flow",
         parameters: {

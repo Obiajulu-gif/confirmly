@@ -1,8 +1,13 @@
 import "server-only";
-import { env } from "@/lib/env";
+import { env, appUrl } from "@/lib/env";
 import { logger } from "@/lib/logger";
 import { sendFlow } from "@/lib/whatsapp/client";
 import { createFlowSession } from "@/lib/whatsapp/flow-session";
+
+/** Public banner shown as the Flow launch card header (see public/whatsapp/). */
+function orderBannerUrl(): string {
+  return `${appUrl().replace(/\/$/, "")}/whatsapp/order-banner.jpg`;
+}
 
 /**
  * Launches the native ordering Flow when it is configured, minting a stored
@@ -22,9 +27,12 @@ export async function maybeSendOrderFlow(waId: string): Promise<boolean> {
     await sendFlow(waId, {
       flowId: settings.WHATSAPP_ORDER_FLOW_ID,
       flowToken: token,
+      headerImageUrl: orderBannerUrl(),
       bodyText:
-        "Order from local stores without leaving WhatsApp. Tap below to search or browse the marketplace.",
-      cta: "Start order",
+        "🛍️ *Shop on WhatsApp*\n\nOrder from local stores without leaving the chat. " +
+        "Search for a shop or browse the marketplace, pick your items, and pay — all in one place.",
+      cta: "Shop now",
+      footerText: "Powered by Confirmly",
       screen: "START",
     });
     logger.info("whatsapp order Flow launched", { waId });

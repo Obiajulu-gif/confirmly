@@ -77,11 +77,22 @@ function solidPng(width, height, [r, g, b]) {
   ]);
 }
 
-/** Loads a real asset PNG if present, else generates a brand placeholder. */
-function assetBase64(fileName, generate) {
-  const file = path.join(ASSET_DIR, fileName);
-  const bytes = existsSync(file) ? readFileSync(file) : generate();
-  return { base64: bytes.toString("base64"), fromDisk: existsSync(file), bytes };
+/**
+ * Loads the first real asset file that exists (JPEG or PNG are both valid Flow
+ * image sources — Meta detects the format from the bytes), else generates a
+ * brand placeholder. Pass a single name or an ordered list of candidates.
+ */
+function assetBase64(fileNames, generate) {
+  const candidates = Array.isArray(fileNames) ? fileNames : [fileNames];
+  for (const name of candidates) {
+    const file = path.join(ASSET_DIR, name);
+    if (existsSync(file)) {
+      const bytes = readFileSync(file);
+      return { base64: bytes.toString("base64"), fromDisk: true, bytes };
+    }
+  }
+  const bytes = generate();
+  return { base64: bytes.toString("base64"), fromDisk: false, bytes };
 }
 
 // Confirmly brand emerald/teal.
@@ -90,7 +101,9 @@ const EMERALD_LIGHT = [16, 185, 129]; // #10b981
 const TEAL_DARK = [4, 120, 87]; // #047857
 
 const assets = {
-  __ASSET_BANNER__: assetBase64("banner.png", () => solidPng(640, 320, EMERALD)),
+  __ASSET_BANNER__: assetBase64(["banner.jpg", "banner.png"], () =>
+    solidPng(640, 320, EMERALD)
+  ),
   __ASSET_ICON_SEARCH__: assetBase64("icon-search.png", () =>
     solidPng(96, 96, EMERALD_LIGHT)
   ),
