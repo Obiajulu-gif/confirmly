@@ -40,6 +40,15 @@ const envSchema = z.object({
     .string()
     .transform((value) => value === "true" || value === "1")
     .default("false"),
+  /** RSA private key (PEM) that decrypts the Flow data-exchange AES key.
+   *  Store the matching PUBLIC key on the phone number via the Graph API.
+   *  Multi-line PEM: set with literal \n or a real multi-line value. */
+  WHATSAPP_FLOW_PRIVATE_KEY: z
+    .string()
+    .min(1)
+    .optional()
+    .transform((value) => value?.replace(/\\n/g, "\n")),
+  WHATSAPP_FLOW_PRIVATE_KEY_PASSPHRASE: z.string().optional(),
 
   NVIDIA_API_KEY: z.string().min(1).optional(),
   NVIDIA_BASE_URL: z
