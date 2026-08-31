@@ -10,6 +10,7 @@ import {
   LayoutDashboard,
   MessagesSquare,
   Package,
+  QrCode,
   Receipt,
   Settings,
   Store,
@@ -28,6 +29,7 @@ type NavItem = {
 
 const links: NavItem[] = [
   { href: "/dashboard", label: "Overview", icon: LayoutDashboard, exact: true },
+  { href: "/dashboard/storefront", label: "WhatsApp store", icon: QrCode },
   { href: "/dashboard/branches", label: "Branches", icon: Store, merchantOnly: true },
   { href: "/dashboard/conversations", label: "Conversations", icon: MessagesSquare },
   { href: "/dashboard/orders", label: "Orders", icon: Receipt },
