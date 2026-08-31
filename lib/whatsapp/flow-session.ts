@@ -13,22 +13,37 @@ import { prisma } from "@/lib/db";
 /** Flow sessions live only as long as an order takes to place. */
 export const FLOW_SESSION_TTL_MINUTES = 30;
 
+/** One line in the Flow cart. Every value is resolved from PostgreSQL. */
+export interface FlowCartItem {
+  productId: string;
+  variantId: string | null;
+  name: string;
+  variantLabel: string | null;
+  size: string | null;
+  colour: string | null;
+  quantity: number;
+  unitPriceKobo: number;
+  lineKobo: number;
+}
+
 /** Accumulated, server-resolved selections. Never populated from client echoes. */
 export interface FlowOrderState {
   entryPoint?: "search" | "marketplace";
   merchantId?: string;
-  productId?: string;
-  quantity?: number;
-  size?: string | null;
-  colour?: string | null;
-  variantId?: string | null;
+  storeName?: string;
+  /** The multi-item cart, grown one SHOP re-render at a time. */
+  items?: FlowCartItem[];
   deliveryZoneId?: string | null;
   deliveryZoneName?: string | null;
   address?: string | null;
-  unitPriceKobo?: number;
   subtotalKobo?: number;
   deliveryFeeKobo?: number;
   totalKobo?: number;
+}
+
+/** Sum of the cart's line totals. */
+export function cartSubtotalKobo(items: FlowCartItem[] | undefined): number {
+  return (items ?? []).reduce((sum, item) => sum + item.lineKobo, 0);
 }
 
 export function hashFlowToken(token: string): string {

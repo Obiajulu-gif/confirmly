@@ -842,6 +842,36 @@ function activeProducts(merchantId: string): Promise<ProductWithVariants[]> {
   });
 }
 
+/**
+ * Entry point for a completed native WhatsApp Flow order. The Flow endpoint has
+ * already resolved every item, variant, price and delivery value from
+ * PostgreSQL, so we hand a fully-matched draft to recalcAndRespond, which
+ * re-grounds it against the catalogue and drives the unchanged summary →
+ * confirm → Monnify path — no AI and no free-text round-trip.
+ */
+export async function presentFlowOrder(
+  merchantId: string,
+  message: ParsedInboundMessage,
+  draft: Draft
+): Promise<void> {
+  const customer = await upsertCustomer(merchantId, message);
+  let conversation = await upsertConversation(merchantId, customer.id, message);
+  // Completing a Flow is self-serving — resume automation so a prior human
+  // handover never swallows the order.
+  if (conversation.automationMode === "HUMAN" || conversation.pendingQuestion) {
+    conversation = await prisma.conversation.update({
+      where: { id: conversation.id },
+      data: { automationMode: "AUTO", pendingQuestion: null },
+    });
+  }
+  const ctx: EngineContext = { merchantId, customer, conversation };
+  const products = await activeProducts(merchantId);
+  const zones = await prisma.deliveryZone.findMany({
+    where: { merchantId, active: true },
+  });
+  await recalcAndRespond(ctx, draft, products, zones);
+}
+
 async function applyOrderIntent(
   ctx: EngineContext,
   intent: OrderIntent

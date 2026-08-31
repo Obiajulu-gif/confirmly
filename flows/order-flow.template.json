@@ -4,9 +4,8 @@
   "data_api_version": "3.0",
   "routing_model": {
     "START": ["SEARCH"],
-    "SEARCH": ["STORE"],
-    "STORE": ["ITEM"],
-    "ITEM": ["DELIVERY"],
+    "SEARCH": ["SHOP"],
+    "SHOP": ["DELIVERY"],
     "DELIVERY": ["REVIEW"],
     "REVIEW": []
   },
@@ -148,18 +147,21 @@
       }
     },
     {
-      "id": "STORE",
-      "title": "Catalogue",
+      "id": "SHOP",
+      "title": "Shop",
       "terminal": false,
       "data": {
-        "store_name": {
+        "store_name": { "type": "string", "__example__": "Ada Styles" },
+        "has_cart": { "type": "boolean", "__example__": false },
+        "cart_summary": {
           "type": "string",
-          "__example__": "Ada Styles"
+          "__example__": "Your cart is empty. Pick an item below and choose Add this item."
         },
-        "has_products": { "type": "boolean", "__example__": true },
+        "cart_total": { "type": "string", "__example__": "" },
+        "has_skus": { "type": "boolean", "__example__": true },
         "has_error": { "type": "boolean", "__example__": false },
         "error_message": { "type": "string", "__example__": "" },
-        "products": {
+        "skus": {
           "type": "array",
           "items": {
             "type": "object",
@@ -172,8 +174,8 @@
           "__example__": [
             {
               "id": "product_example",
-              "title": "Cotton Polo",
-              "description": "₦12,000 · 8 in stock"
+              "title": "Cotton Polo — Black / L",
+              "description": "₦12,000 · 8 left"
             }
           ]
         }
@@ -181,168 +183,60 @@
       "layout": {
         "type": "SingleColumnLayout",
         "children": [
-          {
-            "type": "TextHeading",
-            "text": "${data.store_name}"
-          },
+          { "type": "TextHeading", "text": "${data.store_name}" },
           {
             "type": "If",
             "condition": "${data.has_error}",
             "then": [{ "type": "TextCaption", "text": "${data.error_message}" }]
           },
           {
-            "type": "TextBody",
-            "text": "Choose a product to order."
-          },
-          {
             "type": "If",
-            "condition": "${data.has_products}",
+            "condition": "${data.has_cart}",
             "then": [
-              {
-                "type": "RadioButtonsGroup",
-                "name": "product_id",
-                "label": "Products",
-                "required": true,
-                "data-source": "${data.products}"
-              }
+              { "type": "TextBody", "text": "${data.cart_summary}" },
+              { "type": "TextSubheading", "text": "${data.cart_total}" }
             ]
           },
           {
-            "type": "Footer",
-            "label": "Continue",
-            "on-click-action": {
-              "name": "data_exchange",
-              "payload": {
-                "product_id": "${form.product_id}"
-              }
-            }
-          }
-        ]
-      }
-    },
-    {
-      "id": "ITEM",
-      "title": "Item details",
-      "terminal": false,
-      "data": {
-        "product_name": { "type": "string", "__example__": "Cotton Polo" },
-        "price_label": { "type": "string", "__example__": "₦12,000 each" },
-        "has_error": { "type": "boolean", "__example__": false },
-        "error_message": { "type": "string", "__example__": "" },
-        "has_image": { "type": "boolean", "__example__": false },
-        "product_image": { "type": "string", "__example__": "" },
-        "has_quantities": { "type": "boolean", "__example__": true },
-        "quantities": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "id": { "type": "string" },
-              "title": { "type": "string" }
-            }
-          },
-          "__example__": [
-            { "id": "1", "title": "1" },
-            { "id": "2", "title": "2" }
-          ]
-        },
-        "has_sizes": { "type": "boolean", "__example__": true },
-        "sizes": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "id": { "type": "string" },
-              "title": { "type": "string" }
-            }
-          },
-          "__example__": [
-            { "id": "M", "title": "M" },
-            { "id": "L", "title": "L" }
-          ]
-        },
-        "has_colours": { "type": "boolean", "__example__": true },
-        "colours": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "id": { "type": "string" },
-              "title": { "type": "string" }
-            }
-          },
-          "__example__": [
-            { "id": "Black", "title": "Black" },
-            { "id": "Blue", "title": "Blue" }
-          ]
-        }
-      },
-      "layout": {
-        "type": "SingleColumnLayout",
-        "children": [
-          {
             "type": "If",
-            "condition": "${data.has_image}",
+            "condition": "${data.has_skus}",
             "then": [
               {
-                "type": "Image",
-                "src": "${data.product_image}",
-                "height": 180,
-                "scale-type": "contain",
-                "alt-text": "${data.product_name}"
-              }
-            ]
-          },
-          {
-            "type": "TextHeading",
-            "text": "${data.product_name}"
-          },
-          {
-            "type": "If",
-            "condition": "${data.has_error}",
-            "then": [{ "type": "TextCaption", "text": "${data.error_message}" }]
-          },
-          {
-            "type": "TextBody",
-            "text": "${data.price_label}"
-          },
-          {
-            "type": "If",
-            "condition": "${data.has_quantities}",
-            "then": [
+                "type": "Dropdown",
+                "name": "sku",
+                "label": "Add an item",
+                "required": false,
+                "data-source": "${data.skus}"
+              },
               {
                 "type": "Dropdown",
                 "name": "quantity",
                 "label": "Quantity",
-                "required": true,
-                "data-source": "${data.quantities}"
+                "required": false,
+                "data-source": [
+                  { "id": "1", "title": "1" },
+                  { "id": "2", "title": "2" },
+                  { "id": "3", "title": "3" },
+                  { "id": "4", "title": "4" },
+                  { "id": "5", "title": "5" },
+                  { "id": "6", "title": "6" },
+                  { "id": "7", "title": "7" },
+                  { "id": "8", "title": "8" },
+                  { "id": "9", "title": "9" },
+                  { "id": "10", "title": "10" }
+                ]
               }
             ]
           },
           {
-            "type": "If",
-            "condition": "${data.has_sizes}",
-            "then": [
-              {
-                "type": "RadioButtonsGroup",
-                "name": "size",
-                "label": "Size",
-                "required": true,
-                "data-source": "${data.sizes}"
-              }
-            ]
-          },
-          {
-            "type": "If",
-            "condition": "${data.has_colours}",
-            "then": [
-              {
-                "type": "RadioButtonsGroup",
-                "name": "colour",
-                "label": "Colour",
-                "required": true,
-                "data-source": "${data.colours}"
-              }
+            "type": "RadioButtonsGroup",
+            "name": "next_action",
+            "label": "What would you like to do?",
+            "required": true,
+            "data-source": [
+              { "id": "add", "title": "Add this item to cart" },
+              { "id": "checkout", "title": "Checkout" },
+              { "id": "remove", "title": "Remove last item" }
             ]
           },
           {
@@ -351,9 +245,9 @@
             "on-click-action": {
               "name": "data_exchange",
               "payload": {
+                "sku": "${form.sku}",
                 "quantity": "${form.quantity}",
-                "size": "${form.size}",
-                "colour": "${form.colour}"
+                "next_action": "${form.next_action}"
               }
             }
           }

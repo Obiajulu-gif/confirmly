@@ -1,12 +1,13 @@
 import "server-only";
 import type { WhatsAppFlowSession } from "@prisma/client";
 import { prisma } from "@/lib/db";
-import { env } from "@/lib/env";
 import { formatNaira } from "@/lib/money";
 import { searchScore } from "@/lib/orders/matching";
 import {
+  cartSubtotalKobo,
   readFlowState,
   updateFlowSession,
+  type FlowCartItem,
   type FlowOrderState,
 } from "@/lib/whatsapp/flow-session";
 
@@ -17,6 +18,12 @@ import {
  * delivery fee, merchant id — is ever trusted: the client may only choose an id
  * from a list we previously served, and every id is re-validated against the
  * database before it advances the order.
+ *
+ * The cart is multi-item. WhatsApp Flows forbid backward navigation, so the
+ * "add another item" loop is a SAME-SCREEN re-render of the SHOP screen (never
+ * a jump back to a catalogue screen). Products with variants are expanded into
+ * one selectable SKU row each, so a size/colour is chosen without a per-item
+ * sub-screen.
  */
 
 export interface FlowScreenResponse {
@@ -25,15 +32,24 @@ export interface FlowScreenResponse {
 }
 
 const MAX_STORE_ROWS = 20;
-const MAX_PRODUCT_ROWS = 12;
+const MAX_SKU_ROWS = 30;
 const MAX_QUANTITY = 10;
 const SEARCH_THRESHOLD = 0.5;
-// WhatsApp Flow images are inlined as Base64 in the (then AES-GCM-encrypted)
-// data-exchange response; keep the source small so the encoded payload stays
-// well within Meta's response-size limits. Larger images just render text-only.
-const MAX_IMAGE_BYTES = 100_000;
+/** Separates productId from variantId inside a SHOP sku row id. */
+const SKU_SEP = "::";
 
 type Row = { id: string; title: string; description?: string };
+
+function str(payload: Record<string, unknown>, key: string): string {
+  const value = payload[key];
+  if (typeof value === "string") return value;
+  if (typeof value === "number") return String(value);
+  return "";
+}
+
+function title30(value: string): string {
+  return value.slice(0, 30);
+}
 
 /**
  * A store's pickup option may be named "Pickup", "Store pickup", "Pickup
@@ -55,8 +71,8 @@ function errorFields(error?: string): {
 /**
  * A self-contained, DB-free re-render of a screen carrying only an error.
  * WhatsApp Flows allow a data_exchange response to re-render the SAME screen or
- * move forward, never backward, so an unrecoverable state (expired session,
- * an item that just sold out) or an unexpected failure must stay on the current
+ * move forward, never backward, so an unrecoverable state (expired session, an
+ * item that just sold out) or an unexpected failure must stay on the current
  * screen. Every collection is empty and its `has_*` guard is false, so no
  * required control is served without options.
  */
@@ -66,25 +82,16 @@ export function recoveryScreen(
 ): FlowScreenResponse {
   const base = errorFields(message);
   switch (screenId) {
-    case "STORE":
+    case "SHOP":
       return {
-        screen: "STORE",
-        data: { store_name: "Your order", has_products: false, products: [], ...base },
-      };
-    case "ITEM":
-      return {
-        screen: "ITEM",
+        screen: "SHOP",
         data: {
-          product_name: "Your item",
-          price_label: "",
-          has_image: false,
-          product_image: "",
-          has_quantities: false,
-          quantities: [],
-          has_sizes: false,
-          sizes: [],
-          has_colours: false,
-          colours: [],
+          store_name: "Your order",
+          has_cart: false,
+          cart_summary: "",
+          cart_total: "",
+          has_skus: false,
+          skus: [],
           ...base,
         },
       };
@@ -105,17 +112,6 @@ export function recoveryScreen(
         },
       };
   }
-}
-
-function str(payload: Record<string, unknown>, key: string): string {
-  const value = payload[key];
-  if (typeof value === "string") return value;
-  if (typeof value === "number") return String(value);
-  return "";
-}
-
-function title30(value: string): string {
-  return value.slice(0, 30);
 }
 
 // ---- Store list / search ---------------------------------------------------
@@ -193,126 +189,92 @@ async function buildSearchScreen(params: {
   };
 }
 
-// ---- Store catalogue -------------------------------------------------------
+// ---- SHOP: catalogue + cart ------------------------------------------------
 
-async function buildStoreScreen(
+function loadProduct(productId: string, merchantId: string) {
+  return prisma.product.findFirst({
+    where: { id: productId, merchantId, active: true, stockQuantity: { gt: 0 } },
+    include: { variants: true },
+  });
+}
+
+function variantLabelOf(size: string | null, colour: string | null): string {
+  return [size, colour].filter(Boolean).join(" / ");
+}
+
+/** Expands the merchant's catalogue into one purchasable SKU row per variant. */
+async function buildSkuRows(merchantId: string): Promise<Row[]> {
+  const products = await prisma.product.findMany({
+    where: { merchantId, active: true, stockQuantity: { gt: 0 } },
+    orderBy: [{ category: "asc" }, { name: "asc" }],
+    include: { variants: true },
+  });
+  const rows: Row[] = [];
+  for (const product of products) {
+    const inStockVariants = product.variants.filter((v) => v.stockQuantity > 0);
+    if (inStockVariants.length) {
+      for (const variant of inStockVariants) {
+        const label = variantLabelOf(variant.size, variant.colour) || "Option";
+        const price = product.priceKobo + variant.priceAdjustmentKobo;
+        rows.push({
+          id: `${product.id}${SKU_SEP}${variant.id}`,
+          title: title30(`${product.name} — ${label}`),
+          description: `${formatNaira(price)} · ${variant.stockQuantity} left`,
+        });
+        if (rows.length >= MAX_SKU_ROWS) return rows;
+      }
+    } else {
+      rows.push({
+        id: product.id,
+        title: title30(product.name),
+        description: `${formatNaira(product.priceKobo)} · ${product.stockQuantity} in stock`,
+      });
+      if (rows.length >= MAX_SKU_ROWS) return rows;
+    }
+  }
+  return rows;
+}
+
+function cartLines(items: FlowCartItem[]): string {
+  return items
+    .map((item) => {
+      const label = item.variantLabel ? ` (${item.variantLabel})` : "";
+      return `${item.quantity} × ${item.name}${label} — ${formatNaira(item.lineKobo)}`;
+    })
+    .join("\n");
+}
+
+async function buildShopScreen(
   merchantId: string,
+  state: FlowOrderState,
   error?: string
 ): Promise<FlowScreenResponse> {
   const merchant = await prisma.merchant.findFirst({
     where: { id: merchantId, active: true },
     select: { name: true },
   });
-  // Flows forbid backward navigation, so a store that vanished mid-flow can
-  // only re-render STORE with an error — never jump back to SEARCH.
   if (!merchant) {
     return recoveryScreen(
-      "STORE",
+      "SHOP",
       "That store is no longer available. Close this and start again."
     );
   }
-  const products = await prisma.product.findMany({
-    where: { merchantId, active: true, stockQuantity: { gt: 0 } },
-    orderBy: [{ category: "asc" }, { name: "asc" }],
-    take: MAX_PRODUCT_ROWS,
-    select: { id: true, name: true, priceKobo: true, stockQuantity: true },
-  });
-  const rows: Row[] = products.map((product) => ({
-    id: product.id,
-    title: title30(product.name),
-    description: `${formatNaira(product.priceKobo)} · ${product.stockQuantity} in stock`,
-  }));
-  const message =
-    error ??
-    (rows.length
-      ? undefined
-      : `${merchant.name} has no items available right now.`);
+  const skus = await buildSkuRows(merchantId);
+  const items = state.items ?? [];
+  const subtotal = cartSubtotalKobo(items);
+  const summary = items.length
+    ? `🛒 Your cart\n${cartLines(items)}`
+    : "Your cart is empty. Pick an item below and choose “Add this item”.";
+
   return {
-    screen: "STORE",
+    screen: "SHOP",
     data: {
       store_name: merchant.name,
-      has_products: rows.length > 0,
-      products: rows,
-      ...errorFields(message),
-    },
-  };
-}
-
-// ---- Item detail -----------------------------------------------------------
-
-type ProductWithVariants = NonNullable<
-  Awaited<ReturnType<typeof loadProduct>>
->;
-
-function loadProduct(productId: string, merchantId: string) {
-  return prisma.product.findFirst({
-    where: {
-      id: productId,
-      merchantId,
-      active: true,
-      stockQuantity: { gt: 0 },
-    },
-    include: { variants: true },
-  });
-}
-
-function distinctVariantValues(
-  product: ProductWithVariants,
-  key: "size" | "colour"
-): string[] {
-  return [
-    ...new Set(
-      product.variants
-        .filter((variant) => variant.stockQuantity > 0)
-        .map((variant) => variant[key])
-        .filter((value): value is string => Boolean(value))
-    ),
-  ];
-}
-
-async function productImageBase64(
-  product: ProductWithVariants
-): Promise<string | null> {
-  const allowGenerated =
-    product.imageSource !== "AI_GENERATED" ||
-    Boolean(product.imageApprovedAt) ||
-    env().ALLOW_UNAPPROVED_AI_PRODUCT_IMAGES;
-  if (!allowGenerated) return null;
-
-  const asset = await prisma.productImageAsset.findUnique({
-    where: { productId: product.id },
-    select: { bytes: true, sizeBytes: true },
-  });
-  if (!asset || asset.sizeBytes > MAX_IMAGE_BYTES) return null;
-  return Buffer.from(asset.bytes).toString("base64");
-}
-
-async function buildItemScreen(
-  product: ProductWithVariants,
-  error?: string
-): Promise<FlowScreenResponse> {
-  const maxQty = Math.min(MAX_QUANTITY, product.stockQuantity);
-  const quantities: Row[] = Array.from({ length: maxQty }, (_, index) => ({
-    id: String(index + 1),
-    title: String(index + 1),
-  }));
-  const sizes = distinctVariantValues(product, "size");
-  const colours = distinctVariantValues(product, "colour");
-  const image = await productImageBase64(product);
-
-  return {
-    screen: "ITEM",
-    data: {
-      product_name: product.name,
-      price_label: `${formatNaira(product.priceKobo)} each`,
-      has_image: Boolean(image),
-      product_image: image ?? "",
-      has_quantities: quantities.length > 0,
-      quantities,
-      has_sizes: sizes.length > 0,
-      sizes: sizes.map((size) => ({ id: size, title: size })),
-      has_colours: colours.length > 0,
-      colours: colours.map((colour) => ({ id: colour, title: colour })),
+      has_cart: items.length > 0,
+      cart_summary: summary,
+      cart_total: items.length ? `Subtotal: ${formatNaira(subtotal)}` : "",
+      has_skus: skus.length > 0,
+      skus,
       ...errorFields(error),
     },
   };
@@ -355,23 +317,16 @@ async function buildReviewScreen(
   state: FlowOrderState,
   flowToken: string
 ): Promise<FlowScreenResponse> {
-  const product = state.productId
-    ? await prisma.product.findUnique({
-        where: { id: state.productId },
-        select: { name: true },
-      })
-    : null;
-  const variantBits = [state.size, state.colour].filter(Boolean).join(", ");
-  const line1 = `${state.quantity ?? 1} × ${product?.name ?? "item"}${
-    variantBits ? ` (${variantBits})` : ""
-  }`;
+  const items = state.items ?? [];
+  const itemLines = cartLines(items);
   const isPickup = isPickupZone(state.deliveryZoneName);
   const deliveryLine = state.deliveryZoneName
     ? `${isPickup ? "Pickup at" : "Deliver to"} ${state.deliveryZoneName}`
     : "";
   const addressLine = !isPickup && state.address ? state.address : "";
-  const summaryLines = [line1, deliveryLine, addressLine].filter(Boolean);
-  const breakdown = `Items ${formatNaira(state.subtotalKobo ?? 0)} + delivery ${formatNaira(
+  const summaryLines = [itemLines, deliveryLine, addressLine].filter(Boolean);
+  const subtotal = cartSubtotalKobo(items);
+  const breakdown = `Items ${formatNaira(subtotal)} + delivery ${formatNaira(
     state.deliveryFeeKobo ?? 0
   )}`;
 
@@ -379,7 +334,7 @@ async function buildReviewScreen(
     screen: "REVIEW",
     data: {
       summary: `${summaryLines.join("\n")}\n\n${breakdown}`,
-      total_label: `Total: ${formatNaira(state.totalKobo ?? 0)}`,
+      total_label: `Total: ${formatNaira(state.totalKobo ?? subtotal)}`,
       flow_token: flowToken,
     },
   };
@@ -422,7 +377,7 @@ async function handleSearch(
       });
     }
     // Confirm the store has something to sell before advancing — SEARCH can
-    // re-render itself with a hint, but STORE cannot navigate back to SEARCH.
+    // re-render itself with a hint, but SHOP cannot navigate back to SEARCH.
     const productCount = await prisma.product.count({
       where: { merchantId: merchant.id, active: true, stockQuantity: { gt: 0 } },
     });
@@ -433,114 +388,161 @@ async function handleSearch(
         error: `${merchant.name} has no items available right now. Try another store.`,
       });
     }
-    await updateFlowSession(session.id, {
-      state: { ...state, merchantId: merchant.id },
+    const nextState: FlowOrderState = {
+      ...state,
       merchantId: merchant.id,
-      currentScreen: "STORE",
+      storeName: merchant.name,
+      items: [],
+    };
+    await updateFlowSession(session.id, {
+      state: nextState,
+      merchantId: merchant.id,
+      currentScreen: "SHOP",
     });
-    return buildStoreScreen(merchant.id);
+    return buildShopScreen(merchant.id, nextState);
   }
 
   return buildSearchScreen({ mode, query });
 }
 
-async function handleStore(
+/** Parses a SHOP sku row id into its product and optional variant ids. */
+function parseSku(sku: string): { productId: string; variantId: string | null } {
+  const [productId, variantId] = sku.split(SKU_SEP);
+  return { productId: productId ?? "", variantId: variantId ?? null };
+}
+
+async function handleShop(
   session: WhatsAppFlowSession,
   state: FlowOrderState,
   payload: Record<string, unknown>
 ): Promise<FlowScreenResponse> {
   if (!state.merchantId) {
     return recoveryScreen(
-      "STORE",
+      "SHOP",
       "Your order session expired. Close this and start a new order."
     );
   }
-  const product = await loadProduct(str(payload, "product_id"), state.merchantId);
+  const merchantId = state.merchantId;
+  const items = [...(state.items ?? [])];
+  const action = str(payload, "next_action");
+
+  // --- Remove the last item ------------------------------------------------
+  if (action === "remove") {
+    if (!items.length) {
+      return buildShopScreen(merchantId, state, "Your cart is already empty.");
+    }
+    const removed = items.pop();
+    const nextState = { ...state, items, subtotalKobo: cartSubtotalKobo(items) };
+    await updateFlowSession(session.id, { state: nextState });
+    return buildShopScreen(
+      merchantId,
+      nextState,
+      `Removed ${removed?.name ?? "the last item"}.`
+    );
+  }
+
+  // --- Checkout ------------------------------------------------------------
+  if (action === "checkout") {
+    if (!items.length) {
+      return buildShopScreen(
+        merchantId,
+        state,
+        "Add at least one item to your cart before checking out."
+      );
+    }
+    const nextState = { ...state, items, subtotalKobo: cartSubtotalKobo(items) };
+    await updateFlowSession(session.id, {
+      state: nextState,
+      currentScreen: "DELIVERY",
+    });
+    return buildDeliveryScreen(merchantId);
+  }
+
+  // --- Add an item (default) ----------------------------------------------
+  const { productId, variantId } = parseSku(str(payload, "sku"));
+  if (!productId) {
+    return buildShopScreen(merchantId, state, "Pick an item to add to your cart.");
+  }
+  const product = await loadProduct(productId, merchantId);
   if (!product) {
-    return buildStoreScreen(
-      state.merchantId,
-      "That product is no longer available."
-    );
-  }
-  await updateFlowSession(session.id, {
-    state: { ...state, productId: product.id },
-    currentScreen: "ITEM",
-  });
-  return buildItemScreen(product);
-}
-
-async function handleItem(
-  session: WhatsAppFlowSession,
-  state: FlowOrderState,
-  payload: Record<string, unknown>
-): Promise<FlowScreenResponse> {
-  if (!state.merchantId || !state.productId) {
-    return recoveryScreen(
-      "ITEM",
-      "Your order session expired. Close this and start a new order."
-    );
-  }
-  const product = await loadProduct(state.productId, state.merchantId);
-  if (!product) {
-    // Cannot go back to STORE (backward), so re-render ITEM with the error.
-    return recoveryScreen(
-      "ITEM",
-      "This item just sold out. Close this and start again to pick another."
+    return buildShopScreen(
+      merchantId,
+      state,
+      "That item just sold out. Pick another."
     );
   }
 
-  const quantity = Math.trunc(Number(str(payload, "quantity")));
-  const maxQty = Math.min(MAX_QUANTITY, product.stockQuantity);
-  if (!Number.isInteger(quantity) || quantity < 1 || quantity > maxQty) {
-    return buildItemScreen(product, "Choose a valid quantity.");
-  }
-
-  const sizes = distinctVariantValues(product, "size");
-  const colours = distinctVariantValues(product, "colour");
-  let variantId: string | null = null;
+  let unitPriceKobo = product.priceKobo;
   let size: string | null = null;
   let colour: string | null = null;
-  let unitPriceKobo = product.priceKobo;
+  let resolvedVariantId: string | null = null;
+  let availableStock = product.stockQuantity;
 
-  if (sizes.length || colours.length) {
-    if (sizes.length) {
-      size = str(payload, "size");
-      if (!size || !sizes.includes(size)) {
-        return buildItemScreen(product, "Select a size.");
-      }
-    }
-    if (colours.length) {
-      colour = str(payload, "colour");
-      if (!colour || !colours.includes(colour)) {
-        return buildItemScreen(product, "Select a colour.");
-      }
-    }
+  if (variantId) {
     const variant = product.variants.find(
-      (candidate) =>
-        (candidate.size ?? null) === (size || null) &&
-        (candidate.colour ?? null) === (colour || null)
+      (candidate) => candidate.id === variantId && candidate.stockQuantity > 0
     );
-    if (!variant || variant.stockQuantity < quantity) {
-      return buildItemScreen(product, "That option is out of stock.");
+    if (!variant) {
+      return buildShopScreen(
+        merchantId,
+        state,
+        "That option is out of stock. Pick another."
+      );
     }
-    variantId = variant.id;
+    resolvedVariantId = variant.id;
+    size = variant.size ?? null;
+    colour = variant.colour ?? null;
     unitPriceKobo = product.priceKobo + variant.priceAdjustmentKobo;
+    availableStock = variant.stockQuantity;
   }
 
-  const subtotalKobo = unitPriceKobo * quantity;
-  await updateFlowSession(session.id, {
-    state: {
-      ...state,
-      quantity,
+  const quantity = Math.trunc(Number(str(payload, "quantity") || "1"));
+  const alreadyInCart = items
+    .filter((i) => i.productId === productId && i.variantId === resolvedVariantId)
+    .reduce((sum, i) => sum + i.quantity, 0);
+  const maxAddable = Math.min(MAX_QUANTITY, availableStock - alreadyInCart);
+  if (!Number.isInteger(quantity) || quantity < 1) {
+    return buildShopScreen(merchantId, state, "Choose a valid quantity.");
+  }
+  if (quantity > maxAddable) {
+    return buildShopScreen(
+      merchantId,
+      state,
+      maxAddable > 0
+        ? `Only ${maxAddable} more of that item ${maxAddable === 1 ? "is" : "are"} available.`
+        : "You already have all the available stock of that item in your cart."
+    );
+  }
+
+  const variantLabel = variantLabelOf(size, colour) || null;
+  // Merge with an identical line if present, else append.
+  const existing = items.find(
+    (i) => i.productId === productId && i.variantId === resolvedVariantId
+  );
+  if (existing) {
+    existing.quantity += quantity;
+    existing.lineKobo = existing.unitPriceKobo * existing.quantity;
+  } else {
+    items.push({
+      productId,
+      variantId: resolvedVariantId,
+      name: product.name,
+      variantLabel,
       size,
       colour,
-      variantId,
+      quantity,
       unitPriceKobo,
-      subtotalKobo,
-    },
-    currentScreen: "DELIVERY",
-  });
-  return buildDeliveryScreen(state.merchantId);
+      lineKobo: unitPriceKobo * quantity,
+    });
+  }
+
+  const nextState = { ...state, items, subtotalKobo: cartSubtotalKobo(items) };
+  await updateFlowSession(session.id, { state: nextState });
+  return buildShopScreen(
+    merchantId,
+    nextState,
+    `Added ${quantity} × ${product.name}. Add more, or choose Checkout.`
+  );
 }
 
 async function handleDelivery(
@@ -549,7 +551,7 @@ async function handleDelivery(
   payload: Record<string, unknown>,
   flowToken: string
 ): Promise<FlowScreenResponse> {
-  if (!state.merchantId || !state.productId || !state.quantity) {
+  if (!state.merchantId || !(state.items ?? []).length) {
     return recoveryScreen(
       "DELIVERY",
       "Your order session expired. Close this and start a new order."
@@ -575,13 +577,14 @@ async function handleDelivery(
     );
   }
 
-  const subtotalKobo = state.subtotalKobo ?? 0;
+  const subtotalKobo = cartSubtotalKobo(state.items);
   const totalKobo = subtotalKobo + zone.feeKobo;
   const nextState: FlowOrderState = {
     ...state,
     deliveryZoneId: zone.id,
     deliveryZoneName: zone.name,
     address: isPickup ? address || "Store pickup" : address,
+    subtotalKobo,
     deliveryFeeKobo: zone.feeKobo,
     totalKobo,
   };
@@ -619,10 +622,8 @@ export async function resolveFlowScreen(input: {
         return handleStart(input.session, state, payload);
       case "SEARCH":
         return handleSearch(input.session, state, payload);
-      case "STORE":
-        return handleStore(input.session, state, payload);
-      case "ITEM":
-        return handleItem(input.session, state, payload);
+      case "SHOP":
+        return handleShop(input.session, state, payload);
       case "DELIVERY":
         return handleDelivery(input.session, state, payload, input.flowToken);
       default:

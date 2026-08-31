@@ -11,7 +11,9 @@ import {
 } from "node:crypto";
 import { resetEnvCache } from "@/lib/env";
 import {
+  cartSubtotalKobo,
   isFlowSessionUsable,
+  type FlowCartItem,
   type FlowOrderState,
 } from "@/lib/whatsapp/flow-session";
 
@@ -193,13 +195,13 @@ describe("flow endpoint", () => {
   });
 
   it("recovers on the SAME screen (never backward) when resolution throws", async () => {
-    getValidFlowSession.mockResolvedValue({ id: "s1", currentScreen: "ITEM" });
+    getValidFlowSession.mockResolvedValue({ id: "s1", currentScreen: "SHOP" });
     resolveFlowScreen.mockRejectedValue(new Error("db down"));
     const { envelope, aesKey, iv } = encryptAsMeta({
       version: "3.0",
       action: "data_exchange",
-      screen: "ITEM",
-      data: { quantity: "2" },
+      screen: "SHOP",
+      data: { next_action: "add", sku: "p1" },
       flow_token: "good-token",
     });
 
@@ -207,10 +209,10 @@ describe("flow endpoint", () => {
 
     expect(res.status).toBe(200);
     const body = decryptAsMeta(await res.text(), aesKey, iv);
-    // Forward-only: an ITEM failure must re-render ITEM, not jump to SEARCH.
-    expect(body.screen).toBe("ITEM");
+    // Forward-only: a SHOP failure must re-render SHOP, not jump to SEARCH.
+    expect(body.screen).toBe("SHOP");
     expect(body.data.has_error).toBe(true);
-    expect(body.data.has_quantities).toBe(false);
+    expect(body.data.has_skus).toBe(false);
   });
 });
 
@@ -235,6 +237,46 @@ describe("isFlowSessionUsable", () => {
   });
 });
 
+describe("cartSubtotalKobo", () => {
+  const item = (quantity: number, lineKobo: number): FlowCartItem => ({
+    productId: "p",
+    variantId: null,
+    name: "x",
+    variantLabel: null,
+    size: null,
+    colour: null,
+    quantity,
+    unitPriceKobo: lineKobo / quantity,
+    lineKobo,
+  });
+
+  it("sums line totals across a multi-item cart", () => {
+    expect(cartSubtotalKobo([item(2, 8000), item(1, 500), item(3, 1500)])).toBe(
+      10000
+    );
+  });
+
+  it("is zero for an empty or missing cart", () => {
+    expect(cartSubtotalKobo([])).toBe(0);
+    expect(cartSubtotalKobo(undefined)).toBe(0);
+  });
+});
+
 // Compile-time guard: the endpoint's state contract stays in sync.
-const _stateSample: FlowOrderState = { merchantId: "m", productId: "p", quantity: 1 };
+const _stateSample: FlowOrderState = {
+  merchantId: "m",
+  items: [
+    {
+      productId: "p",
+      variantId: null,
+      name: "Item",
+      variantLabel: null,
+      size: null,
+      colour: null,
+      quantity: 1,
+      unitPriceKobo: 1000,
+      lineKobo: 1000,
+    },
+  ],
+};
 void _stateSample;

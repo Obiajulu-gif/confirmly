@@ -5,6 +5,8 @@ import { prisma } from "@/lib/db";
 import { env, isDemoMode } from "@/lib/env";
 import { logger } from "@/lib/logger";
 import { formatNaira } from "@/lib/money";
+import { EMPTY_DRAFT, type Draft } from "@/lib/orders/draft";
+import { presentFlowOrder } from "@/lib/orders/engine";
 import { scoreMatch, searchScore } from "@/lib/orders/matching";
 import {
   sendButtons,
@@ -748,7 +750,8 @@ async function handleFlowReply(
   }
 
   const state = readFlowState(session);
-  if (!state.merchantId || !state.productId || !state.quantity) {
+  const items = state.items ?? [];
+  if (!state.merchantId || !items.length) {
     await sendText(
       message.from,
       "Please reopen the order form and complete your selection."
@@ -768,50 +771,42 @@ async function handleFlowReply(
     return { handled: true };
   }
 
-  const product = await prisma.product.findFirst({
-    where: { id: state.productId, merchantId: context.merchant.id, active: true },
-    select: { name: true },
-  });
-  if (!product) {
-    await sendText(
-      message.from,
-      "That product is no longer available. Send MENU to browse again."
-    );
-    return { handled: true };
-  }
-
-  const quantity = Math.max(1, Math.min(99, state.quantity ?? 1));
-  const isPickup = (state.deliveryZoneName ?? "").toLowerCase() === "pickup";
-  const orderText = [
-    `I want ${quantity} ${product.name}`,
-    state.colour ?? "",
-    state.size ?? "",
-    state.deliveryZoneName
-      ? `${isPickup ? "pickup at" : "deliver to"} ${state.deliveryZoneName}`
-      : "",
-    !isPickup && state.address ? `at ${state.address}` : "",
-  ]
-    .filter(Boolean)
-    .join(", ");
+  // Build a fully server-resolved, matched draft straight from the cart — no
+  // English-sentence round-trip through the AI. The engine re-grounds it
+  // against the catalogue and drives the unchanged summary → confirm → Monnify
+  // path (prices and stock are re-checked from PostgreSQL there).
+  const isPickup = (state.deliveryZoneName ?? "").toLowerCase().includes("pickup");
+  const draft: Draft = {
+    ...EMPTY_DRAFT,
+    items: items.map((item) => ({
+      searchTerm: item.name,
+      quantity: item.quantity,
+      size: item.size,
+      colour: item.colour,
+      status: "matched" as const,
+      productId: item.productId,
+      productName: item.name,
+      variantId: item.variantId,
+      variantLabel: item.variantLabel,
+      unitPriceKobo: item.unitPriceKobo,
+      alternatives: [],
+    })),
+    deliveryMethod: isPickup ? "PICKUP" : "DELIVERY",
+    deliveryArea: isPickup ? null : state.deliveryZoneName ?? null,
+    deliveryZoneId: state.deliveryZoneId ?? null,
+    deliveryZoneName: state.deliveryZoneName ?? null,
+    deliveryFeeKobo: state.deliveryFeeKobo ?? null,
+    deliveryAddress: isPickup ? null : state.address ?? null,
+    notes: null,
+  };
 
   logger.info("whatsapp Flow order submitted", {
     merchantId: context.merchant.id,
-    productId: state.productId,
-    quantity,
+    items: draft.items.length,
   });
 
-  return {
-    handled: false,
-    forwardedMessage: {
-      ...message,
-      kind: "text",
-      text: orderText,
-      interactiveId: null,
-      location: null,
-      flowResponse: null,
-      rawType: "interactive.flow_order",
-    },
-  };
+  await presentFlowOrder(context.merchant.id, message, draft);
+  return { handled: true };
 }
 
 /**
