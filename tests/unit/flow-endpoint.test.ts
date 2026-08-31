@@ -25,7 +25,11 @@ vi.mock("@/lib/whatsapp/flow-session", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/whatsapp/flow-session")>();
   return { ...actual, getValidFlowSession };
 });
-vi.mock("@/lib/whatsapp/flow-screens", () => ({ resolveFlowScreen }));
+vi.mock("@/lib/whatsapp/flow-screens", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("@/lib/whatsapp/flow-screens")>();
+  return { ...actual, resolveFlowScreen };
+});
 
 import { POST } from "@/app/api/whatsapp/flow/route";
 
@@ -176,6 +180,37 @@ describe("flow endpoint", () => {
         session,
       })
     );
+  });
+
+  it("refuses with 503 when WHATSAPP_APP_SECRET is unset", async () => {
+    delete process.env.WHATSAPP_APP_SECRET;
+    resetEnvCache();
+    const { envelope } = encryptAsMeta({ version: "3.0", action: "ping" });
+
+    const res = await POST(makeRequest(envelope));
+
+    expect(res.status).toBe(503);
+  });
+
+  it("recovers on the SAME screen (never backward) when resolution throws", async () => {
+    getValidFlowSession.mockResolvedValue({ id: "s1", currentScreen: "ITEM" });
+    resolveFlowScreen.mockRejectedValue(new Error("db down"));
+    const { envelope, aesKey, iv } = encryptAsMeta({
+      version: "3.0",
+      action: "data_exchange",
+      screen: "ITEM",
+      data: { quantity: "2" },
+      flow_token: "good-token",
+    });
+
+    const res = await POST(makeRequest(envelope));
+
+    expect(res.status).toBe(200);
+    const body = decryptAsMeta(await res.text(), aesKey, iv);
+    // Forward-only: an ITEM failure must re-render ITEM, not jump to SEARCH.
+    expect(body.screen).toBe("ITEM");
+    expect(body.data.has_error).toBe(true);
+    expect(body.data.has_quantities).toBe(false);
   });
 });
 

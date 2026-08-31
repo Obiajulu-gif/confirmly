@@ -9,7 +9,7 @@ import {
   type EncryptedFlowRequest,
 } from "@/lib/whatsapp/flow-crypto";
 import { getValidFlowSession } from "@/lib/whatsapp/flow-session";
-import { resolveFlowScreen } from "@/lib/whatsapp/flow-screens";
+import { resolveFlowScreen, recoveryScreen } from "@/lib/whatsapp/flow-screens";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -54,13 +54,18 @@ export async function POST(request: NextRequest) {
   }
 
   // 2. Verify Meta's signature over the raw body (same app secret as webhooks).
+  //    The app secret is mandatory — the RSA public key is registered with
+  //    Meta and therefore public, so without the signature check anyone who can
+  //    encrypt a valid envelope could reach the endpoint unauthenticated.
   const appSecret = env().WHATSAPP_APP_SECRET;
-  if (appSecret) {
-    const signature = request.headers.get("x-hub-signature-256");
-    if (!verifyMetaSignature(rawBody, signature, appSecret)) {
-      logger.warn("flow endpoint rejected: invalid signature");
-      return new NextResponse("Invalid signature", { status: 432 });
-    }
+  if (!appSecret) {
+    logger.error("flow endpoint hit but WHATSAPP_APP_SECRET is unset");
+    return new NextResponse("Not configured", { status: 503 });
+  }
+  const signature = request.headers.get("x-hub-signature-256");
+  if (!verifyMetaSignature(rawBody, signature, appSecret)) {
+    logger.warn("flow endpoint rejected: invalid signature");
+    return new NextResponse("Invalid signature", { status: 432 });
   }
 
   // 3. Parse the encrypted envelope.
@@ -141,10 +146,13 @@ export async function POST(request: NextRequest) {
     logger.error("flow endpoint screen resolution failed", {
       reason: error instanceof Error ? error.message : "unknown",
     });
-    // Still return an encrypted, well-formed error the client can render.
-    return encrypt({
-      screen: session.currentScreen || "SEARCH",
-      data: { error_message: "Something went wrong. Please try again." },
-    });
+    // Re-render the SAME screen the request came from (Flows forbid backward
+    // navigation) with a no-DB error payload, so the client always renders —
+    // even when the failure was the database itself.
+    const from =
+      typeof decryptedBody.screen === "string" ? decryptedBody.screen : "SEARCH";
+    return encrypt(
+      recoveryScreen(from, "Sorry, something went wrong. Please try again.")
+    );
   }
 }

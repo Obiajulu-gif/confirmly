@@ -28,9 +28,84 @@ const MAX_STORE_ROWS = 20;
 const MAX_PRODUCT_ROWS = 12;
 const MAX_QUANTITY = 10;
 const SEARCH_THRESHOLD = 0.5;
-const MAX_IMAGE_BYTES = 300_000; // Base64 of a larger image bloats the payload.
+// WhatsApp Flow images are inlined as Base64 in the (then AES-GCM-encrypted)
+// data-exchange response; keep the source small so the encoded payload stays
+// well within Meta's response-size limits. Larger images just render text-only.
+const MAX_IMAGE_BYTES = 100_000;
 
 type Row = { id: string; title: string; description?: string };
+
+/**
+ * A store's pickup option may be named "Pickup", "Store pickup", "Pickup
+ * point", etc. — treat any zone whose name mentions pickup as pickup so we
+ * don't force an address for it.
+ */
+function isPickupZone(name: string | null | undefined): boolean {
+  return (name ?? "").toLowerCase().includes("pickup");
+}
+
+/** Error fields every data-driven screen declares, so messages are visible. */
+function errorFields(error?: string): {
+  has_error: boolean;
+  error_message: string;
+} {
+  return { has_error: Boolean(error), error_message: error ?? "" };
+}
+
+/**
+ * A self-contained, DB-free re-render of a screen carrying only an error.
+ * WhatsApp Flows allow a data_exchange response to re-render the SAME screen or
+ * move forward, never backward, so an unrecoverable state (expired session,
+ * an item that just sold out) or an unexpected failure must stay on the current
+ * screen. Every collection is empty and its `has_*` guard is false, so no
+ * required control is served without options.
+ */
+export function recoveryScreen(
+  screenId: string,
+  message: string
+): FlowScreenResponse {
+  const base = errorFields(message);
+  switch (screenId) {
+    case "STORE":
+      return {
+        screen: "STORE",
+        data: { store_name: "Your order", has_products: false, products: [], ...base },
+      };
+    case "ITEM":
+      return {
+        screen: "ITEM",
+        data: {
+          product_name: "Your item",
+          price_label: "",
+          has_image: false,
+          product_image: "",
+          has_quantities: false,
+          quantities: [],
+          has_sizes: false,
+          sizes: [],
+          has_colours: false,
+          colours: [],
+          ...base,
+        },
+      };
+    case "DELIVERY":
+      return {
+        screen: "DELIVERY",
+        data: { has_zones: false, zones: [], ...base },
+      };
+    case "SEARCH":
+    default:
+      return {
+        screen: "SEARCH",
+        data: {
+          search_hint: "Type a store name or code and tap Continue.",
+          has_stores: false,
+          stores: [],
+          ...base,
+        },
+      };
+  }
+}
 
 function str(payload: Record<string, unknown>, key: string): string {
   const value = payload[key];
@@ -106,12 +181,14 @@ async function buildSearchScreen(params: {
       ? "Pick a store to browse, or type a name to search."
       : "Type a store name or code, then tap Continue.";
 
+  const rows = storeRows(stores);
   return {
     screen: "SEARCH",
     data: {
       search_hint: hint,
-      stores: storeRows(stores),
-      ...(params.error ? { error_message: params.error } : {}),
+      has_stores: rows.length > 0,
+      stores: rows,
+      ...errorFields(params.error),
     },
   };
 }
@@ -126,11 +203,13 @@ async function buildStoreScreen(
     where: { id: merchantId, active: true },
     select: { name: true },
   });
+  // Flows forbid backward navigation, so a store that vanished mid-flow can
+  // only re-render STORE with an error — never jump back to SEARCH.
   if (!merchant) {
-    return buildSearchScreen({
-      mode: "marketplace",
-      error: "That store is no longer available.",
-    });
+    return recoveryScreen(
+      "STORE",
+      "That store is no longer available. Close this and start again."
+    );
   }
   const products = await prisma.product.findMany({
     where: { merchantId, active: true, stockQuantity: { gt: 0 } },
@@ -138,23 +217,23 @@ async function buildStoreScreen(
     take: MAX_PRODUCT_ROWS,
     select: { id: true, name: true, priceKobo: true, stockQuantity: true },
   });
-  if (!products.length) {
-    return buildSearchScreen({
-      mode: "marketplace",
-      error: `${merchant.name} has no items available right now.`,
-    });
-  }
   const rows: Row[] = products.map((product) => ({
     id: product.id,
     title: title30(product.name),
     description: `${formatNaira(product.priceKobo)} · ${product.stockQuantity} in stock`,
   }));
+  const message =
+    error ??
+    (rows.length
+      ? undefined
+      : `${merchant.name} has no items available right now.`);
   return {
     screen: "STORE",
     data: {
       store_name: merchant.name,
+      has_products: rows.length > 0,
       products: rows,
-      ...(error ? { error_message: error } : {}),
+      ...errorFields(message),
     },
   };
 }
@@ -228,12 +307,13 @@ async function buildItemScreen(
       price_label: `${formatNaira(product.priceKobo)} each`,
       has_image: Boolean(image),
       product_image: image ?? "",
+      has_quantities: quantities.length > 0,
       quantities,
       has_sizes: sizes.length > 0,
       sizes: sizes.map((size) => ({ id: size, title: size })),
       has_colours: colours.length > 0,
       colours: colours.map((colour) => ({ id: colour, title: colour })),
-      ...(error ? { error_message: error } : {}),
+      ...errorFields(error),
     },
   };
 }
@@ -254,14 +334,17 @@ async function buildDeliveryScreen(
     title: title30(zone.name),
     description: zone.feeKobo > 0 ? `${formatNaira(zone.feeKobo)} delivery` : "Free",
   }));
+  const message =
+    error ??
+    (rows.length
+      ? undefined
+      : "This store hasn't set delivery or pickup areas yet. Please message the store to order.");
   return {
     screen: "DELIVERY",
     data: {
+      has_zones: rows.length > 0,
       zones: rows,
-      ...(rows.length
-        ? {}
-        : { error_message: "This store has not set delivery areas yet." }),
-      ...(error ? { error_message: error } : {}),
+      ...errorFields(message),
     },
   };
 }
@@ -282,7 +365,7 @@ async function buildReviewScreen(
   const line1 = `${state.quantity ?? 1} × ${product?.name ?? "item"}${
     variantBits ? ` (${variantBits})` : ""
   }`;
-  const isPickup = (state.deliveryZoneName ?? "").toLowerCase() === "pickup";
+  const isPickup = isPickupZone(state.deliveryZoneName);
   const deliveryLine = state.deliveryZoneName
     ? `${isPickup ? "Pickup at" : "Deliver to"} ${state.deliveryZoneName}`
     : "";
@@ -329,13 +412,25 @@ async function handleSearch(
   if (storeId) {
     const merchant = await prisma.merchant.findFirst({
       where: { id: storeId, active: true },
-      select: { id: true },
+      select: { id: true, name: true },
     });
     if (!merchant) {
       return buildSearchScreen({
         mode,
         query,
-        error: "That store is no longer available.",
+        error: "That store is no longer available. Pick another.",
+      });
+    }
+    // Confirm the store has something to sell before advancing — SEARCH can
+    // re-render itself with a hint, but STORE cannot navigate back to SEARCH.
+    const productCount = await prisma.product.count({
+      where: { merchantId: merchant.id, active: true, stockQuantity: { gt: 0 } },
+    });
+    if (productCount === 0) {
+      return buildSearchScreen({
+        mode,
+        query,
+        error: `${merchant.name} has no items available right now. Try another store.`,
       });
     }
     await updateFlowSession(session.id, {
@@ -355,10 +450,10 @@ async function handleStore(
   payload: Record<string, unknown>
 ): Promise<FlowScreenResponse> {
   if (!state.merchantId) {
-    return buildSearchScreen({
-      mode: "marketplace",
-      error: "Your session reset. Pick a store again.",
-    });
+    return recoveryScreen(
+      "STORE",
+      "Your order session expired. Close this and start a new order."
+    );
   }
   const product = await loadProduct(str(payload, "product_id"), state.merchantId);
   if (!product) {
@@ -380,16 +475,17 @@ async function handleItem(
   payload: Record<string, unknown>
 ): Promise<FlowScreenResponse> {
   if (!state.merchantId || !state.productId) {
-    return buildSearchScreen({
-      mode: "marketplace",
-      error: "Your session reset. Pick a store again.",
-    });
+    return recoveryScreen(
+      "ITEM",
+      "Your order session expired. Close this and start a new order."
+    );
   }
   const product = await loadProduct(state.productId, state.merchantId);
   if (!product) {
-    return buildStoreScreen(
-      state.merchantId,
-      "That product is no longer available."
+    // Cannot go back to STORE (backward), so re-render ITEM with the error.
+    return recoveryScreen(
+      "ITEM",
+      "This item just sold out. Close this and start again to pick another."
     );
   }
 
@@ -454,10 +550,10 @@ async function handleDelivery(
   flowToken: string
 ): Promise<FlowScreenResponse> {
   if (!state.merchantId || !state.productId || !state.quantity) {
-    return buildSearchScreen({
-      mode: "marketplace",
-      error: "Your session reset. Pick a store again.",
-    });
+    return recoveryScreen(
+      "DELIVERY",
+      "Your order session expired. Close this and start a new order."
+    );
   }
   const zone = await prisma.deliveryZone.findFirst({
     where: {
@@ -470,7 +566,7 @@ async function handleDelivery(
   if (!zone) {
     return buildDeliveryScreen(state.merchantId, "Choose a delivery area.");
   }
-  const isPickup = zone.name.toLowerCase() === "pickup";
+  const isPickup = isPickupZone(zone.name);
   const address = str(payload, "address").trim();
   if (!isPickup && address.length < 5) {
     return buildDeliveryScreen(

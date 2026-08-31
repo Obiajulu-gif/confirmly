@@ -88,6 +88,18 @@
           "type": "string",
           "__example__": "Type a store name or code, then tap Continue."
         },
+        "has_stores": {
+          "type": "boolean",
+          "__example__": true
+        },
+        "has_error": {
+          "type": "boolean",
+          "__example__": false
+        },
+        "error_message": {
+          "type": "string",
+          "__example__": ""
+        },
         "stores": {
           "type": "array",
           "items": {
@@ -117,6 +129,16 @@
         "type": "SingleColumnLayout",
         "children": [
           {
+            "type": "If",
+            "condition": "${data.has_error}",
+            "then": [
+              {
+                "type": "TextCaption",
+                "text": "${data.error_message}"
+              }
+            ]
+          },
+          {
             "type": "TextBody",
             "text": "${data.search_hint}"
           },
@@ -128,11 +150,17 @@
             "required": false
           },
           {
-            "type": "RadioButtonsGroup",
-            "name": "store_id",
-            "label": "Stores",
-            "required": false,
-            "data-source": "${data.stores}"
+            "type": "If",
+            "condition": "${data.has_stores}",
+            "then": [
+              {
+                "type": "RadioButtonsGroup",
+                "name": "store_id",
+                "label": "Stores",
+                "required": false,
+                "data-source": "${data.stores}"
+              }
+            ]
           },
           {
             "type": "Footer",
@@ -156,6 +184,18 @@
         "store_name": {
           "type": "string",
           "__example__": "Ada Styles"
+        },
+        "has_products": {
+          "type": "boolean",
+          "__example__": true
+        },
+        "has_error": {
+          "type": "boolean",
+          "__example__": false
+        },
+        "error_message": {
+          "type": "string",
+          "__example__": ""
         },
         "products": {
           "type": "array",
@@ -190,15 +230,31 @@
             "text": "${data.store_name}"
           },
           {
+            "type": "If",
+            "condition": "${data.has_error}",
+            "then": [
+              {
+                "type": "TextCaption",
+                "text": "${data.error_message}"
+              }
+            ]
+          },
+          {
             "type": "TextBody",
             "text": "Choose a product to order."
           },
           {
-            "type": "RadioButtonsGroup",
-            "name": "product_id",
-            "label": "Products",
-            "required": true,
-            "data-source": "${data.products}"
+            "type": "If",
+            "condition": "${data.has_products}",
+            "then": [
+              {
+                "type": "RadioButtonsGroup",
+                "name": "product_id",
+                "label": "Products",
+                "required": true,
+                "data-source": "${data.products}"
+              }
+            ]
           },
           {
             "type": "Footer",
@@ -226,6 +282,14 @@
           "type": "string",
           "__example__": "₦12,000 each"
         },
+        "has_error": {
+          "type": "boolean",
+          "__example__": false
+        },
+        "error_message": {
+          "type": "string",
+          "__example__": ""
+        },
         "has_image": {
           "type": "boolean",
           "__example__": false
@@ -233,6 +297,10 @@
         "product_image": {
           "type": "string",
           "__example__": ""
+        },
+        "has_quantities": {
+          "type": "boolean",
+          "__example__": true
         },
         "quantities": {
           "type": "array",
@@ -336,15 +404,31 @@
             "text": "${data.product_name}"
           },
           {
+            "type": "If",
+            "condition": "${data.has_error}",
+            "then": [
+              {
+                "type": "TextCaption",
+                "text": "${data.error_message}"
+              }
+            ]
+          },
+          {
             "type": "TextBody",
             "text": "${data.price_label}"
           },
           {
-            "type": "Dropdown",
-            "name": "quantity",
-            "label": "Quantity",
-            "required": true,
-            "data-source": "${data.quantities}"
+            "type": "If",
+            "condition": "${data.has_quantities}",
+            "then": [
+              {
+                "type": "Dropdown",
+                "name": "quantity",
+                "label": "Quantity",
+                "required": true,
+                "data-source": "${data.quantities}"
+              }
+            ]
           },
           {
             "type": "If",
@@ -392,6 +476,18 @@
       "title": "Delivery",
       "terminal": false,
       "data": {
+        "has_zones": {
+          "type": "boolean",
+          "__example__": true
+        },
+        "has_error": {
+          "type": "boolean",
+          "__example__": false
+        },
+        "error_message": {
+          "type": "string",
+          "__example__": ""
+        },
         "zones": {
           "type": "array",
           "items": {
@@ -430,18 +526,34 @@
             "text": "Where should we deliver?"
           },
           {
-            "type": "Dropdown",
-            "name": "delivery_zone",
-            "label": "Delivery area",
-            "required": true,
-            "data-source": "${data.zones}"
+            "type": "If",
+            "condition": "${data.has_error}",
+            "then": [
+              {
+                "type": "TextCaption",
+                "text": "${data.error_message}"
+              }
+            ]
           },
           {
-            "type": "TextArea",
-            "name": "address",
-            "label": "Delivery address",
-            "helper-text": "House number, street and landmark. Leave blank for store pickup.",
-            "required": false
+            "type": "If",
+            "condition": "${data.has_zones}",
+            "then": [
+              {
+                "type": "Dropdown",
+                "name": "delivery_zone",
+                "label": "Delivery area",
+                "required": true,
+                "data-source": "${data.zones}"
+              },
+              {
+                "type": "TextArea",
+                "name": "address",
+                "label": "Delivery address",
+                "helper-text": "House number, street and landmark. Leave blank for store pickup.",
+                "required": false
+              }
+            ]
           },
           {
             "type": "Footer",
