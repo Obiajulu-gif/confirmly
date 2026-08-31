@@ -4,6 +4,11 @@ import { prisma } from "@/lib/db";
 import { canAccessBranch, getBusinessSession } from "@/lib/authz/business-access";
 import { formatNaira } from "@/lib/money";
 import { maskReference } from "@/lib/receipts";
+import {
+  fulfilmentActionLabel,
+  fulfilmentStatusLabel,
+  nextFulfilmentOptions,
+} from "@/lib/orders/fulfilment";
 import { Badge, Card, stateTone } from "@/components/ui";
 import { OrderActions } from "./order-actions";
 
@@ -33,6 +38,11 @@ export default async function OrderDetailsPage({
   if (!order) notFound();
   if (!(await canAccessBranch(session, order.merchantId))) notFound();
 
+  const fulfilmentOptions = nextFulfilmentOptions(
+    order.fulfilmentStatus,
+    order.deliveryMethod
+  ).map((to) => ({ to, label: fulfilmentActionLabel(to, order.deliveryMethod) }));
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -47,11 +57,16 @@ export default async function OrderDetailsPage({
             {order.reference}
           </h1>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Badge tone={stateTone(order.payment?.state ?? "CREATED")}>
             Payment: {order.payment?.state ?? "none"}
           </Badge>
           <Badge tone={stateTone(order.state)}>{order.state}</Badge>
+          {order.fulfilmentStatus !== "AWAITING_PAYMENT" ? (
+            <Badge tone={order.fulfilmentStatus === "DELIVERED" ? "success" : "info"}>
+              {fulfilmentStatusLabel(order.fulfilmentStatus)}
+            </Badge>
+          ) : null}
         </div>
       </div>
 
@@ -130,6 +145,8 @@ export default async function OrderDetailsPage({
               orderState={order.state}
               paymentState={order.payment?.state ?? null}
               provider={order.payment?.provider ?? null}
+              fulfilmentStatus={order.fulfilmentStatus}
+              fulfilmentOptions={fulfilmentOptions}
             />
           </Card>
 

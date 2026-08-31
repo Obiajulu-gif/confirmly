@@ -92,6 +92,20 @@ enum OrderState {
   CANCELLED
 }
 
+/**
+ * Post-payment fulfilment lifecycle, tracked separately from OrderState so the
+ * payment/settlement state machine is never coupled to operational status.
+ * Starts at RECEIVED when payment is verified.
+ */
+enum FulfilmentStatus {
+  AWAITING_PAYMENT
+  RECEIVED
+  PREPARING
+  READY
+  OUT_FOR_DELIVERY
+  DELIVERED
+}
+
 enum PaymentProvider {
   MONNIFY
   DEMO
@@ -509,36 +523,58 @@ model WhatsAppMessage {
 }
 
 model Order {
-  id              String        @id @default(cuid())
-  reference       String        @unique
-  merchantId      String
-  merchant        Merchant      @relation(fields: [merchantId], references: [id], onDelete: Cascade)
-  customerId      String
-  customer        Customer      @relation(fields: [customerId], references: [id], onDelete: Restrict)
-  conversationId  String?
-  conversation    Conversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
-  state           OrderState    @default(DRAFT)
-  subtotalKobo    Int
-  deliveryFeeKobo Int           @default(0)
-  discountKobo    Int           @default(0)
-  totalKobo       Int
-  deliveryMethod  String?
-  deliveryAddress String?
-  deliveryZone    String?
-  notes           String?
-  confirmedAt     DateTime?
-  paidAt          DateTime?
-  fulfilledAt     DateTime?
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
+  id               String           @id @default(cuid())
+  reference        String           @unique
+  merchantId       String
+  merchant         Merchant         @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  customerId       String
+  customer         Customer         @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  conversationId   String?
+  conversation     Conversation?    @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  state            OrderState       @default(DRAFT)
+  fulfilmentStatus FulfilmentStatus @default(AWAITING_PAYMENT)
+  subtotalKobo     Int
+  deliveryFeeKobo  Int              @default(0)
+  discountKobo     Int              @default(0)
+  totalKobo        Int
+  deliveryMethod   String?
+  deliveryAddress  String?
+  deliveryZone     String?
+  notes            String?
+  confirmedAt      DateTime?
+  paidAt           DateTime?
+  fulfilledAt      DateTime?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
 
-  items       OrderItem[]
-  payment     Payment?
-  receipt     Receipt?
-  auditEvents AuditEvent[]
+  items            OrderItem[]
+  payment          Payment?
+  receipt          Receipt?
+  auditEvents      AuditEvent[]
+  fulfilmentEvents FulfilmentEvent[]
 
   @@index([merchantId, state, createdAt])
   @@index([merchantId, createdAt])
+}
+
+/**
+ * Append-only timeline of fulfilment status changes for an order.
+ */
+model FulfilmentEvent {
+  id        String           @id @default(cuid())
+  orderId   String
+  order     Order            @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  status    FulfilmentStatus
+  note      String?
+  actorType String           @default("MERCHANT")
+  actorId   String?
+  /**
+   * Whether the customer WhatsApp notification for this change was delivered.
+   */
+  notified  Boolean          @default(false)
+  createdAt DateTime         @default(now())
+
+  @@index([orderId, createdAt])
 }
 
 model OrderItem {

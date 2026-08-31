@@ -290,7 +290,21 @@ export async function applyVerifiedTransaction(
     if (transitionedToPaid) {
       await tx.order.update({
         where: { id: payment.orderId },
-        data: { state: "PAID", paidAt: new Date() },
+        data: {
+          state: "PAID",
+          paidAt: new Date(),
+          // Fulfilment begins the moment payment is verified. The customer's
+          // payment-confirmation message doubles as the "order received" notice.
+          fulfilmentStatus: "RECEIVED",
+        },
+      });
+      await tx.fulfilmentEvent.create({
+        data: {
+          orderId: payment.orderId,
+          status: "RECEIVED",
+          actorType: "SYSTEM",
+          notified: true,
+        },
       });
       const { receipt } = await issueReceipt(payment.orderId, tx);
       receiptToken = receipt.token;
