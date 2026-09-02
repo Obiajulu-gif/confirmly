@@ -239,6 +239,13 @@ export async function sendFlow(
     headerImageUrl?: string;
     /** Optional small footer line under the body. */
     footerText?: string;
+    /**
+     * "navigate" opens a fixed first screen (payload embedded in the message —
+     * only valid for the flow's entry screen). "data_exchange" opens the flow
+     * and lets the endpoint serve the first screen via an INIT request, so the
+     * launch message stays tiny even when that screen is image-heavy.
+     */
+    flowAction?: "navigate" | "data_exchange";
   }
 ): Promise<SendResult> {
   const headerLink = input.headerImageUrl?.trim();
@@ -249,6 +256,16 @@ export async function sendFlow(
   const footer = input.footerText
     ? { footer: { text: input.footerText.slice(0, 60) } }
     : {};
+  const flowAction = input.flowAction ?? "navigate";
+  const actionPayload =
+    flowAction === "navigate" && input.screen
+      ? {
+          flow_action_payload: {
+            screen: input.screen,
+            data: input.data ?? {},
+          },
+        }
+      : {};
   return post({
     to,
     type: "interactive",
@@ -264,15 +281,8 @@ export async function sendFlow(
           flow_token: input.flowToken,
           flow_id: input.flowId,
           flow_cta: input.cta.slice(0, 20),
-          flow_action: "navigate",
-          ...(input.screen
-            ? {
-                flow_action_payload: {
-                  screen: input.screen,
-                  data: input.data ?? {},
-                },
-              }
-            : {}),
+          flow_action: flowAction,
+          ...actionPayload,
         },
       },
     },
