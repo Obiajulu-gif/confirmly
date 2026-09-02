@@ -31,6 +31,10 @@ export interface FlowOrderState {
   entryPoint?: "search" | "marketplace";
   merchantId?: string;
   storeName?: string;
+  /** Which SHOP view the customer is on (catalogue → product → cart loop). */
+  shopMode?: "catalogue" | "product" | "cart";
+  /** The product being customized in the "product" view. */
+  selectedProductId?: string;
   /** The multi-item cart, grown one SHOP re-render at a time. */
   items?: FlowCartItem[];
   deliveryZoneId?: string | null;

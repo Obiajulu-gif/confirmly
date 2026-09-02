@@ -36,7 +36,7 @@ export async function maybeSendOrderFlow(
       // Resolve the store's catalogue exactly as the endpoint would; the same
       // data shape is valid whether served here at launch or via data-exchange.
       const shop = await buildShopScreen(store.merchantId, {});
-      if (shop.screen !== "SHOP" || shop.data.has_skus !== true) {
+      if (shop.screen !== "SHOP" || shop.data.has_products !== true) {
         // Store unavailable or has nothing in stock — let the caller fall back.
         return false;
       }

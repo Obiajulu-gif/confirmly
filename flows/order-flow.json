@@ -180,23 +180,39 @@
       "data": {
         "store_name": {
           "type": "string",
-          "__example__": "Ada Styles"
+          "__example__": "Ada Kitchen"
         },
-        "has_cart": {
+        "footer_label": {
+          "type": "string",
+          "__example__": "Continue"
+        },
+        "show_product": {
           "type": "boolean",
           "__example__": false
         },
-        "cart_summary": {
-          "type": "string",
-          "__example__": "Your cart is empty. Pick an item below and choose Add this item."
+        "show_cart": {
+          "type": "boolean",
+          "__example__": false
         },
-        "cart_total": {
-          "type": "string",
-          "__example__": ""
+        "show_cart_hint": {
+          "type": "boolean",
+          "__example__": false
         },
-        "has_skus": {
+        "show_products": {
           "type": "boolean",
           "__example__": true
+        },
+        "show_product_image": {
+          "type": "boolean",
+          "__example__": false
+        },
+        "show_sizes": {
+          "type": "boolean",
+          "__example__": false
+        },
+        "show_colours": {
+          "type": "boolean",
+          "__example__": false
         },
         "has_error": {
           "type": "boolean",
@@ -206,7 +222,19 @@
           "type": "string",
           "__example__": ""
         },
-        "skus": {
+        "has_cart": {
+          "type": "boolean",
+          "__example__": false
+        },
+        "cart_hint": {
+          "type": "string",
+          "__example__": ""
+        },
+        "has_products": {
+          "type": "boolean",
+          "__example__": true
+        },
+        "products": {
           "type": "array",
           "items": {
             "type": "object",
@@ -219,16 +247,114 @@
               },
               "description": {
                 "type": "string"
+              },
+              "image": {
+                "type": "string"
+              },
+              "alt-text": {
+                "type": "string"
               }
             }
           },
           "__example__": [
             {
               "id": "product_example",
-              "title": "Cotton Polo — Black / L",
-              "description": "₦12,000 · 8 left"
+              "title": "Fried Rice",
+              "description": "Main meals · ₦1,150",
+              "image": "",
+              "alt-text": "Fried Rice"
             }
           ]
+        },
+        "product_name": {
+          "type": "string",
+          "__example__": "Stew"
+        },
+        "product_price": {
+          "type": "string",
+          "__example__": "₦820"
+        },
+        "product_description": {
+          "type": "string",
+          "__example__": "Rich tomato stew."
+        },
+        "has_product_image": {
+          "type": "boolean",
+          "__example__": false
+        },
+        "product_image": {
+          "type": "string",
+          "__example__": ""
+        },
+        "quantities": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              }
+            }
+          },
+          "__example__": [
+            {
+              "id": "1",
+              "title": "1"
+            },
+            {
+              "id": "2",
+              "title": "2"
+            }
+          ]
+        },
+        "has_sizes": {
+          "type": "boolean",
+          "__example__": false
+        },
+        "sizes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              }
+            }
+          },
+          "__example__": []
+        },
+        "has_colours": {
+          "type": "boolean",
+          "__example__": false
+        },
+        "colours": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              }
+            }
+          },
+          "__example__": []
+        },
+        "cart_lines": {
+          "type": "string",
+          "__example__": ""
+        },
+        "cart_total": {
+          "type": "string",
+          "__example__": ""
         }
       },
       "layout": {
@@ -250,108 +376,137 @@
           },
           {
             "type": "If",
-            "condition": "${data.has_cart}",
+            "condition": "${data.show_cart_hint}",
             "then": [
               {
                 "type": "TextBody",
-                "text": "${data.cart_summary}"
-              },
-              {
-                "type": "TextSubheading",
-                "text": "${data.cart_total}"
+                "text": "${data.cart_hint}"
               }
             ]
           },
           {
             "type": "If",
-            "condition": "${data.has_skus}",
+            "condition": "${data.show_products}",
             "then": [
               {
-                "type": "Dropdown",
-                "name": "sku",
-                "label": "Add an item",
+                "type": "RadioButtonsGroup",
+                "name": "product_pick",
+                "label": "Choose a product",
                 "required": false,
-                "data-source": "${data.skus}"
+                "media-size": "regular",
+                "data-source": "${data.products}"
+              }
+            ]
+          },
+          {
+            "type": "If",
+            "condition": "${data.show_product_image}",
+            "then": [
+              {
+                "type": "Image",
+                "src": "${data.product_image}",
+                "height": 220,
+                "scale-type": "cover",
+                "alt-text": "${data.product_name}"
+              }
+            ]
+          },
+          {
+            "type": "If",
+            "condition": "${data.show_product}",
+            "then": [
+              {
+                "type": "TextHeading",
+                "text": "${data.product_name}"
+              },
+              {
+                "type": "TextSubheading",
+                "text": "${data.product_price}"
+              },
+              {
+                "type": "TextBody",
+                "text": "${data.product_description}"
               },
               {
                 "type": "Dropdown",
                 "name": "quantity",
                 "label": "Quantity",
                 "required": false,
+                "data-source": "${data.quantities}"
+              }
+            ]
+          },
+          {
+            "type": "If",
+            "condition": "${data.show_sizes}",
+            "then": [
+              {
+                "type": "RadioButtonsGroup",
+                "name": "size",
+                "label": "Size",
+                "required": false,
+                "data-source": "${data.sizes}"
+              }
+            ]
+          },
+          {
+            "type": "If",
+            "condition": "${data.show_colours}",
+            "then": [
+              {
+                "type": "RadioButtonsGroup",
+                "name": "colour",
+                "label": "Colour",
+                "required": false,
+                "data-source": "${data.colours}"
+              }
+            ]
+          },
+          {
+            "type": "If",
+            "condition": "${data.show_cart}",
+            "then": [
+              {
+                "type": "TextBody",
+                "text": "${data.cart_lines}"
+              },
+              {
+                "type": "TextSubheading",
+                "text": "${data.cart_total}"
+              },
+              {
+                "type": "RadioButtonsGroup",
+                "name": "cart_action",
+                "label": "What next?",
+                "required": true,
                 "data-source": [
                   {
-                    "id": "1",
-                    "title": "1"
+                    "id": "continue",
+                    "title": "Continue shopping"
                   },
                   {
-                    "id": "2",
-                    "title": "2"
+                    "id": "checkout",
+                    "title": "Checkout"
                   },
                   {
-                    "id": "3",
-                    "title": "3"
-                  },
-                  {
-                    "id": "4",
-                    "title": "4"
-                  },
-                  {
-                    "id": "5",
-                    "title": "5"
-                  },
-                  {
-                    "id": "6",
-                    "title": "6"
-                  },
-                  {
-                    "id": "7",
-                    "title": "7"
-                  },
-                  {
-                    "id": "8",
-                    "title": "8"
-                  },
-                  {
-                    "id": "9",
-                    "title": "9"
-                  },
-                  {
-                    "id": "10",
-                    "title": "10"
+                    "id": "remove",
+                    "title": "Remove last item"
                   }
                 ]
               }
             ]
           },
           {
-            "type": "RadioButtonsGroup",
-            "name": "next_action",
-            "label": "What would you like to do?",
-            "required": true,
-            "data-source": [
-              {
-                "id": "add",
-                "title": "Add this item to cart"
-              },
-              {
-                "id": "checkout",
-                "title": "Checkout"
-              },
-              {
-                "id": "remove",
-                "title": "Remove last item"
-              }
-            ]
-          },
-          {
             "type": "Footer",
-            "label": "Continue",
+            "label": "${data.footer_label}",
             "on-click-action": {
               "name": "data_exchange",
               "payload": {
-                "sku": "${form.sku}",
+                "product_pick": "${form.product_pick}",
                 "quantity": "${form.quantity}",
-                "next_action": "${form.next_action}"
+                "size": "${form.size}",
+                "colour": "${form.colour}",
+                "cart_action": "${form.cart_action}"
               }
             }
           }

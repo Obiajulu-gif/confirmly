@@ -10,6 +10,10 @@ import {
   type FlowCartItem,
   type FlowOrderState,
 } from "@/lib/whatsapp/flow-session";
+import {
+  productImageBase64,
+  productThumbnails,
+} from "@/lib/whatsapp/flow-media";
 
 /**
  * Server-side resolver for the native ordering Flow. Given the decrypted
@@ -32,13 +36,19 @@ export interface FlowScreenResponse {
 }
 
 const MAX_STORE_ROWS = 20;
-const MAX_SKU_ROWS = 30;
+/** Image-rich catalogue rows are heavier, so cap tighter than a text list. */
+const MAX_PRODUCT_ROWS = 20;
 const MAX_QUANTITY = 10;
 const SEARCH_THRESHOLD = 0.5;
-/** Separates productId from variantId inside a SHOP sku row id. */
-const SKU_SEP = "::";
 
 type Row = { id: string; title: string; description?: string };
+/** A catalogue row may carry a Base64 thumbnail + alt text. */
+type ProductRow = Row & { image?: string; "alt-text"?: string };
+
+const QUANTITY_ROWS: Row[] = Array.from({ length: MAX_QUANTITY }, (_, i) => ({
+  id: String(i + 1),
+  title: String(i + 1),
+}));
 
 function str(payload: Record<string, unknown>, key: string): string {
   const value = payload[key];
@@ -202,37 +212,66 @@ function variantLabelOf(size: string | null, colour: string | null): string {
   return [size, colour].filter(Boolean).join(" / ");
 }
 
-/** Expands the merchant's catalogue into one purchasable SKU row per variant. */
-async function buildSkuRows(merchantId: string): Promise<Row[]> {
-  const products = await prisma.product.findMany({
-    where: { merchantId, active: true, stockQuantity: { gt: 0 } },
-    orderBy: [{ category: "asc" }, { name: "asc" }],
-    include: { variants: true },
+/** One image-rich catalogue row per product (variants are picked on the
+ *  product screen). `category · ₦price` reads as the row subtitle. */
+async function buildProductRows(
+  products: Array<{
+    id: string;
+    name: string;
+    category: string | null;
+    priceKobo: number;
+  }>
+): Promise<ProductRow[]> {
+  const thumbs = await productThumbnails(products.map((p) => p.id));
+  return products.map((product) => {
+    const image = thumbs.get(product.id);
+    const category = product.category ? `${product.category} · ` : "";
+    return {
+      id: product.id,
+      title: title30(product.name),
+      description: `${category}${formatNaira(product.priceKobo)}`,
+      ...(image ? { image, "alt-text": product.name } : {}),
+    };
   });
-  const rows: Row[] = [];
-  for (const product of products) {
-    const inStockVariants = product.variants.filter((v) => v.stockQuantity > 0);
-    if (inStockVariants.length) {
-      for (const variant of inStockVariants) {
-        const label = variantLabelOf(variant.size, variant.colour) || "Option";
-        const price = product.priceKobo + variant.priceAdjustmentKobo;
-        rows.push({
-          id: `${product.id}${SKU_SEP}${variant.id}`,
-          title: title30(`${product.name} — ${label}`),
-          description: `${formatNaira(price)} · ${variant.stockQuantity} left`,
-        });
-        if (rows.length >= MAX_SKU_ROWS) return rows;
-      }
-    } else {
-      rows.push({
-        id: product.id,
-        title: title30(product.name),
-        description: `${formatNaira(product.priceKobo)} · ${product.stockQuantity} in stock`,
-      });
-      if (rows.length >= MAX_SKU_ROWS) return rows;
-    }
-  }
-  return rows;
+}
+
+/** A cart summary line for the catalogue header ("🛒 2 items · ₦4,050"). */
+function cartHint(items: FlowCartItem[]): string {
+  const count = items.reduce((sum, item) => sum + item.quantity, 0);
+  if (!count) return "";
+  return `🛒 ${count} item${count === 1 ? "" : "s"} · ${formatNaira(
+    cartSubtotalKobo(items)
+  )} in your cart`;
+}
+
+/** Full SHOP data with every field defaulted; builders override per view. */
+function shopDefaults(storeName: string) {
+  return {
+    store_name: storeName,
+    footer_label: "Continue",
+    show_product: false,
+    show_cart: false,
+    show_cart_hint: false,
+    show_products: false,
+    show_product_image: false,
+    show_sizes: false,
+    show_colours: false,
+    has_error: false,
+    error_message: "",
+    has_cart: false,
+    cart_hint: "",
+    has_products: false,
+    products: [] as ProductRow[],
+    product_name: "",
+    product_price: "",
+    product_description: "",
+    product_image: "",
+    quantities: QUANTITY_ROWS,
+    sizes: [] as Row[],
+    colours: [] as Row[],
+    cart_lines: "",
+    cart_total: "",
+  };
 }
 
 function cartLines(items: FlowCartItem[]): string {
@@ -244,40 +283,132 @@ function cartLines(items: FlowCartItem[]): string {
     .join("\n");
 }
 
+async function storeName(merchantId: string): Promise<string | null> {
+  const merchant = await prisma.merchant.findFirst({
+    where: { id: merchantId, active: true },
+    select: { name: true },
+  });
+  return merchant?.name ?? null;
+}
+
+/**
+ * SHOP — catalogue view. This is also the Flow's entry when a customer opens
+ * straight into a store, so it keeps the exported name and shape callers use.
+ */
 export async function buildShopScreen(
   merchantId: string,
   state: FlowOrderState,
   error?: string
 ): Promise<FlowScreenResponse> {
-  const merchant = await prisma.merchant.findFirst({
-    where: { id: merchantId, active: true },
-    select: { name: true },
-  });
-  if (!merchant) {
+  const name = await storeName(merchantId);
+  if (!name) {
     return recoveryScreen(
       "SHOP",
       "That store is no longer available. Close this and start again."
     );
   }
-  const skus = await buildSkuRows(merchantId);
+  const products = await prisma.product.findMany({
+    where: { merchantId, active: true, stockQuantity: { gt: 0 } },
+    orderBy: [{ category: "asc" }, { name: "asc" }],
+    take: MAX_PRODUCT_ROWS,
+    select: { id: true, name: true, category: true, priceKobo: true },
+  });
+  const rows = await buildProductRows(products);
   const items = state.items ?? [];
-  const subtotal = cartSubtotalKobo(items);
-  const summary = items.length
-    ? `🛒 Your cart\n${cartLines(items)}`
-    : "Your cart is empty. Pick an item below and choose “Add this item”.";
+  return {
+    screen: "SHOP",
+    data: {
+      ...shopDefaults(name),
+      footer_label: "View product",
+      show_products: rows.length > 0,
+      has_products: rows.length > 0,
+      products: rows,
+      show_cart_hint: items.length > 0,
+      has_cart: items.length > 0,
+      cart_hint: cartHint(items),
+      ...errorFields(error),
+    },
+  };
+}
+
+/** SHOP — product ("Customize") view: image, price, quantity, size/colour. */
+async function buildProductMode(
+  merchantId: string,
+  state: FlowOrderState,
+  productId: string,
+  error?: string
+): Promise<FlowScreenResponse> {
+  const name = await storeName(merchantId);
+  const product = name ? await loadProduct(productId, merchantId) : null;
+  if (!name || !product) {
+    return buildShopScreen(
+      merchantId,
+      { ...state, shopMode: "catalogue", selectedProductId: undefined },
+      "That item is no longer available. Pick another."
+    );
+  }
+  const inStock = product.variants.filter((v) => v.stockQuantity > 0);
+  const sizes = distinctOptions(inStock.map((v) => v.size));
+  const colours = distinctOptions(inStock.map((v) => v.colour));
+  const image = await productImageBase64(product.id, "detail");
+  const hasAdjustment = inStock.some((v) => v.priceAdjustmentKobo !== 0);
 
   return {
     screen: "SHOP",
     data: {
-      store_name: merchant.name,
-      has_cart: items.length > 0,
-      cart_summary: summary,
-      cart_total: items.length ? `Subtotal: ${formatNaira(subtotal)}` : "",
-      has_skus: skus.length > 0,
-      skus,
+      ...shopDefaults(name),
+      footer_label: "Add to cart",
+      show_product: true,
+      show_product_image: Boolean(image),
+      product_image: image ?? "",
+      product_name: product.name,
+      product_price: `${hasAdjustment ? "From " : ""}${formatNaira(product.priceKobo)}`,
+      product_description: product.description ?? "",
+      quantities: QUANTITY_ROWS,
+      show_sizes: sizes.length > 0,
+      sizes,
+      show_colours: colours.length > 0,
+      colours,
       ...errorFields(error),
     },
   };
+}
+
+/** SHOP — cart view: line items, subtotal and what-next choices. */
+function buildCartMode(
+  name: string,
+  state: FlowOrderState,
+  error?: string
+): FlowScreenResponse {
+  const items = state.items ?? [];
+  return {
+    screen: "SHOP",
+    data: {
+      ...shopDefaults(name),
+      footer_label: "Continue",
+      show_cart: true,
+      cart_lines: items.length
+        ? `🛒 Your cart\n${cartLines(items)}`
+        : "Your cart is empty.",
+      cart_total: items.length
+        ? `Subtotal: ${formatNaira(cartSubtotalKobo(items))}`
+        : "",
+      ...errorFields(error),
+    },
+  };
+}
+
+/** Distinct, order-preserving non-empty option rows (sizes or colours). */
+function distinctOptions(values: Array<string | null>): Row[] {
+  const seen = new Set<string>();
+  const rows: Row[] = [];
+  for (const value of values) {
+    const v = (value ?? "").trim();
+    if (!v || seen.has(v)) continue;
+    seen.add(v);
+    rows.push({ id: v, title: title30(v) });
+  }
+  return rows;
 }
 
 // ---- Delivery --------------------------------------------------------------
@@ -405,12 +536,13 @@ async function handleSearch(
   return buildSearchScreen({ mode, query });
 }
 
-/** Parses a SHOP sku row id into its product and optional variant ids. */
-function parseSku(sku: string): { productId: string; variantId: string | null } {
-  const [productId, variantId] = sku.split(SKU_SEP);
-  return { productId: productId ?? "", variantId: variantId ?? null };
-}
-
+/**
+ * SHOP is a single Flow screen re-rendered in three views (catalogue → product
+ * → cart), because WhatsApp Flows forbid backward navigation and the "add
+ * another item" loop must stay on one screen. The current view lives in
+ * `state.shopMode`; every product, variant, price and stock value is re-read
+ * from PostgreSQL here — nothing the client echoes is trusted.
+ */
 async function handleShop(
   session: WhatsAppFlowSession,
   state: FlowOrderState,
@@ -423,54 +555,68 @@ async function handleShop(
     );
   }
   const merchantId = state.merchantId;
-  const items = [...(state.items ?? [])];
-  const action = str(payload, "next_action");
+  const mode = state.shopMode ?? "catalogue";
+  const name = state.storeName ?? "your store";
 
-  // --- Remove the last item ------------------------------------------------
-  if (action === "remove") {
-    if (!items.length) {
-      return buildShopScreen(merchantId, state, "Your cart is already empty.");
+  // --- Catalogue: the customer picked a product to customize ---------------
+  if (mode === "catalogue") {
+    const productId = str(payload, "product_pick");
+    if (!productId) {
+      return buildShopScreen(merchantId, state, "Tap a product to view it.");
     }
-    const removed = items.pop();
-    const nextState = { ...state, items, subtotalKobo: cartSubtotalKobo(items) };
+    const product = await loadProduct(productId, merchantId);
+    if (!product) {
+      return buildShopScreen(merchantId, state, "That item just sold out. Pick another.");
+    }
+    const nextState: FlowOrderState = {
+      ...state,
+      shopMode: "product",
+      selectedProductId: productId,
+    };
     await updateFlowSession(session.id, { state: nextState });
-    return buildShopScreen(
-      merchantId,
-      nextState,
-      `Removed ${removed?.name ?? "the last item"}.`
-    );
+    return buildProductMode(merchantId, nextState, productId);
   }
 
-  // --- Checkout ------------------------------------------------------------
-  if (action === "checkout") {
-    if (!items.length) {
-      return buildShopScreen(
-        merchantId,
-        state,
-        "Add at least one item to your cart before checking out."
-      );
+  // --- Cart: continue shopping / checkout / remove -------------------------
+  if (mode === "cart") {
+    const items = [...(state.items ?? [])];
+    const action = str(payload, "cart_action");
+    if (action === "remove") {
+      if (!items.length) return buildCartMode(name, state, "Your cart is already empty.");
+      const removed = items.pop();
+      const nextState = { ...state, items, subtotalKobo: cartSubtotalKobo(items) };
+      await updateFlowSession(session.id, { state: nextState });
+      return buildCartMode(name, nextState, `Removed ${removed?.name ?? "the last item"}.`);
     }
-    const nextState = { ...state, items, subtotalKobo: cartSubtotalKobo(items) };
-    await updateFlowSession(session.id, {
-      state: nextState,
-      currentScreen: "DELIVERY",
-    });
-    return buildDeliveryScreen(merchantId);
+    if (action === "checkout") {
+      if (!items.length) {
+        return buildCartMode(name, state, "Add at least one item before checking out.");
+      }
+      const nextState = { ...state, items, subtotalKobo: cartSubtotalKobo(items) };
+      await updateFlowSession(session.id, { state: nextState, currentScreen: "DELIVERY" });
+      return buildDeliveryScreen(merchantId);
+    }
+    // Continue shopping (default) — back to the catalogue view.
+    const back: FlowOrderState = { ...state, shopMode: "catalogue", selectedProductId: undefined };
+    await updateFlowSession(session.id, { state: back });
+    return buildShopScreen(merchantId, back);
   }
 
-  // --- Add an item (default) ----------------------------------------------
-  const { productId, variantId } = parseSku(str(payload, "sku"));
-  if (!productId) {
-    return buildShopScreen(merchantId, state, "Pick an item to add to your cart.");
-  }
-  const product = await loadProduct(productId, merchantId);
+  // --- Product ("Customize"): validate selection + add to cart -------------
+  const productId = state.selectedProductId ?? "";
+  const product = productId ? await loadProduct(productId, merchantId) : null;
   if (!product) {
-    return buildShopScreen(
-      merchantId,
-      state,
-      "That item just sold out. Pick another."
-    );
+    const back: FlowOrderState = { ...state, shopMode: "catalogue", selectedProductId: undefined };
+    await updateFlowSession(session.id, { state: back });
+    return buildShopScreen(merchantId, back, "That item is no longer available. Pick another.");
   }
+
+  const items = [...(state.items ?? [])];
+  const inStock = product.variants.filter((v) => v.stockQuantity > 0);
+  const needSize = inStock.some((v) => v.size);
+  const needColour = inStock.some((v) => v.colour);
+  const chosenSize = str(payload, "size") || null;
+  const chosenColour = str(payload, "colour") || null;
 
   let unitPriceKobo = product.priceKobo;
   let size: string | null = null;
@@ -478,15 +624,24 @@ async function handleShop(
   let resolvedVariantId: string | null = null;
   let availableStock = product.stockQuantity;
 
-  if (variantId) {
-    const variant = product.variants.find(
-      (candidate) => candidate.id === variantId && candidate.stockQuantity > 0
+  if (product.variants.length) {
+    if (needSize && !chosenSize) {
+      return buildProductMode(merchantId, state, productId, "Choose a size.");
+    }
+    if (needColour && !chosenColour) {
+      return buildProductMode(merchantId, state, productId, "Choose a colour.");
+    }
+    const variant = inStock.find(
+      (v) =>
+        (!needSize || v.size === chosenSize) &&
+        (!needColour || v.colour === chosenColour)
     );
     if (!variant) {
-      return buildShopScreen(
+      return buildProductMode(
         merchantId,
         state,
-        "That option is out of stock. Pick another."
+        productId,
+        "That combination is unavailable. Pick another."
       );
     }
     resolvedVariantId = variant.id;
@@ -502,12 +657,13 @@ async function handleShop(
     .reduce((sum, i) => sum + i.quantity, 0);
   const maxAddable = Math.min(MAX_QUANTITY, availableStock - alreadyInCart);
   if (!Number.isInteger(quantity) || quantity < 1) {
-    return buildShopScreen(merchantId, state, "Choose a valid quantity.");
+    return buildProductMode(merchantId, state, productId, "Choose a valid quantity.");
   }
   if (quantity > maxAddable) {
-    return buildShopScreen(
+    return buildProductMode(
       merchantId,
       state,
+      productId,
       maxAddable > 0
         ? `Only ${maxAddable} more of that item ${maxAddable === 1 ? "is" : "are"} available.`
         : "You already have all the available stock of that item in your cart."
@@ -515,7 +671,6 @@ async function handleShop(
   }
 
   const variantLabel = variantLabelOf(size, colour) || null;
-  // Merge with an identical line if present, else append.
   const existing = items.find(
     (i) => i.productId === productId && i.variantId === resolvedVariantId
   );
@@ -536,12 +691,18 @@ async function handleShop(
     });
   }
 
-  const nextState = { ...state, items, subtotalKobo: cartSubtotalKobo(items) };
+  const nextState: FlowOrderState = {
+    ...state,
+    items,
+    subtotalKobo: cartSubtotalKobo(items),
+    shopMode: "cart",
+    selectedProductId: undefined,
+  };
   await updateFlowSession(session.id, { state: nextState });
-  return buildShopScreen(
-    merchantId,
+  return buildCartMode(
+    name,
     nextState,
-    `Added ${quantity} × ${product.name}. Add more, or choose Checkout.`
+    `Added ${quantity} × ${product.name}. Continue shopping or check out.`
   );
 }
 
