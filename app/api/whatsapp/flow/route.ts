@@ -98,11 +98,25 @@ export async function POST(request: NextRequest) {
 
   const { decryptedBody, aesKey, initialVector } = decrypted;
   const action = typeof decryptedBody.action === "string" ? decryptedBody.action : "";
-  const encrypt = (payload: unknown) =>
-    new NextResponse(encryptFlowResponse(payload, aesKey, initialVector), {
+  logger.info("flow request", {
+    action,
+    screen: typeof decryptedBody.screen === "string" ? decryptedBody.screen : "",
+    hasToken: typeof decryptedBody.flow_token === "string",
+  });
+  const encrypt = (payload: unknown) => {
+    const record = payload as { screen?: string; data?: Record<string, unknown> };
+    if (record?.screen) {
+      logger.info("flow response", {
+        screen: record.screen,
+        keys: Object.keys(record.data ?? {}).length,
+        bytes: JSON.stringify(record.data ?? {}).length,
+      });
+    }
+    return new NextResponse(encryptFlowResponse(payload, aesKey, initialVector), {
       status: 200,
       headers: { "Content-Type": "text/plain" },
     });
+  };
 
   // 5. Health check — Meta pings a live endpoint before publishing.
   if (action === "ping") {

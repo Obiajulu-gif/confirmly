@@ -774,11 +774,8 @@ export async function resolveFlowScreen(input: {
   const screen = input.screen ?? "";
 
   if (input.action === "INIT") {
-    // A store-scoped session (opened from a specific shop) starts on that
-    // store's catalogue; otherwise the customer discovers a store first.
-    if (state.merchantId) {
-      return buildShopScreen(state.merchantId, state);
-    }
+    // Open on store discovery (image-free) so the Flow always renders a valid
+    // first screen; the customer picks a store, then lands on its catalogue.
     return buildSearchScreen({ mode: "marketplace" });
   }
 
