@@ -60,6 +60,10 @@ export interface CreatedFlowSession {
 export async function createFlowSession(params: {
   waId: string;
   merchantId?: string | null;
+  /** Pre-seed the accumulated state (e.g. launching straight into a store). */
+  state?: FlowOrderState;
+  /** The screen the Flow is launched on, so the endpoint stays in sync. */
+  currentScreen?: string;
   ttlMinutes?: number;
 }): Promise<CreatedFlowSession> {
   const token = randomBytes(24).toString("base64url");
@@ -71,7 +75,8 @@ export async function createFlowSession(params: {
       tokenHash: hashFlowToken(token),
       waId: params.waId,
       merchantId: params.merchantId ?? null,
-      state: {},
+      state: (params.state ?? {}) as object,
+      ...(params.currentScreen ? { currentScreen: params.currentScreen } : {}),
       expiresAt,
     },
   });

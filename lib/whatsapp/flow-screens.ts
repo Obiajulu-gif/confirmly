@@ -244,7 +244,7 @@ function cartLines(items: FlowCartItem[]): string {
     .join("\n");
 }
 
-async function buildShopScreen(
+export async function buildShopScreen(
   merchantId: string,
   state: FlowOrderState,
   error?: string

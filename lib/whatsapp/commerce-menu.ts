@@ -354,6 +354,17 @@ async function sendCatalogue(
   waId: string,
   context: StoreContext
 ): Promise<void> {
+  // Prefer the native ordering Flow, opened straight on this store's
+  // catalogue. Falls back to the interactive list below when the Flow is
+  // disabled, the store has nothing in stock, or the send fails.
+  if (
+    await maybeSendOrderFlow(waId, {
+      merchantId: context.merchant.id,
+      storeName: context.merchant.name,
+    })
+  ) {
+    return;
+  }
   // Backfill a missing product image in the background as customers browse —
   // never blocks the WhatsApp response.
   defer(() =>
