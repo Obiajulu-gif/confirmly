@@ -278,10 +278,6 @@
           "type": "string",
           "__example__": "Rich tomato stew."
         },
-        "has_product_image": {
-          "type": "boolean",
-          "__example__": false
-        },
         "product_image": {
           "type": "string",
           "__example__": ""
@@ -310,10 +306,6 @@
             }
           ]
         },
-        "has_sizes": {
-          "type": "boolean",
-          "__example__": false
-        },
         "sizes": {
           "type": "array",
           "items": {
@@ -328,10 +320,6 @@
             }
           },
           "__example__": []
-        },
-        "has_colours": {
-          "type": "boolean",
-          "__example__": false
         },
         "colours": {
           "type": "array",

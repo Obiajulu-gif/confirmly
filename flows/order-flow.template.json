@@ -190,7 +190,6 @@
         "product_name": { "type": "string", "__example__": "Stew" },
         "product_price": { "type": "string", "__example__": "₦820" },
         "product_description": { "type": "string", "__example__": "Rich tomato stew." },
-        "has_product_image": { "type": "boolean", "__example__": false },
         "product_image": { "type": "string", "__example__": "" },
         "quantities": {
           "type": "array",
@@ -206,7 +205,6 @@
             { "id": "2", "title": "2" }
           ]
         },
-        "has_sizes": { "type": "boolean", "__example__": false },
         "sizes": {
           "type": "array",
           "items": {
@@ -218,7 +216,6 @@
           },
           "__example__": []
         },
-        "has_colours": { "type": "boolean", "__example__": false },
         "colours": {
           "type": "array",
           "items": {
