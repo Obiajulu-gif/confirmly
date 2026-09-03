@@ -35,12 +35,10 @@ export async function maybeSendOrderFlow(
   const flowId = settings.WHATSAPP_ORDER_FLOW_ID;
   const banner = orderBannerUrl();
 
-  // Launch on the flow's static entry screen (START). Meta renders START from
-  // the flow JSON directly (no endpoint round-trip), which is the reliable,
-  // canonical way to open a flow — a `navigate` launch to any OTHER screen is
-  // rejected (131009), and a `data_exchange` launch (endpoint-driven INIT) is
-  // rejected too. From START the customer chooses Search / Marketplace and the
-  // flow advances screen-by-screen via data_exchange.
+  // Launch with `data_exchange`: Meta ACCEPTS this send (a `navigate` launch to
+  // START — or any screen — is rejected with 131009), then opens the flow and
+  // calls our endpoint with an INIT request. The endpoint answers INIT with the
+  // store-list screen (see resolveFlowScreen), and the flow advances from there.
   try {
     const { token } = await createFlowSession({
       waId,
@@ -60,8 +58,7 @@ export async function maybeSendOrderFlow(
         "Search for a shop or browse the marketplace, pick your items, and pay — all in one place.",
       cta: "Shop now",
       footerText: "Powered by Confirmly",
-      flowAction: "navigate",
-      screen: "START",
+      flowAction: "data_exchange",
     });
     logger.info("whatsapp order Flow launched", { waId, store: Boolean(store) });
     return true;
