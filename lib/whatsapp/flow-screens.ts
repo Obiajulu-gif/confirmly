@@ -1,6 +1,7 @@
 import "server-only";
 import type { WhatsAppFlowSession } from "@prisma/client";
 import { prisma } from "@/lib/db";
+import { logger } from "@/lib/logger";
 import { formatNaira } from "@/lib/money";
 import { searchScore } from "@/lib/orders/matching";
 import {
@@ -586,6 +587,53 @@ async function handleOnboarding(
   return buildSearchScreen({ mode });
 }
 
+/**
+ * Persists the customer for a store as soon as they select it in the Flow,
+ * applying any first-time onboarding profile (name · email · referral). Runs
+ * best-effort — a write failure must never block store browsing. A matching
+ * Conversation is upserted so the customer also appears in the ops inbox.
+ */
+async function recordFlowCustomer(
+  merchantId: string,
+  session: WhatsAppFlowSession,
+  state: FlowOrderState
+): Promise<void> {
+  const profile = {
+    ...(state.onboardingName ? { name: state.onboardingName } : {}),
+    ...(state.onboardingEmail ? { email: state.onboardingEmail } : {}),
+    ...(state.referralCode ? { referralCode: state.referralCode } : {}),
+  };
+  try {
+    const customer = await prisma.customer.upsert({
+      where: { merchantId_waId: { merchantId, waId: session.waId } },
+      create: { merchantId, waId: session.waId, phoneNumber: session.waId, ...profile },
+      update: profile,
+    });
+    await prisma.conversation.upsert({
+      where: {
+        merchantId_customerId_channel: {
+          merchantId,
+          customerId: customer.id,
+          channel: "whatsapp",
+        },
+      },
+      create: {
+        merchantId,
+        customerId: customer.id,
+        channel: "whatsapp",
+        state: "COLLECTING_ORDER",
+        lastInboundAt: new Date(),
+      },
+      update: { lastInboundAt: new Date() },
+    });
+  } catch (err) {
+    logger.warn("flow customer record failed", {
+      merchantId,
+      reason: err instanceof Error ? err.message : "unknown",
+    });
+  }
+}
+
 async function handleSearch(
   session: WhatsAppFlowSession,
   state: FlowOrderState,
@@ -619,6 +667,9 @@ async function handleSearch(
         error: `${merchant.name} has no items available right now. Try another store.`,
       });
     }
+    // Record the customer for this store now (with any onboarding profile) so a
+    // first-time user shows up in the backend/admin even before they order.
+    await recordFlowCustomer(merchant.id, session, state);
     const nextState: FlowOrderState = {
       ...state,
       merchantId: merchant.id,
