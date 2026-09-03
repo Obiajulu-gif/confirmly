@@ -298,6 +298,21 @@ export async function markMessageRead(
   });
 }
 
+/**
+ * Marks the customer's message read AND shows a "typing…" indicator, so the
+ * chat feels responsive while we compute the reply. WhatsApp clears it as soon
+ * as we send a message (or after ~25s). Best-effort — never block on it.
+ */
+export async function sendTypingIndicator(
+  providerMessageId: string
+): Promise<SendResult> {
+  return post({
+    status: "read",
+    message_id: providerMessageId,
+    typing_indicator: { type: "text" },
+  });
+}
+
 /** Sends the pre-approved hello_world template (Meta test number default). */
 export async function sendTemplate(
   to: string,

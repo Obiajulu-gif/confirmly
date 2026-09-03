@@ -12,6 +12,7 @@ import {
 } from "@/lib/whatsapp/types";
 import { preprocessCommerceMessage } from "@/lib/whatsapp/commerce-menu";
 import { processInboundMessage } from "@/lib/orders/engine";
+import { sendTypingIndicator } from "@/lib/whatsapp/client";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -107,6 +108,8 @@ export async function POST(request: NextRequest) {
     for (const message of webhook.messages) {
       if (!newMessageIds.has(message.providerMessageId)) continue;
       try {
+        // Show a "typing…" indicator so the chat feels alive before we reply.
+        await sendTypingIndicator(message.providerMessageId).catch(() => {});
         const menuResult = await preprocessCommerceMessage(message);
         if (!menuResult.handled) {
           await processInboundMessage(menuResult.forwardedMessage ?? message);
