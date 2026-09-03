@@ -51,6 +51,9 @@ const QUANTITY_ROWS: Row[] = Array.from({ length: MAX_QUANTITY }, (_, i) => ({
   title: String(i + 1),
 }));
 
+/** Sentinel catalogue-row id that opens the cart view instead of a product. */
+const CART_ROW_ID = "__cart__";
+
 function str(payload: Record<string, unknown>, key: string): string {
   const value = payload[key];
   if (typeof value === "string") return value;
@@ -314,13 +317,26 @@ export async function buildShopScreen(
     take: MAX_PRODUCT_ROWS,
     select: { id: true, name: true, category: true, priceKobo: true },
   });
-  const rows = await buildProductRows(products);
+  const productRows = await buildProductRows(products);
   const items = state.items ?? [];
+  // When the cart has items, offer a "View cart" row at the top so the customer
+  // can open the cart view on demand (single Footer, so it's a selectable row).
+  const count = items.reduce((sum, item) => sum + item.quantity, 0);
+  const rows: ProductRow[] = count
+    ? [
+        {
+          id: CART_ROW_ID,
+          title: `🛒 View cart · ${count} item${count === 1 ? "" : "s"}`,
+          description: `${formatNaira(cartSubtotalKobo(items))} — review or check out`,
+        },
+        ...productRows,
+      ]
+    : productRows;
   return {
     screen: "SHOP",
     data: {
       ...shopDefaults(name),
-      footer_label: "View product",
+      footer_label: "Continue",
       show_products: rows.length > 0,
       has_products: rows.length > 0,
       products: rows,
@@ -595,6 +611,16 @@ async function handleShop(
   // --- Catalogue: the customer picked a product to customize ---------------
   if (mode === "catalogue") {
     const productId = str(payload, "product_pick");
+    // "View cart" row → open the cart view.
+    if (productId === CART_ROW_ID) {
+      const items = state.items ?? [];
+      if (!items.length) {
+        return buildShopScreen(merchantId, state, "Your cart is empty — add an item first.");
+      }
+      const nextState: FlowOrderState = { ...state, shopMode: "cart" };
+      await updateFlowSession(session.id, { state: nextState });
+      return buildCartMode(name, nextState);
+    }
     if (!productId) {
       return buildShopScreen(merchantId, state, "Tap a product to view it.");
     }
