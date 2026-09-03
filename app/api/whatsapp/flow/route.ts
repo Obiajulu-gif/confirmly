@@ -98,6 +98,11 @@ export async function POST(request: NextRequest) {
 
   const { decryptedBody, aesKey, initialVector } = decrypted;
   const action = typeof decryptedBody.action === "string" ? decryptedBody.action : "";
+  // Meta's data-exchange response MUST echo the data_api_version — omitting it
+  // makes the client reject an otherwise-valid screen with "Something went
+  // wrong" and retry the request.
+  const version =
+    typeof decryptedBody.version === "string" ? decryptedBody.version : "3.0";
   logger.info("flow request", {
     action,
     screen: typeof decryptedBody.screen === "string" ? decryptedBody.screen : "",
@@ -112,10 +117,14 @@ export async function POST(request: NextRequest) {
         bytes: JSON.stringify(record.data ?? {}).length,
       });
     }
-    return new NextResponse(encryptFlowResponse(payload, aesKey, initialVector), {
-      status: 200,
-      headers: { "Content-Type": "text/plain" },
-    });
+    return new NextResponse(
+      encryptFlowResponse(
+        { version, ...(payload as Record<string, unknown>) },
+        aesKey,
+        initialVector
+      ),
+      { status: 200, headers: { "Content-Type": "text/plain" } }
+    );
   };
 
   // 5. Health check — Meta pings a live endpoint before publishing.
