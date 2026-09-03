@@ -752,6 +752,11 @@ async function handleFlowReply(
   const session = await prisma.whatsAppFlowSession.findUnique({
     where: { tokenHash: hashFlowToken(token) },
   });
+  if (session?.completedAt && readFlowState(session).orderRef) {
+    // The order was already placed inside the Flow (REVIEW → Confirm) and the
+    // payment link is already in this chat — the "Done" tap is a no-op.
+    return { handled: true };
+  }
   if (!session || session.completedAt) {
     await sendText(
       message.from,

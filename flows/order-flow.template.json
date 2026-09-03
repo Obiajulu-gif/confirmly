@@ -7,7 +7,8 @@
     "SEARCH": ["SHOP"],
     "SHOP": ["DELIVERY"],
     "DELIVERY": ["REVIEW"],
-    "REVIEW": []
+    "REVIEW": ["PAYMENT"],
+    "PAYMENT": []
   },
   "screens": [
     {
@@ -422,7 +423,7 @@
     {
       "id": "REVIEW",
       "title": "Review order",
-      "terminal": true,
+      "terminal": false,
       "data": {
         "summary": {
           "type": "string",
@@ -454,16 +455,62 @@
           },
           {
             "type": "TextCaption",
-            "text": "Tapping Confirm sends your order to the store. You will get a secure Monnify payment link to complete checkout."
+            "text": "Tapping Confirm places your order and shows a secure Monnify payment link right here."
           },
           {
             "type": "Footer",
             "label": "Confirm order",
             "on-click-action": {
+              "name": "data_exchange",
+              "payload": {}
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "PAYMENT",
+      "title": "Payment",
+      "terminal": true,
+      "data": {
+        "payment_summary": {
+          "type": "string",
+          "__example__": "Order CFY-7Y7SUEG7 is confirmed.\n\nTotal due: ₦10,000"
+        },
+        "checkout_url": {
+          "type": "string",
+          "__example__": "https://sandbox.sdk.monnify.com/checkout/example"
+        }
+      },
+      "layout": {
+        "type": "SingleColumnLayout",
+        "children": [
+          {
+            "type": "TextHeading",
+            "text": "Order confirmed ✅"
+          },
+          {
+            "type": "TextBody",
+            "text": "${data.payment_summary}"
+          },
+          {
+            "type": "EmbeddedLink",
+            "text": "Pay now with Monnify",
+            "on-click-action": {
+              "name": "open_url",
+              "url": "${data.checkout_url}"
+            }
+          },
+          {
+            "type": "TextCaption",
+            "text": "We verify every payment automatically — no screenshots needed. Your receipt lands in this chat the moment it's confirmed."
+          },
+          {
+            "type": "Footer",
+            "label": "Done",
+            "on-click-action": {
               "name": "complete",
-              "payload": {
-                "flow_token": "${data.flow_token}"
-              }
+              "payload": {}
             }
           }
         ]

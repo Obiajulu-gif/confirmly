@@ -14,6 +14,7 @@ import {
   productImageBase64,
   productThumbnails,
 } from "@/lib/whatsapp/flow-media";
+import { finalizeFlowOrder } from "@/lib/whatsapp/flow-order";
 
 /**
  * Server-side resolver for the native ordering Flow. Given the decrypted
@@ -471,6 +472,39 @@ async function buildReviewScreen(
   };
 }
 
+/**
+ * REVIEW → Confirm: place the order + create the Monnify payment, then show the
+ * PAYMENT screen with a "Pay now" link right inside the Flow. The order is
+ * created here (not after the Flow closes) so the payment link lives in the
+ * Flow UI. On failure, re-render REVIEW with an error rather than a broken jump.
+ */
+async function handleReview(
+  session: WhatsAppFlowSession,
+  flowToken: string
+): Promise<FlowScreenResponse> {
+  const result = await finalizeFlowOrder(session);
+  if (!result) {
+    return {
+      screen: "REVIEW",
+      data: {
+        summary:
+          "Something went wrong placing your order. Please close this and start again.",
+        total_label: "",
+        flow_token: flowToken,
+      },
+    };
+  }
+  return {
+    screen: "PAYMENT",
+    data: {
+      payment_summary: `Order ${result.orderRef} is confirmed.\n\nTotal due: ${formatNaira(
+        result.totalKobo
+      )}`,
+      checkout_url: result.checkoutUrl,
+    },
+  };
+}
+
 // ---- Transition handlers ---------------------------------------------------
 
 async function handleStart(
@@ -791,6 +825,8 @@ export async function resolveFlowScreen(input: {
         return handleShop(input.session, state, payload);
       case "DELIVERY":
         return handleDelivery(input.session, state, payload, input.flowToken);
+      case "REVIEW":
+        return handleReview(input.session, input.flowToken);
       default:
         return buildSearchScreen({ mode: "marketplace" });
     }

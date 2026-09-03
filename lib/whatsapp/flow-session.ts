@@ -43,6 +43,8 @@ export interface FlowOrderState {
   subtotalKobo?: number;
   deliveryFeeKobo?: number;
   totalKobo?: number;
+  /** Set once the order is placed from REVIEW, so completion can't re-place it. */
+  orderRef?: string;
 }
 
 /** Sum of the cart's line totals. */
