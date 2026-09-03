@@ -7,6 +7,7 @@ import {
   Store,
   Package,
   Users,
+  UserPlus,
   Smartphone,
   Receipt,
 } from "lucide-react";
@@ -16,6 +17,7 @@ const links = [
   { href: "/admin/merchants", label: "Merchants", icon: Store },
   { href: "/admin/products", label: "Products", icon: Package },
   { href: "/admin/customers", label: "Customers", icon: Users },
+  { href: "/admin/leads", label: "Leads", icon: UserPlus },
   { href: "/admin/sessions", label: "WhatsApp numbers", icon: Smartphone },
   { href: "/admin/orders", label: "Orders", icon: Receipt },
 ];

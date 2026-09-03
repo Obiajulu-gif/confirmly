@@ -574,6 +574,25 @@ async function handleOnboarding(
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
     return buildOnboardingScreen("Please enter a valid email address.");
   }
+  // Capture a global lead immediately — this records every completed onboarding
+  // even if the customer never picks a store. Best-effort.
+  try {
+    await prisma.lead.upsert({
+      where: { waId: session.waId },
+      create: {
+        waId: session.waId,
+        name,
+        email,
+        referralCode: referral || null,
+        source: "flow_onboarding",
+      },
+      update: { name, email, referralCode: referral || null },
+    });
+  } catch (err) {
+    logger.warn("flow lead capture failed", {
+      reason: err instanceof Error ? err.message : "unknown",
+    });
+  }
   const mode = state.entryPoint === "search" ? "search" : "marketplace";
   await updateFlowSession(session.id, {
     state: {

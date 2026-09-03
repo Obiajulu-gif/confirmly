@@ -470,6 +470,27 @@ model Customer {
   @@index([merchantId])
 }
 
+/**
+ * Global (not per-store) capture of a customer who completed first-time Flow
+ * onboarding — recorded the moment they submit name/email, even if they never
+ * pick a store. One row per WhatsApp number.
+ */
+model Lead {
+  id           String   @id @default(cuid())
+  waId         String   @unique
+  name         String?
+  email        String?
+  referralCode String?
+  /**
+   * Where the lead came from (e.g. "flow_onboarding").
+   */
+  source       String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([createdAt])
+}
+
 model Conversation {
   id                String            @id @default(cuid())
   merchantId        String
