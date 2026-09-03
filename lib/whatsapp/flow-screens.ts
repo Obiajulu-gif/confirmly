@@ -774,9 +774,11 @@ export async function resolveFlowScreen(input: {
   const screen = input.screen ?? "";
 
   if (input.action === "INIT") {
-    // Open on store discovery (image-free) so the Flow always renders a valid
-    // first screen; the customer picks a store, then lands on its catalogue.
-    return buildSearchScreen({ mode: "marketplace" });
+    // Meta requires the INIT response to be the flow's ENTRY screen (START).
+    // Returning any other screen here makes the client reject it ("Something
+    // went wrong") and retry INIT. START is static, so an empty data payload is
+    // correct; the customer picks Search/Marketplace and advances from there.
+    return { screen: "START", data: {} };
   }
 
   if (input.action === "data_exchange" || input.action === "BACK") {
