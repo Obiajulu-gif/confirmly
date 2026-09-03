@@ -1,20 +1,12 @@
 import "server-only";
 import { env, appUrl } from "@/lib/env";
 import { logger } from "@/lib/logger";
-import { prisma } from "@/lib/db";
 import { sendFlow } from "@/lib/whatsapp/client";
 import { createFlowSession } from "@/lib/whatsapp/flow-session";
 
 /** Public banner shown as the Flow launch card header (see public/whatsapp/). */
 function orderBannerUrl(): string {
   return `${appUrl().replace(/\/$/, "")}/whatsapp/order-banner.jpg`;
-}
-
-async function storeHasStock(merchantId: string): Promise<boolean> {
-  const count = await prisma.product.count({
-    where: { merchantId, active: true, stockQuantity: { gt: 0 } },
-  });
-  return count > 0;
 }
 
 /**
@@ -43,45 +35,12 @@ export async function maybeSendOrderFlow(
   const flowId = settings.WHATSAPP_ORDER_FLOW_ID;
   const banner = orderBannerUrl();
 
-  // Preferred: open directly on the store's catalogue via an endpoint INIT.
-  if (store) {
-    try {
-      if (!(await storeHasStock(store.merchantId))) return false;
-      const { token } = await createFlowSession({
-        waId,
-        merchantId: store.merchantId,
-        state: {
-          merchantId: store.merchantId,
-          storeName: store.storeName,
-          shopMode: "catalogue",
-        },
-        currentScreen: "SHOP",
-      });
-      await sendFlow(waId, {
-        flowId,
-        flowToken: token,
-        headerImageUrl: banner,
-        bodyText:
-          `🛍️ *Shop ${store.storeName} on WhatsApp*\n\n` +
-          "Browse the catalogue, add items to your cart, choose delivery and pay — all right here.",
-        cta: "Shop now",
-        footerText: "Powered by Confirmly",
-        flowAction: "data_exchange",
-      });
-      logger.info("whatsapp order Flow launched (store)", {
-        waId,
-        merchantId: store.merchantId,
-      });
-      return true;
-    } catch (error) {
-      logger.warn("store Flow launch failed; trying START launch", {
-        reason: error instanceof Error ? error.message : "unknown",
-      });
-      // Fall through to the START launch below.
-    }
-  }
-
-  // Global entry (or store fallback): open the Search/Marketplace start screen.
+  // Launch on the flow's static entry screen (START). Meta renders START from
+  // the flow JSON directly (no endpoint round-trip), which is the reliable,
+  // canonical way to open a flow — a `navigate` launch to any OTHER screen is
+  // rejected (131009), and a `data_exchange` launch (endpoint-driven INIT) is
+  // rejected too. From START the customer chooses Search / Marketplace and the
+  // flow advances screen-by-screen via data_exchange.
   try {
     const { token } = await createFlowSession({
       waId,
