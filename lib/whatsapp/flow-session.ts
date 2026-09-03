@@ -31,6 +31,10 @@ export interface FlowOrderState {
   entryPoint?: "search" | "marketplace";
   merchantId?: string;
   storeName?: string;
+  /** First-time onboarding capture (applied to the Customer at order time). */
+  onboardingName?: string;
+  onboardingEmail?: string;
+  referralCode?: string | null;
   /** Which SHOP view the customer is on (catalogue → product → cart loop). */
   shopMode?: "catalogue" | "product" | "cart";
   /** The product being customized in the "product" view. */

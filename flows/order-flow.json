@@ -3,6 +3,10 @@
   "data_api_version": "3.0",
   "routing_model": {
     "START": [
+      "ONBOARDING",
+      "SEARCH"
+    ],
+    "ONBOARDING": [
       "SEARCH"
     ],
     "SEARCH": [
@@ -20,6 +24,78 @@
     "PAYMENT": []
   },
   "screens": [
+    {
+      "id": "ONBOARDING",
+      "title": "Set up your account",
+      "terminal": false,
+      "data": {
+        "has_error": {
+          "type": "boolean",
+          "__example__": false
+        },
+        "error_message": {
+          "type": "string",
+          "__example__": ""
+        }
+      },
+      "layout": {
+        "type": "SingleColumnLayout",
+        "children": [
+          {
+            "type": "TextHeading",
+            "text": "Welcome to Confirmly 👋"
+          },
+          {
+            "type": "TextBody",
+            "text": "Tell us a little about yourself and you're ready to order."
+          },
+          {
+            "type": "If",
+            "condition": "${data.has_error}",
+            "then": [
+              {
+                "type": "TextCaption",
+                "text": "${data.error_message}"
+              }
+            ]
+          },
+          {
+            "type": "TextInput",
+            "name": "name",
+            "label": "Your name",
+            "input-type": "text",
+            "required": true
+          },
+          {
+            "type": "TextInput",
+            "name": "email",
+            "label": "Email address",
+            "input-type": "email",
+            "required": true
+          },
+          {
+            "type": "TextInput",
+            "name": "referral",
+            "label": "Referral code (optional)",
+            "input-type": "text",
+            "required": false,
+            "helper-text": "Already filled in if you used a friend's link."
+          },
+          {
+            "type": "Footer",
+            "label": "Get started",
+            "on-click-action": {
+              "name": "data_exchange",
+              "payload": {
+                "name": "${form.name}",
+                "email": "${form.email}",
+                "referral": "${form.referral}"
+              }
+            }
+          }
+        ]
+      }
+    },
     {
       "id": "START",
       "title": "Order on WhatsApp",

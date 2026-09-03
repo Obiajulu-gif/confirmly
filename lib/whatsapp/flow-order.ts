@@ -39,10 +39,17 @@ export async function finalizeFlowOrder(
   const merchantId = state.merchantId;
   const waId = session.waId;
 
+  // Apply the profile captured at first-time onboarding (name · email ·
+  // referral). Only fills fields the customer provided; never blanks existing.
+  const profile = {
+    ...(state.onboardingName ? { name: state.onboardingName } : {}),
+    ...(state.onboardingEmail ? { email: state.onboardingEmail } : {}),
+    ...(state.referralCode ? { referralCode: state.referralCode } : {}),
+  };
   const customer = await prisma.customer.upsert({
     where: { merchantId_waId: { merchantId, waId } },
-    create: { merchantId, waId, phoneNumber: waId },
-    update: {},
+    create: { merchantId, waId, phoneNumber: waId, ...profile },
+    update: profile,
   });
   const conversation = await prisma.conversation.findFirst({
     where: { merchantId, customerId: customer.id },

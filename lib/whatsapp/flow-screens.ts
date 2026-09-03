@@ -523,14 +523,64 @@ async function handleReview(
 
 // ---- Transition handlers ---------------------------------------------------
 
+/** True when this WhatsApp user has never given us a name (first-time customer). */
+async function isNewCustomer(waId: string): Promise<boolean> {
+  const existing = await prisma.customer.findFirst({
+    where: { waId, name: { not: null } },
+    select: { id: true },
+  });
+  return !existing;
+}
+
+/** The first-time "Set up your account" screen (name · email · referral). */
+function buildOnboardingScreen(error?: string): FlowScreenResponse {
+  return { screen: "ONBOARDING", data: { ...errorFields(error) } };
+}
+
 async function handleStart(
   session: WhatsAppFlowSession,
   state: FlowOrderState,
   payload: Record<string, unknown>
 ): Promise<FlowScreenResponse> {
   const mode = str(payload, "entry_point") === "search" ? "search" : "marketplace";
+  // First-time customers set up their profile once before shopping; returning
+  // customers keep their saved details and go straight to store discovery.
+  if (await isNewCustomer(session.waId)) {
+    await updateFlowSession(session.id, {
+      state: { ...state, entryPoint: mode },
+      currentScreen: "ONBOARDING",
+    });
+    return buildOnboardingScreen();
+  }
   await updateFlowSession(session.id, {
     state: { ...state, entryPoint: mode },
+    currentScreen: "SEARCH",
+  });
+  return buildSearchScreen({ mode });
+}
+
+async function handleOnboarding(
+  session: WhatsAppFlowSession,
+  state: FlowOrderState,
+  payload: Record<string, unknown>
+): Promise<FlowScreenResponse> {
+  const name = str(payload, "name").trim();
+  const email = str(payload, "email").trim();
+  const referral = str(payload, "referral").trim();
+  if (name.length < 2) {
+    return buildOnboardingScreen("Please enter your name.");
+  }
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+    return buildOnboardingScreen("Please enter a valid email address.");
+  }
+  const mode = state.entryPoint === "search" ? "search" : "marketplace";
+  await updateFlowSession(session.id, {
+    state: {
+      ...state,
+      onboardingName: name,
+      onboardingEmail: email,
+      referralCode: referral || null,
+    },
     currentScreen: "SEARCH",
   });
   return buildSearchScreen({ mode });
@@ -845,6 +895,8 @@ export async function resolveFlowScreen(input: {
     switch (screen) {
       case "START":
         return handleStart(input.session, state, payload);
+      case "ONBOARDING":
+        return handleOnboarding(input.session, state, payload);
       case "SEARCH":
         return handleSearch(input.session, state, payload);
       case "SHOP":

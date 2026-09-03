@@ -453,6 +453,10 @@ model Customer {
   phoneNumber    String
   name           String?
   email          String?
+  /**
+   * Optional referral code captured at first-time onboarding.
+   */
+  referralCode   String?
   defaultAddress String?
   optedIn        Boolean  @default(true)
   createdAt      DateTime @default(now())
