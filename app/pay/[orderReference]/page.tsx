@@ -10,11 +10,20 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { prisma } from "@/lib/db";
-import { env } from "@/lib/env";
+import { env, isDemoMode } from "@/lib/env";
 import { formatNaira } from "@/lib/money";
+import { createPaymentForOrder } from "@/lib/payments/service";
+import { logger } from "@/lib/logger";
 import { ConfirmlyLogo } from "@/components/logo";
 import { Badge } from "@/components/ui";
 import { refreshPaymentStatusAction } from "../actions";
+
+const ORDER_INCLUDE = {
+  items: true,
+  payment: true,
+  merchant: true,
+  receipt: true,
+} as const;
 
 export const dynamic = "force-dynamic";
 
@@ -30,11 +39,41 @@ export default async function PayPage({
   params: Promise<{ orderReference: string }>;
 }) {
   const { orderReference } = await params;
-  const order = await prisma.order.findUnique({
+  let order = await prisma.order.findUnique({
     where: { reference: orderReference },
-    include: { items: true, payment: true, merchant: true, receipt: true },
+    include: ORDER_INCLUDE,
   });
   if (!order) notFound();
+
+  // Lazily create the Monnify checkout if the order was placed but payment
+  // creation didn't complete during the Flow (a transient provider/DB hiccup
+  // leaves the order with no payment and only the fallback /pay link). This is
+  // the retry the Flow's fallback comment promises. Never for demo or already
+  // -paid orders; a CheckoutBlockedError falls through to the notice below.
+  // Payment state is still only ever set to PAID by a verified transaction.
+  const needsCheckout =
+    order.state !== "PAID" &&
+    order.state !== "COMPLETED" &&
+    !isDemoMode() &&
+    (!order.payment ||
+      (order.payment.provider === "MONNIFY" &&
+        !order.payment.checkoutUrl &&
+        order.payment.state !== "PAID"));
+  if (needsCheckout) {
+    try {
+      await createPaymentForOrder(order.id);
+      order =
+        (await prisma.order.findUnique({
+          where: { reference: orderReference },
+          include: ORDER_INCLUDE,
+        })) ?? order;
+    } catch (err) {
+      logger.warn("pay page lazy payment creation failed", {
+        reference: orderReference,
+        reason: err instanceof Error ? err.message : "unknown",
+      });
+    }
+  }
 
   const paid = order.state === "PAID" || order.state === "COMPLETED";
   const payment = order.payment;
