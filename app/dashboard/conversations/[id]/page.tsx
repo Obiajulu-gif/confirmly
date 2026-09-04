@@ -5,9 +5,28 @@ import { canAccessBranch, getBusinessSession } from "@/lib/authz/business-access
 import { Badge, Card, stateTone } from "@/components/ui";
 import { toggleAutomationAction } from "../actions";
 import { ReplyForm } from "./reply-form";
+import { AutoRefresh } from "../auto-refresh";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Conversation" };
+
+/** WhatsApp-style delivery indicator for an outbound message. */
+function statusIndicator(status: string): { text: string; className: string } {
+  switch (status) {
+    case "READ":
+      return { text: "✓✓ read", className: "text-sky-600" };
+    case "DELIVERED":
+      return { text: "✓✓ delivered", className: "text-ink-500" };
+    case "SENT":
+      return { text: "✓ sent", className: "text-ink-500" };
+    case "FAILED":
+      return { text: "⚠ failed", className: "text-red-600 font-semibold" };
+    case "QUEUED":
+      return { text: "· sending…", className: "text-ink-400" };
+    default:
+      return { text: status.toLowerCase(), className: "text-ink-500" };
+  }
+}
 
 export default async function ConversationDetailPage({
   params,
@@ -29,8 +48,14 @@ export default async function ConversationDetailPage({
   if (!conversation) notFound();
   if (!(await canAccessBranch(session, conversation.merchantId))) notFound();
 
+  // Opening the chat marks it read (powers the inbox unread indicator).
+  await prisma.conversation
+    .update({ where: { id }, data: { lastReadAt: new Date() } })
+    .catch(() => {});
+
   return (
     <div className="space-y-6">
+      <AutoRefresh intervalMs={5000} />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <Link
@@ -71,14 +96,19 @@ export default async function ConversationDetailPage({
                       }`}
                     >
                       {message.textBody ?? `[${message.type.toLowerCase()}]`}
-                      <p className="mt-1 text-right text-[10px] text-ink-500">
-                        {message.createdAt.toLocaleTimeString("en-NG", {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
+                      <p className="mt-1 flex items-center justify-end gap-1 text-[10px] text-ink-500">
+                        <span>
+                          {message.createdAt.toLocaleTimeString("en-NG", {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </span>
                         {message.direction === "OUTBOUND"
-                          ? ` · ${message.status.toLowerCase()}`
-                          : ""}
+                          ? (() => {
+                              const s = statusIndicator(message.status);
+                              return <span className={s.className}>· {s.text}</span>;
+                            })()
+                          : null}
                       </p>
                     </div>
                   </li>

@@ -505,6 +505,10 @@ model Conversation {
   lastInboundAt     DateTime?
   lastOutboundAt    DateTime?
   /**
+   * Last time a merchant opened this chat — powers the unread indicator.
+   */
+  lastReadAt        DateTime?
+  /**
    * Set when an abandoned-order nudge was sent — throttles to one per cycle.
    */
   lastNudgeAt       DateTime?
