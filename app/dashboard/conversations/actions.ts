@@ -72,6 +72,17 @@ export async function sendMerchantReplyAction(
   const ctx = await authorizeConversation(parsed.data.conversationId);
   if (!ctx) return { error: "conversation not found", ok: false };
 
+  // Sending a manual reply atomically takes the chat over (AUTO → HUMAN) first,
+  // so the bot goes silent and can never reply alongside the merchant. The
+  // engine gates every inbound message on automationMode === "HUMAN".
+  if (ctx.conversation.automationMode === "AUTO") {
+    await takeoverConversation({
+      conversationId: ctx.conversation.id,
+      userId: ctx.session.userId,
+      businessId: ctx.session.businessId,
+    });
+  }
+
   try {
     await sendToCustomer({
       merchantId: ctx.conversation.merchantId,
@@ -87,5 +98,6 @@ export async function sendMerchantReplyAction(
     };
   }
   revalidatePath(`/dashboard/conversations/${ctx.conversation.id}`);
+  revalidatePath("/dashboard/conversations");
   return { error: null, ok: true };
 }
