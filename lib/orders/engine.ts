@@ -1,4 +1,6 @@
 import "server-only";
+import { randomBytes } from "node:crypto";
+import type { IssueCategory } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { logger } from "@/lib/logger";
 import { calculateOrderTotal, formatNaira } from "@/lib/money";
@@ -42,6 +44,8 @@ const COMMAND_CHECK_PAYMENT = /^(check payment|payment status)[.!?]?$/i;
 const COMMAND_RESUME = /^(resume|start over)[.!?]?$/i;
 const COMMAND_VIEW_CART = /^(cart|view cart|view order|my cart|show cart|basket)[.!?]?$/i;
 const COMMAND_MY_ORDERS = /^(my orders|order history|my order|past orders|previous orders)[.!?]?$/i;
+const COMMAND_REPORT_ISSUE =
+  /^(report( an?)?( issue| problem| a problem)?|problem|complaint|complain|wrong order|missing item|item missing|damaged( item)?|not received|didn'?t receive( it)?|i was scammed|scam|report a problem)[.!?]?$/i;
 // Store selection (one shared WhatsApp number serves every merchant).
 const COMMAND_STORE = /^(?:start|store)\s+([a-z0-9-]{2,24})[.!]?$/i;
 const COMMAND_STORE_LIST = /^(stores|shops|switch|change (store|shop))[.!?]?$/i;
@@ -518,9 +522,41 @@ async function handleText(ctx: EngineContext, text: string): Promise<void> {
     await listCustomerOrders(ctx);
     return;
   }
+  if (COMMAND_REPORT_ISSUE.test(trimmed)) {
+    await startIssueReport(ctx);
+    return;
+  }
   if (COMMAND_RESUME.test(trimmed)) {
     await setConversation(ctx, { state: "COLLECTING_ORDER", draft: EMPTY_DRAFT });
     await reply(ctx, "Fresh start! What would you like to order?");
+    return;
+  }
+
+  // Optional free-text follow-up for a just-reported issue.
+  if (ctx.conversation.pendingQuestion?.startsWith("issue:note:")) {
+    const issueId = ctx.conversation.pendingQuestion.slice("issue:note:".length);
+    await setConversation(ctx, { pendingQuestion: null });
+    if (!/^(skip|no|none|n\/a)[.!]?$/i.test(trimmed)) {
+      await prisma.orderIssue
+        .update({ where: { id: issueId }, data: { description: trimmed.slice(0, 1000) } })
+        .catch(() => {});
+    }
+    await reply(
+      ctx,
+      "Thanks — the store has your report and will get back to you. Reply \"my orders\" anytime to check status."
+    );
+    return;
+  }
+  // Optional free-text comment for a just-submitted review.
+  if (ctx.conversation.pendingQuestion?.startsWith("review:comment:")) {
+    const reviewId = ctx.conversation.pendingQuestion.slice("review:comment:".length);
+    await setConversation(ctx, { pendingQuestion: null });
+    if (!/^(skip|no|none|n\/a)[.!]?$/i.test(trimmed)) {
+      await prisma.review
+        .update({ where: { id: reviewId }, data: { comment: trimmed.slice(0, 1000) } })
+        .catch(() => {});
+    }
+    await reply(ctx, "🙏 Thank you for your feedback!");
     return;
   }
 
@@ -1399,6 +1435,20 @@ async function handleInteractiveReply(
     await reorderInto(ctx, interactiveId.slice("reorder:".length));
     return;
   }
+  if (interactiveId.startsWith("issue:order:")) {
+    await showIssueCategories(ctx, interactiveId.slice("issue:order:".length));
+    return;
+  }
+  if (interactiveId.startsWith("issue:cat:")) {
+    const [, , orderId, category] = interactiveId.split(":");
+    await createIssue(ctx, orderId ?? "", category ?? "OTHER");
+    return;
+  }
+  if (interactiveId.startsWith("review:rate:")) {
+    const [, , orderId, rating] = interactiveId.split(":");
+    await createReview(ctx, orderId ?? "", Number(rating ?? 0));
+    return;
+  }
   if (interactiveId.startsWith("onboardzone:")) {
     const zoneId = interactiveId.split(":")[1];
     if (zoneId === "skip") {
@@ -1753,6 +1803,165 @@ async function listCustomerOrders(ctx: EngineContext): Promise<void> {
       description: `${formatNaira(order.totalKobo)} · ${order.payment?.state ?? order.state}`,
     })),
   });
+}
+
+const ISSUE_CATEGORIES: { id: IssueCategory; title: string }[] = [
+  { id: "WRONG_ORDER", title: "Wrong order / items" },
+  { id: "MISSING_ITEM", title: "Item missing" },
+  { id: "DAMAGED_ITEM", title: "Item damaged" },
+  { id: "NOT_RECEIVED", title: "Never received it" },
+  { id: "WRONG_DELIVERY", title: "Wrong delivery" },
+  { id: "PAYMENT_PROBLEM", title: "Payment problem" },
+  { id: "OTHER", title: "Something else" },
+];
+
+/** "Report an issue" — pick which order has a problem. */
+async function startIssueReport(ctx: EngineContext): Promise<void> {
+  const orders = await prisma.order.findMany({
+    where: {
+      merchantId: ctx.merchantId,
+      customerId: ctx.customer.id,
+      state: { in: ["PAID", "FULFILLING", "COMPLETED", "NEEDS_ATTENTION"] },
+    },
+    orderBy: { createdAt: "desc" },
+    take: 9,
+  });
+  if (!orders.length) {
+    await reply(
+      ctx,
+      "You don't have any orders to report yet. Once you place an order you can report a problem here."
+    );
+    return;
+  }
+  await sendToCustomer({
+    merchantId: ctx.merchantId,
+    customer: ctx.customer,
+    conversationId: ctx.conversation.id,
+    kind: "list",
+    text: "Sorry to hear there's a problem. Which order is it about?",
+    listButtonLabel: "Choose order",
+    rows: orders.map((o) => ({
+      id: `issue:order:${o.id}`,
+      title: o.reference,
+      description: `${formatNaira(o.totalKobo)} · ${o.state}`,
+    })),
+  });
+}
+
+/** After picking the order, choose what went wrong. */
+async function showIssueCategories(ctx: EngineContext, orderId: string): Promise<void> {
+  const order = await prisma.order.findFirst({
+    where: { id: orderId, merchantId: ctx.merchantId, customerId: ctx.customer.id },
+    select: { id: true, reference: true },
+  });
+  if (!order) {
+    await reply(ctx, 'I couldn\'t find that order. Reply "report issue" to try again.');
+    return;
+  }
+  await sendToCustomer({
+    merchantId: ctx.merchantId,
+    customer: ctx.customer,
+    conversationId: ctx.conversation.id,
+    kind: "list",
+    text: `What went wrong with order ${order.reference}?`,
+    listButtonLabel: "Choose problem",
+    rows: ISSUE_CATEGORIES.map((c) => ({
+      id: `issue:cat:${order.id}:${c.id}`,
+      title: c.title,
+    })),
+  });
+}
+
+/** Creates the issue record + asks for optional details. */
+async function createIssue(
+  ctx: EngineContext,
+  orderId: string,
+  category: string
+): Promise<void> {
+  const order = await prisma.order.findFirst({
+    where: { id: orderId, merchantId: ctx.merchantId, customerId: ctx.customer.id },
+    select: { id: true, reference: true },
+  });
+  if (!order) {
+    await reply(ctx, 'I couldn\'t find that order. Reply "report issue" to try again.');
+    return;
+  }
+  const cat: IssueCategory = ISSUE_CATEGORIES.some((c) => c.id === category)
+    ? (category as IssueCategory)
+    : "OTHER";
+  const reference = `ISS-${randomBytes(4).toString("hex").toUpperCase()}`;
+  const issue = await prisma.orderIssue.create({
+    data: {
+      reference,
+      orderId: order.id,
+      merchantId: ctx.merchantId,
+      customerId: ctx.customer.id,
+      conversationId: ctx.conversation.id,
+      category: cat,
+      status: "OPEN",
+    },
+  });
+  await recordAudit({
+    merchantId: ctx.merchantId,
+    orderId: order.id,
+    conversationId: ctx.conversation.id,
+    event: `Issue reported: ${cat}`,
+    actor: "CUSTOMER",
+    metadata: { issueRef: reference },
+  });
+  await setConversation(ctx, { pendingQuestion: `issue:note:${issue.id}` });
+  await reply(
+    ctx,
+    `Got it — I've logged report *${reference}* for order ${order.reference}. Add any details now, or reply "skip".`
+  );
+}
+
+/** Creates a post-delivery review + asks for an optional comment. */
+async function createReview(
+  ctx: EngineContext,
+  orderId: string,
+  rating: number
+): Promise<void> {
+  if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
+    await reply(ctx, "Please tap one of the star ratings.");
+    return;
+  }
+  const order = await prisma.order.findFirst({
+    where: { id: orderId, customer: { waId: ctx.customer.waId } },
+    select: { id: true, merchantId: true, customerId: true, fulfilmentStatus: true },
+  });
+  if (!order) {
+    await reply(ctx, "I couldn't find that order to review.");
+    return;
+  }
+  if (order.fulfilmentStatus !== "DELIVERED") {
+    await reply(ctx, "You can review an order once it's delivered.");
+    return;
+  }
+  const existing = await prisma.review.findUnique({ where: { orderId: order.id } });
+  if (existing) {
+    await reply(ctx, "Thanks — you've already reviewed this order.");
+    return;
+  }
+  const review = await prisma.review.create({
+    data: {
+      orderId: order.id,
+      merchantId: order.merchantId,
+      customerId: order.customerId,
+      rating,
+    },
+  });
+  await recordAudit({
+    merchantId: order.merchantId,
+    orderId: order.id,
+    event: `Review: ${rating}-star`,
+    actor: "CUSTOMER",
+  });
+  await setConversation(ctx, { pendingQuestion: `review:comment:${review.id}` });
+  await reply(
+    ctx,
+    `Thanks for the ${"⭐".repeat(rating)}! Tell us more about your experience, or reply "skip".`
+  );
 }
 
 /** Shows one order's status, receipt (if paid), and a Reorder button. */

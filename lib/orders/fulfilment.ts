@@ -192,6 +192,27 @@ export async function advanceFulfilment(params: {
       where: { id: event.id },
       data: { notified: true },
     });
+    // On delivery, invite a rating (once — skip if already reviewed).
+    if (params.to === "DELIVERED") {
+      const reviewed = await prisma.review.findUnique({
+        where: { orderId: order.id },
+        select: { id: true },
+      });
+      if (!reviewed) {
+        await sendToCustomer({
+          merchantId: order.merchantId,
+          customer: order.customer,
+          conversationId: order.conversationId,
+          kind: "list",
+          text: `How was your order from ${order.merchant.name}?`,
+          listButtonLabel: "Rate order",
+          rows: [5, 4, 3, 2, 1].map((n) => ({
+            id: `review:rate:${order.id}:${n}`,
+            title: `${"⭐".repeat(n)} ${n}`,
+          })),
+        });
+      }
+    }
   } catch (err) {
     logger.warn("fulfilment notification not delivered", {
       orderId: order.id,

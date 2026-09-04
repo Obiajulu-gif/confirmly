@@ -33,6 +33,8 @@ export default async function OrderDetailsPage({
       receipt: true,
       conversation: true,
       auditEvents: { orderBy: { createdAt: "asc" } },
+      issues: { orderBy: { createdAt: "desc" } },
+      review: true,
     },
   });
   if (!order) notFound();
@@ -237,6 +239,48 @@ export default async function OrderDetailsPage({
               </Link>
             ) : null}
           </Card>
+
+          {order.issues.length > 0 ? (
+            <Card title="Customer reports">
+              <ul className="space-y-3">
+                {order.issues.map((issue) => (
+                  <li key={issue.id} className="text-sm">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-mono text-xs font-semibold text-ink-700">
+                        {issue.reference}
+                      </span>
+                      <Badge tone={issue.status === "RESOLVED" ? "success" : "danger"}>
+                        {issue.status}
+                      </Badge>
+                    </div>
+                    <p className="mt-0.5 font-medium text-ink-900">
+                      {issue.category.replace(/_/g, " ").toLowerCase()}
+                    </p>
+                    {issue.description ? (
+                      <p className="text-ink-600">{issue.description}</p>
+                    ) : null}
+                    <p className="mt-0.5 text-xs text-ink-500">
+                      {issue.createdAt.toLocaleString("en-NG", {
+                        dateStyle: "medium",
+                        timeStyle: "short",
+                      })}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          ) : null}
+
+          {order.review ? (
+            <Card title="Customer review">
+              <p className="text-lg">{"⭐".repeat(order.review.rating)}</p>
+              {order.review.comment ? (
+                <p className="mt-1 text-sm text-ink-700">
+                  “{order.review.comment}”
+                </p>
+              ) : null}
+            </Card>
+          ) : null}
         </div>
       </div>
     </div>

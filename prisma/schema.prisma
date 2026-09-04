@@ -303,6 +303,8 @@ model Merchant {
   branchAssignments BranchAssignment[]
   invitations       BranchAgentInvitation[]
   ledgerEntries     WalletLedgerEntry[]
+  issues            OrderIssue[]
+  reviews           Review[]
 
   @@index([businessId, active])
 }
@@ -465,6 +467,8 @@ model Customer {
   conversations Conversation[]
   messages      WhatsAppMessage[]
   orders        Order[]
+  issues        OrderIssue[]
+  reviews       Review[]
 
   @@unique([merchantId, waId])
   @@index([merchantId])
@@ -581,6 +585,8 @@ model Order {
   receipt          Receipt?
   auditEvents      AuditEvent[]
   fulfilmentEvents FulfilmentEvent[]
+  issues           OrderIssue[]
+  review           Review?
 
   @@index([merchantId, state, createdAt])
   @@index([merchantId, createdAt])
@@ -697,6 +703,64 @@ model Receipt {
   token     String    @unique
   issuedAt  DateTime  @default(now())
   revokedAt DateTime?
+}
+
+enum IssueCategory {
+  WRONG_ORDER
+  MISSING_ITEM
+  DAMAGED_ITEM
+  NOT_RECEIVED
+  WRONG_DELIVERY
+  PAYMENT_PROBLEM
+  OTHER
+}
+
+enum IssueStatus {
+  OPEN
+  IN_REVIEW
+  RESOLVED
+}
+
+/**
+ * A customer-reported problem with an order (support/dispute).
+ */
+model OrderIssue {
+  id             String        @id @default(cuid())
+  reference      String        @unique
+  orderId        String
+  order          Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  merchantId     String
+  merchant       Merchant      @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  customerId     String
+  customer       Customer      @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  conversationId String?
+  category       IssueCategory
+  description    String?
+  status         IssueStatus   @default(OPEN)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  @@index([merchantId, status, createdAt])
+  @@index([orderId])
+}
+
+/**
+ * A post-delivery rating + optional comment. One review per order.
+ */
+model Review {
+  id         String   @id @default(cuid())
+  orderId    String   @unique
+  order      Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  merchantId String
+  merchant   Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  rating     Int
+  comment    String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([merchantId, createdAt])
 }
 
 model AuditEvent {
