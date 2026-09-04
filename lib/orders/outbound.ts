@@ -29,15 +29,22 @@ export interface OutboundInput {
  * dashboard transcript still works.
  */
 export async function sendToCustomer(input: OutboundInput): Promise<string> {
-  let providerMessageId: string;
+  const messageType = input.kind === "text" ? "TEXT" : "INTERACTIVE";
+  const payload =
+    input.kind === "buttons"
+      ? { buttons: input.buttons?.map((b) => b.id) }
+      : input.kind === "list"
+        ? { rows: input.rows?.map((r) => r.id) }
+        : undefined;
 
-  if (isDemoMode()) {
-    providerMessageId = `demo-${randomCode(12)}`;
-    logger.info("demo mode: outbound message not sent to Meta", {
-      kind: input.kind,
-    });
-  } else {
-    if (input.kind === "buttons" && input.buttons?.length) {
+  let providerMessageId: string;
+  try {
+    if (isDemoMode()) {
+      providerMessageId = `demo-${randomCode(12)}`;
+      logger.info("demo mode: outbound message not sent to Meta", {
+        kind: input.kind,
+      });
+    } else if (input.kind === "buttons" && input.buttons?.length) {
       const r = await sendButtons(input.customer.waId, input.text, input.buttons);
       providerMessageId = r.providerMessageId;
     } else if (input.kind === "list" && input.rows?.length) {
@@ -52,6 +59,33 @@ export async function sendToCustomer(input: OutboundInput): Promise<string> {
       const r = await sendText(input.customer.waId, input.text);
       providerMessageId = r.providerMessageId;
     }
+  } catch (err) {
+    // Record the failed send so it is visible in the transcript and never
+    // silently dropped, then re-throw for the caller's error handling.
+    await prisma.whatsAppMessage
+      .create({
+        data: {
+          providerMessageId: `failed-${randomCode(12)}`,
+          merchantId: input.merchantId,
+          customerId: input.customer.id,
+          conversationId: input.conversationId,
+          direction: "OUTBOUND",
+          type: messageType,
+          textBody: input.text,
+          status: "FAILED",
+          payload: {
+            ...(payload ?? {}),
+            error: err instanceof Error ? err.message.slice(0, 300) : "send failed",
+          },
+        },
+      })
+      .catch(() => {});
+    logger.warn("outbound send failed", {
+      merchantId: input.merchantId,
+      kind: input.kind,
+      reason: err instanceof Error ? err.message : "unknown",
+    });
+    throw err;
   }
 
   await prisma.whatsAppMessage.create({
@@ -61,20 +95,10 @@ export async function sendToCustomer(input: OutboundInput): Promise<string> {
       customerId: input.customer.id,
       conversationId: input.conversationId,
       direction: "OUTBOUND",
-      type:
-        input.kind === "text"
-          ? "TEXT"
-          : input.kind === "buttons"
-            ? "INTERACTIVE"
-            : "INTERACTIVE",
+      type: messageType,
       textBody: input.text,
       status: isDemoMode() ? "SENT" : "QUEUED",
-      payload:
-        input.kind === "buttons"
-          ? { buttons: input.buttons?.map((b) => b.id) }
-          : input.kind === "list"
-            ? { rows: input.rows?.map((r) => r.id) }
-            : undefined,
+      payload,
     },
   });
   if (input.conversationId) {

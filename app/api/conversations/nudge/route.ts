@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getMerchantSession } from "@/lib/auth";
 import { sendAbandonedOrderNudges } from "@/lib/orders/nudge";
+import { retryFailedOutbound } from "@/lib/orders/reliability";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -23,8 +24,11 @@ export async function POST(request: NextRequest) {
   if (!(await authorized(request))) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
+  // Recover any outbound messages that failed to send (backstop to the
+  // client's inline 5xx/429 retries), then run the abandoned-order nudge.
+  const retry = await retryFailedOutbound();
   const result = await sendAbandonedOrderNudges();
-  return NextResponse.json({ ok: true, ...result });
+  return NextResponse.json({ ok: true, retry, ...result });
 }
 
 /** Vercel cron uses GET. */

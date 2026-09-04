@@ -7,6 +7,7 @@ export const metadata = { title: "Admin overview" };
 
 export default async function AdminOverviewPage() {
   const since30d = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
   const [
     registrations,
@@ -21,6 +22,8 @@ export default async function AdminOverviewPage() {
     merchantsActive,
     settlementAgg,
     recentEvents,
+    failedWebhooks24h,
+    failedOutbound24h,
   ] = await Promise.all([
     prisma.waSession.count(),
     prisma.waSession.count({ where: { createdAt: { gte: since30d } } }),
@@ -44,6 +47,16 @@ export default async function AdminOverviewPage() {
       orderBy: { createdAt: "desc" },
       take: 8,
       include: { merchant: { select: { name: true } } },
+    }),
+    prisma.webhookEvent.count({
+      where: { state: "FAILED", createdAt: { gte: since24h } },
+    }),
+    prisma.whatsAppMessage.count({
+      where: {
+        direction: "OUTBOUND",
+        status: "FAILED",
+        createdAt: { gte: since24h },
+      },
     }),
   ]);
 
@@ -83,6 +96,32 @@ export default async function AdminOverviewPage() {
           sub="Paid & completed orders"
         />
       </div>
+
+      <Card title="Reliability (last 24h)">
+        <div className="flex flex-wrap gap-8 text-sm">
+          <div>
+            <span className="text-ink-500">Failed inbound processing: </span>
+            <span
+              className={`font-semibold ${failedWebhooks24h ? "text-red-700" : "text-ink-900"}`}
+            >
+              {failedWebhooks24h}
+            </span>
+          </div>
+          <div>
+            <span className="text-ink-500">Failed outbound sends: </span>
+            <span
+              className={`font-semibold ${failedOutbound24h ? "text-red-700" : "text-ink-900"}`}
+            >
+              {failedOutbound24h}
+            </span>
+          </div>
+        </div>
+        <p className="mt-2 text-xs text-ink-500">
+          Failed outbound text messages are auto-retried by the daily job (after
+          the client&apos;s inline 5xx/429 retries). Inbound-processing failures
+          are logged for investigation — raw message content is never stored.
+        </p>
+      </Card>
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Card title="Merchants">
