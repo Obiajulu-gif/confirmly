@@ -165,12 +165,20 @@ export default async function ReceiptPage({
               Scan the QR code or visit the verification page to confirm this
               receipt was issued by Confirmly and has not been revoked.
             </p>
-            <Link
-              href={`/verify/receipt/${receipt.token}`}
-              className="mt-2 inline-block font-semibold text-brand-700 underline"
-            >
-              Open verification page
-            </Link>
+            <div className="mt-2 flex gap-3">
+              <Link
+                href={`/verify/${receipt.token}`}
+                className="font-semibold text-brand-700 underline"
+              >
+                Verify receipt
+              </Link>
+              <Link
+                href={`/receipts/${receipt.id}`}
+                className="font-semibold text-brand-700 underline"
+              >
+                View PNG receipt
+              </Link>
+            </div>
           </div>
         </div>
       </div>

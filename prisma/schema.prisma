@@ -697,12 +697,17 @@ model WebhookEvent {
 }
 
 model Receipt {
-  id        String    @id @default(cuid())
-  orderId   String    @unique
-  order     Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  token     String    @unique
-  issuedAt  DateTime  @default(now())
-  revokedAt DateTime?
+  id              String    @id @default(cuid())
+  orderId         String    @unique
+  order           Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  token           String    @unique
+  templateVersion String    @default("v1")
+  imageUrl        String?
+  status          String    @default("GENERATED")
+  issuedAt        DateTime  @default(now())
+  generatedAt     DateTime? @default(now())
+  sentAt          DateTime?
+  revokedAt       DateTime?
 }
 
 enum IssueCategory {

@@ -447,23 +447,36 @@ export async function sendPaidNotification(result: ApplyResult) {
     where: { id: result.orderId },
     include: { customer: true },
   });
-  const { buildReceiptText } = await import("@/lib/orders/summary");
-  const { sendToCustomer } = await import("@/lib/orders/outbound");
+  const { sendReceiptViaWhatsApp } = await import("@/lib/whatsapp/sendReceipt");
   try {
-    await sendToCustomer({
-      merchantId: result.merchantId,
-      customer: order.customer,
-      conversationId: order.conversationId,
-      kind: "text",
-      text: buildReceiptText(receiptUrl(result.receiptToken), order.reference),
-    });
-    await recordAudit({
-      merchantId: result.merchantId,
-      orderId: result.orderId,
-      conversationId: order.conversationId,
-      event: AUDIT.WHATSAPP_CONFIRMATION_SENT,
-      actor: "SYSTEM",
-    });
+    const delivery = await sendReceiptViaWhatsApp({ orderId: result.orderId });
+    if (delivery.success) {
+      await recordAudit({
+        merchantId: result.merchantId,
+        orderId: result.orderId,
+        conversationId: order.conversationId,
+        event: AUDIT.WHATSAPP_CONFIRMATION_SENT,
+        actor: "SYSTEM",
+      });
+    } else {
+      // Fallback to text message if WhatsApp image delivery had an issue
+      const { buildReceiptText } = await import("@/lib/orders/summary");
+      const { sendToCustomer } = await import("@/lib/orders/outbound");
+      await sendToCustomer({
+        merchantId: result.merchantId,
+        customer: order.customer,
+        conversationId: order.conversationId,
+        kind: "text",
+        text: buildReceiptText(receiptUrl(result.receiptToken), order.reference),
+      });
+      await recordAudit({
+        merchantId: result.merchantId,
+        orderId: result.orderId,
+        conversationId: order.conversationId,
+        event: AUDIT.WHATSAPP_CONFIRMATION_SENT,
+        actor: "SYSTEM",
+      });
+    }
   } catch (err) {
     logger.error("failed to send WhatsApp receipt", {
       orderId: result.orderId,
