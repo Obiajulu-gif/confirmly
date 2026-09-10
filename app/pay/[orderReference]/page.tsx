@@ -12,7 +12,11 @@ import {
 import { prisma } from "@/lib/db";
 import { env, isDemoMode } from "@/lib/env";
 import { formatNaira } from "@/lib/money";
-import { createPaymentForOrder } from "@/lib/payments/service";
+import {
+  createPaymentForOrder,
+  verifyAndApplyPayment,
+  sendPaidNotification,
+} from "@/lib/payments/service";
 import { logger } from "@/lib/logger";
 import { ConfirmlyLogo } from "@/components/logo";
 import { Badge } from "@/components/ui";
@@ -75,6 +79,34 @@ export default async function PayPage({
     }
   }
 
+  // When a user returns from Monnify after successful checkout, the browser redirect
+  // can land before the asynchronous webhook has delivered. Verify with Monnify immediately
+  // so the user sees their payment confirmed and receipt ready without delay.
+  if (
+    order.state !== "PAID" &&
+    order.state !== "COMPLETED" &&
+    order.payment &&
+    order.payment.provider === "MONNIFY" &&
+    order.payment.state !== "PAID"
+  ) {
+    try {
+      const result = await verifyAndApplyPayment(order.payment.id);
+      await sendPaidNotification(result);
+      if (result.transitionedToPaid) {
+        order =
+          (await prisma.order.findUnique({
+            where: { reference: orderReference },
+            include: ORDER_INCLUDE,
+          })) ?? order;
+      }
+    } catch (err) {
+      logger.info("pay page early verification check pending", {
+        reference: orderReference,
+        reason: err instanceof Error ? err.message : "unknown",
+      });
+    }
+  }
+
   const paid = order.state === "PAID" || order.state === "COMPLETED";
   const payment = order.payment;
   const va = payment?.virtualAccount as {
@@ -91,8 +123,14 @@ export default async function PayPage({
           .slice(0, 16)
           .replace("T", " ")
       : null);
-  const waNumber = env().WHATSAPP_PUBLIC_NUMBER?.replace(/\D/g, "");
-  const waLink = waNumber ? `https://wa.me/${waNumber}` : null;
+
+  let waLink: string | null = null;
+  try {
+    const waNumber = env().WHATSAPP_PUBLIC_NUMBER?.replace(/\D/g, "");
+    waLink = waNumber ? `https://wa.me/${waNumber}` : null;
+  } catch {
+    waLink = null;
+  }
 
   return (
     <div className="mx-auto flex min-h-screen w-full max-w-lg flex-col px-4 py-8">
@@ -160,12 +198,20 @@ export default async function PayPage({
               This payment was verified directly with Monnify.
             </p>
             {order.receipt ? (
-              <Link
-                href={`/receipt/${order.receipt.token}`}
-                className="mt-3 inline-block rounded-lg bg-brand-600 px-4 py-2 font-semibold text-white hover:bg-brand-700"
-              >
-                View receipt
-              </Link>
+              <div className="mt-3 flex flex-col sm:flex-row gap-2">
+                <Link
+                  href={`/receipt/${order.receipt.token}`}
+                  className="flex-1 rounded-lg bg-brand-600 px-4 py-2 text-center font-semibold text-white hover:bg-brand-700 transition-colors"
+                >
+                  View digital receipt
+                </Link>
+                <Link
+                  href={`/receipts/${order.receipt.id}`}
+                  className="flex-1 rounded-lg border border-brand-300 bg-white px-4 py-2 text-center font-semibold text-brand-700 hover:bg-brand-50 transition-colors"
+                >
+                  PNG receipt
+                </Link>
+              </div>
             ) : null}
           </div>
         ) : payment && payment.provider === "MONNIFY" ? (

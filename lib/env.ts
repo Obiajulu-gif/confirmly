@@ -162,7 +162,11 @@ export function env(): Env {
     const trimmed = Object.fromEntries(
       Object.entries(process.env).map(([key, value]) => [
         key,
-        typeof value === "string" ? value.trim() : value,
+        typeof value === "string" && value.trim() === ""
+          ? undefined
+          : typeof value === "string"
+          ? value.trim()
+          : value,
       ])
     );
     const parsed = envSchema.parse(trimmed);
