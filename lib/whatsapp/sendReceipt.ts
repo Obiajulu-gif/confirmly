@@ -108,14 +108,24 @@ export async function sendReceiptViaWhatsApp(
       const isPublicHttps = receipt.imageUrl && /^https:\/\//i.test(receipt.imageUrl);
 
       if (isPublicHttps) {
-        const sendResult = await sendImageByUrl(to, {
-          imageUrl: receipt.imageUrl!,
-          caption: messageText,
-        });
-        providerMessageId = sendResult.providerMessageId;
+        try {
+          const sendResult = await sendImageByUrl(to, {
+            imageUrl: receipt.imageUrl!,
+            caption: messageText,
+          });
+          providerMessageId = sendResult.providerMessageId;
+        } catch (imageErr) {
+          logger.warn("WhatsApp image delivery failed, falling back to text with receipt link", {
+            orderId: order.id,
+            error: imageErr instanceof Error ? imageErr.message : "unknown",
+          });
+          const textWithLink = `${messageText}\n\nView official receipt: ${receiptUrl(receipt.token)}`;
+          const fallbackResult = await sendText(to, textWithLink);
+          providerMessageId = fallbackResult.providerMessageId;
+        }
       } else {
         // Fallback for non-public HTTPS (e.g. dev/staging): send message text with receipt link
-        const textWithLink = `${messageText}\n\nView receipt: ${receiptUrl(receipt.token)}`;
+        const textWithLink = `${messageText}\n\nView official receipt: ${receiptUrl(receipt.token)}`;
         const sendResult = await sendText(to, textWithLink);
         providerMessageId = sendResult.providerMessageId;
       }
