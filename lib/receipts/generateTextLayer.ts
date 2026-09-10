@@ -1,5 +1,3 @@
-import fs from "fs";
-import path from "path";
 import { defaultReceiptLayout } from "./receiptLayout";
 import { formatCurrency, formatReceiptDate, formatStoreName } from "./formatReceiptData";
 import type { ReceiptData, ReceiptLayoutConfig } from "./receiptTypes";
@@ -21,7 +19,7 @@ function fitText(
   const charWidthFactor = 0.58;
 
   let fontSize = initialFontSize;
-  let singleLineWidth = text.length * fontSize * charWidthFactor;
+  const singleLineWidth = text.length * fontSize * charWidthFactor;
 
   // 1. If single line fits, return it directly
   if (singleLineWidth <= maxWidth) {

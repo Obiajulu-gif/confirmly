@@ -1,6 +1,6 @@
 import Link from "next/link";
-import { BadgeCheck, ShieldAlert, SearchX, Download, Eye, ArrowLeft } from "lucide-react";
-import { findReceiptByIdOrToken, receiptUrl } from "@/lib/receipts";
+import { BadgeCheck, ShieldAlert, SearchX, Download, Eye } from "lucide-react";
+import { findReceiptByIdOrToken } from "@/lib/receipts";
 import { formatCurrency, formatReceiptDate } from "@/lib/receipts/formatReceiptData";
 import { ConfirmlyLogo } from "@/components/logo";
 

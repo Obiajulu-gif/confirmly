@@ -11,7 +11,6 @@ import {
 import { generateQRCode } from "@/lib/receipts/generateQRCode";
 import { generateTextLayer } from "@/lib/receipts/generateTextLayer";
 import { generateReceipt } from "@/lib/receipts/generateReceipt";
-import { defaultReceiptLayout } from "@/lib/receipts/receiptLayout";
 import type { ReceiptData } from "@/lib/receipts/receiptTypes";
 
 describe("Receipt Formatting Functions (PRD Section 14, 15, 36)", () => {

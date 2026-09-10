@@ -30,7 +30,6 @@ export async function storeReceiptImage(
   // 1. Check if Vercel Blob is configured (production serverless)
   if (process.env.BLOB_READ_WRITE_TOKEN) {
     try {
-      // @ts-ignore -- @vercel/blob is optionally loaded when BLOB_READ_WRITE_TOKEN is set
       const { put } = await import("@vercel/blob");
       const blob = await put(relativePath.replace(/\\/g, "/"), imageBuffer, {
         access: "public",

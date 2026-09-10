@@ -5,7 +5,7 @@ import { logger } from "@/lib/logger";
 import { randomCode } from "@/lib/references";
 import { formatCurrency } from "@/lib/receipts/formatReceiptData";
 import { issueAndGenerateReceipt, receiptUrl } from "@/lib/receipts";
-import { sendText, sendImageByUrl, type SendResult } from "@/lib/whatsapp/client";
+import { sendText, sendImageByUrl } from "@/lib/whatsapp/client";
 
 export interface SendReceiptInput {
   orderId: string;

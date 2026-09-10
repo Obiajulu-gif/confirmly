@@ -1,8 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, Download, ShieldCheck, Share2 } from "lucide-react";
+import { ArrowLeft, Download, ShieldCheck } from "lucide-react";
 import { findReceiptByIdOrToken, receiptVerifyUrl } from "@/lib/receipts";
-import { ConfirmlyLogo } from "@/components/logo";
 
 export const dynamic = "force-dynamic";
 
