@@ -119,36 +119,12 @@
             "text": "Find a store and check out without leaving WhatsApp. Payments settle securely through Monnify."
           },
           {
-            "type": "RadioButtonsGroup",
-            "name": "entry_point",
-            "label": "Select an option",
-            "required": true,
-            "media-size": "regular",
-            "data-source": [
-              {
-                "id": "search",
-                "title": "Search",
-                "description": "Find a store by name or code",
-                "image": "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",
-                "alt-text": "Search"
-              },
-              {
-                "id": "marketplace",
-                "title": "Marketplace",
-                "description": "Browse nearby stores",
-                "image": "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",
-                "alt-text": "Marketplace"
-              }
-            ]
-          },
-          {
             "type": "Footer",
-            "label": "Continue",
-            "enabled": "${form.entry_point}",
+            "label": "Browse stores",
             "on-click-action": {
               "name": "data_exchange",
               "payload": {
-                "entry_point": "${form.entry_point}"
+                "entry_point": "marketplace"
               }
             }
           }
@@ -160,23 +136,15 @@
       "title": "Choose a store",
       "terminal": false,
       "data": {
-        "search_hint": {
-          "type": "string",
-          "__example__": "Type a store name or code, then tap Continue."
-        },
         "has_stores": {
           "type": "boolean",
           "__example__": true
         },
-        "has_error": {
-          "type": "boolean",
-          "__example__": false
-        },
-        "error_message": {
+        "empty_message": {
           "type": "string",
-          "__example__": ""
+          "__example__": "No stores are open right now. Please check back soon."
         },
-        "stores": {
+        "store_items": {
           "type": "array",
           "items": {
             "type": "object",
@@ -184,19 +152,45 @@
               "id": {
                 "type": "string"
               },
-              "title": {
-                "type": "string"
+              "main-content": {
+                "type": "object",
+                "properties": {
+                  "title": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "metadata": {
+                    "type": "string"
+                  }
+                }
               },
-              "description": {
-                "type": "string"
+              "start": {
+                "type": "object",
+                "properties": {
+                  "image": {
+                    "type": "string"
+                  },
+                  "alt-text": {
+                    "type": "string"
+                  }
+                }
               }
             }
           },
           "__example__": [
             {
               "id": "store_example",
-              "title": "Ada Styles",
-              "description": "Fashion · ADASTYLES"
+              "main-content": {
+                "title": "Ada Styles",
+                "description": "Fashion",
+                "metadata": "ADASTYLES"
+              },
+              "start": {
+                "image": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M8AAAMBAQAY3Y2wAAAAAElFTkSuQmCC",
+                "alt-text": "Ada Styles logo"
+              }
             }
           ]
         }
@@ -206,48 +200,30 @@
         "children": [
           {
             "type": "If",
-            "condition": "${data.has_error}",
-            "then": [
-              {
-                "type": "TextCaption",
-                "text": "${data.error_message}"
-              }
-            ]
-          },
-          {
-            "type": "TextBody",
-            "text": "${data.search_hint}"
-          },
-          {
-            "type": "TextInput",
-            "name": "store_query",
-            "label": "Store name or code",
-            "input-type": "text",
-            "required": false
-          },
-          {
-            "type": "If",
             "condition": "${data.has_stores}",
             "then": [
               {
-                "type": "RadioButtonsGroup",
+                "type": "NavigationList",
                 "name": "store_id",
-                "label": "Stores",
-                "required": false,
-                "data-source": "${data.stores}"
+                "list-items": "${data.store_items}",
+                "on-click-action": {
+                  "name": "data_exchange",
+                  "payload": {
+                    "store_id": "${form.store_id}"
+                  }
+                }
+              }
+            ],
+            "else": [
+              {
+                "type": "TextHeading",
+                "text": "No stores available"
+              },
+              {
+                "type": "TextBody",
+                "text": "${data.empty_message}"
               }
             ]
-          },
-          {
-            "type": "Footer",
-            "label": "Continue",
-            "on-click-action": {
-              "name": "data_exchange",
-              "payload": {
-                "store_query": "${form.store_query}",
-                "store_id": "${form.store_id}"
-              }
-            }
           }
         ]
       }
