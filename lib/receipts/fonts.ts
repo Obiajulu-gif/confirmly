@@ -2,10 +2,12 @@ import fs from "fs";
 import path from "path";
 import opentype, { type Font } from "opentype.js";
 
+import { ALONG_SANS_BOLD_BASE64, ALONG_SANS_SEMIBOLD_BASE64 } from "./fontData";
+
 let boldFontCache: Font | null = null;
 let semiBoldFontCache: Font | null = null;
 
-function resolveFontPath(fileName: string): string {
+function loadFontWithFallback(fileName: string, base64Fallback: string): Font {
   const candidates = [
     path.join(process.cwd(), "font", "along_sans", fileName),
     path.join(process.cwd(), "public", "fonts", fileName),
@@ -13,14 +15,22 @@ function resolveFontPath(fileName: string): string {
   ];
 
   for (const candidate of candidates) {
-    if (fs.existsSync(candidate)) return candidate;
+    try {
+      if (fs.existsSync(candidate)) {
+        const buffer = fs.readFileSync(candidate);
+        const arrayBuffer = buffer.buffer.slice(
+          buffer.byteOffset,
+          buffer.byteOffset + buffer.byteLength
+        );
+        return opentype.parse(arrayBuffer);
+      }
+    } catch {
+      // Continue to next candidate or fallback
+    }
   }
 
-  throw new Error(`Font file "${fileName}" not found in candidate paths: ${candidates.join(", ")}`);
-}
-
-function loadFontFromPath(filePath: string): Font {
-  const buffer = fs.readFileSync(filePath);
+  // Serverless embedded fallback (guarantees fonts load without host filesystem dependencies)
+  const buffer = Buffer.from(base64Fallback, "base64");
   const arrayBuffer = buffer.buffer.slice(
     buffer.byteOffset,
     buffer.byteOffset + buffer.byteLength
@@ -30,13 +40,11 @@ function loadFontFromPath(filePath: string): Font {
 
 export function getReceiptFonts(): { bold: Font; semiBold: Font } {
   if (!boldFontCache) {
-    const boldPath = resolveFontPath("AlongSanss2-Bold.otf");
-    boldFontCache = loadFontFromPath(boldPath);
+    boldFontCache = loadFontWithFallback("AlongSanss2-Bold.otf", ALONG_SANS_BOLD_BASE64);
   }
 
   if (!semiBoldFontCache) {
-    const semiBoldPath = resolveFontPath("AlongSanss2-SemiBold.otf");
-    semiBoldFontCache = loadFontFromPath(semiBoldPath);
+    semiBoldFontCache = loadFontWithFallback("AlongSanss2-SemiBold.otf", ALONG_SANS_SEMIBOLD_BASE64);
   }
 
   return {

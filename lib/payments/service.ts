@@ -450,7 +450,12 @@ export async function sendPaidNotification(result: ApplyResult) {
   if (!order) return;
   if (order.receipt?.status === "SENT") return;
   if (!result.transitionedToPaid && order.state !== "PAID" && order.state !== "COMPLETED") return;
-  const token = result.receiptToken || order.receipt?.token;
+  let token = result.receiptToken || order.receipt?.token;
+  if (!token) {
+    const { issueReceipt } = await import("@/lib/receipts");
+    const { receipt } = await issueReceipt(order.id);
+    token = receipt.token;
+  }
   if (!token) return;
   const { sendReceiptViaWhatsApp } = await import("@/lib/whatsapp/sendReceipt");
   try {

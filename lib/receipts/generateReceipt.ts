@@ -4,6 +4,7 @@ import sharp from "sharp";
 import { defaultReceiptLayout } from "./receiptLayout";
 import { generateQRCode } from "./generateQRCode";
 import { generateTextLayer } from "./generateTextLayer";
+import { V1_TEMPLATE_BASE64 } from "./templateData";
 import type { ReceiptData, ReceiptLayoutConfig } from "./receiptTypes";
 
 // In-memory template buffer cache keyed by template version
@@ -20,21 +21,36 @@ export function getReceiptTemplate(version = "v1"): Buffer {
 
   // Look in public/receipts/ first
   const publicPath = path.join(process.cwd(), "public", "receipts", `confirmly-receipt-${version}.png`);
-  if (fs.existsSync(publicPath)) {
-    const buf = fs.readFileSync(publicPath);
-    templateCache.set(version, buf);
-    return buf;
+  try {
+    if (fs.existsSync(publicPath)) {
+      const buf = fs.readFileSync(publicPath);
+      templateCache.set(version, buf);
+      return buf;
+    }
+  } catch {
+    // Continue to next candidate
   }
 
   // Fallback to templates directory
   const rootTemplatePath = path.join(process.cwd(), "templates", "Confirmly Receipt Template.png");
-  if (fs.existsSync(rootTemplatePath)) {
-    const buf = fs.readFileSync(rootTemplatePath);
+  try {
+    if (fs.existsSync(rootTemplatePath)) {
+      const buf = fs.readFileSync(rootTemplatePath);
+      templateCache.set(version, buf);
+      return buf;
+    }
+  } catch {
+    // Continue to next candidate
+  }
+
+  // Serverless embedded fallback (guarantees template is available without filesystem dependencies)
+  if (version === "v1" && V1_TEMPLATE_BASE64) {
+    const buf = Buffer.from(V1_TEMPLATE_BASE64, "base64");
     templateCache.set(version, buf);
     return buf;
   }
 
-  throw new Error(`Receipt template version "${version}" not found at ${publicPath}`);
+  throw new Error(`Receipt template version "${version}" not found`);
 }
 
 /**

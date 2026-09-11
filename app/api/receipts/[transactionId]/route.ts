@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { logger } from "@/lib/logger";
 import {
   issueAndGenerateReceipt,
   findReceiptByIdOrToken,
@@ -65,6 +66,9 @@ export async function POST(
       },
     });
   } catch (err) {
+    logger.error("receipt POST generation endpoint error", {
+      error: err instanceof Error ? err.stack : String(err),
+    });
     return NextResponse.json(
       {
         error: "RECEIPT_GENERATION_ERROR",
@@ -87,6 +91,7 @@ export async function GET(
     if (wantsImage) {
       const result = await getOrGenerateReceiptImage(transactionId);
       if (!result || !result.imageBuffer || result.imageBuffer.length === 0) {
+        logger.warn("receipt image not found or empty for transaction", { transactionId });
         return NextResponse.json(
           { error: "RECEIPT_NOT_FOUND", message: "Receipt image could not be generated" },
           { status: 404 }
@@ -124,6 +129,9 @@ export async function GET(
       verificationUrl: receiptVerifyUrl(receipt.token),
     });
   } catch (err) {
+    logger.error("receipt GET endpoint error", {
+      error: err instanceof Error ? err.stack : String(err),
+    });
     return NextResponse.json(
       {
         error: "INTERNAL_ERROR",

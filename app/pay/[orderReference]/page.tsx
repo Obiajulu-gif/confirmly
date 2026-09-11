@@ -115,6 +115,11 @@ export default async function PayPage({
     try {
       const { sendReceiptViaWhatsApp } = await import("@/lib/whatsapp/sendReceipt");
       await sendReceiptViaWhatsApp({ orderId: order.id });
+      order =
+        (await prisma.order.findUnique({
+          where: { reference: orderReference },
+          include: ORDER_INCLUDE,
+        })) ?? order;
     } catch (err) {
       logger.warn("pay page receipt delivery dispatch failed", {
         reference: orderReference,
