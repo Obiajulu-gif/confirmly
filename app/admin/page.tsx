@@ -54,11 +54,10 @@ function timeAgo(date: Date | null): string {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
-/** Masks a WhatsApp number for cross-tenant admin display: 2348••••567. */
-function maskNumber(value: string): string {
+/** Full WhatsApp number in international format for admin display: +2348012345678. */
+function formatFullNumber(value: string): string {
   const digits = value.replace(/\D/g, "");
-  if (digits.length < 6) return value;
-  return `${digits.slice(0, 4)}••••${digits.slice(-3)}`;
+  return digits ? `+${digits}` : value;
 }
 
 export default async function AdminOverviewPage() {
@@ -151,7 +150,7 @@ export default async function AdminOverviewPage() {
     return {
       id: s.id,
       name: lead?.name ?? s.profileName ?? null,
-      number: maskNumber(s.waId),
+      number: formatFullNumber(s.waId),
       email: lead?.email ?? null,
       joined: s.createdAt,
     };
