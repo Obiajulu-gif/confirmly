@@ -43,12 +43,25 @@ const MAX_PRODUCT_ROWS = 20;
 const MAX_QUANTITY = 10;
 
 type Row = { id: string; title: string; description?: string };
-/** A NavigationList store card: logo + name + category, tapped to open. */
+/**
+ * A NavigationList store card: logo + name + category, tapped to open. Each item
+ * carries its OWN data_exchange action with a literal store id — NavigationList
+ * has no `name`, so a component-level `${form.*}` reference cannot resolve and
+ * makes the client fail to render ("Something went wrong").
+ */
 type StoreNavItem = {
   id: string;
   "main-content": { title: string; description: string; metadata: string };
   start: { image: string; "alt-text": string };
+  "on-click-action": {
+    name: "data_exchange";
+    payload: { store_id: string };
+  };
 };
+
+function storeOnClick(storeId: string): StoreNavItem["on-click-action"] {
+  return { name: "data_exchange", payload: { store_id: storeId } };
+}
 /** A catalogue row may carry a Base64 thumbnail + alt text. */
 type ProductRow = Row & { image?: string; "alt-text"?: string };
 
@@ -164,6 +177,7 @@ async function storeNavItems(
       image: logos.get(store.id) ?? "",
       "alt-text": `${store.name} logo`,
     },
+    "on-click-action": storeOnClick(store.id),
   }));
 }
 
@@ -183,6 +197,7 @@ const EMPTY_STORE_ITEM: StoreNavItem = {
       "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M8AAAMBAQAY3Y2wAAAAAElFTkSuQmCC",
     "alt-text": "No stores",
   },
+  "on-click-action": { name: "data_exchange", payload: { store_id: "__none__" } },
 };
 
 async function buildSearchScreen(

@@ -169,6 +169,22 @@
                     "type": "string"
                   }
                 }
+              },
+              "on-click-action": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "payload": {
+                    "type": "object",
+                    "properties": {
+                      "store_id": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
               }
             }
           },
@@ -183,6 +199,12 @@
               "start": {
                 "image": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M8AAAMBAQAY3Y2wAAAAAElFTkSuQmCC",
                 "alt-text": "Ada Styles logo"
+              },
+              "on-click-action": {
+                "name": "data_exchange",
+                "payload": {
+                  "store_id": "store_example"
+                }
               }
             }
           ]
@@ -193,14 +215,7 @@
         "children": [
           {
             "type": "NavigationList",
-            "name": "store_id",
-            "list-items": "${data.store_items}",
-            "on-click-action": {
-              "name": "data_exchange",
-              "payload": {
-                "store_id": "${form.store_id}"
-              }
-            }
+            "list-items": "${data.store_items}"
           }
         ]
       }
