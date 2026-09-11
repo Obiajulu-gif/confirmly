@@ -1,7 +1,5 @@
 import Link from "next/link";
 import {
-  ArrowDown,
-  ArrowRight,
   BadgeCheck,
   Banknote,
   CheckCircle2,
@@ -18,22 +16,12 @@ import {
   ShieldCheck,
   Store,
   Users,
-  Sparkles,
 } from "lucide-react";
 import { ConfirmlyLogo, ConfirmlyMark } from "@/components/logo";
-import { PhoneDemo } from "@/components/phone-demo";
 import { Reveal } from "@/components/reveal";
 import { WhatsAppQr } from "@/components/whatsapp-qr";
 import { Hero3DCarousel } from "@/components/hero-3d-carousel";
 import { LandingNav } from "@/components/landing-nav";
-
-const flowStrip = [
-  "WhatsApp order",
-  "structured order",
-  "Monnify checkout",
-  "payment verified",
-  "receipt issued",
-];
 
 const problems = [
   {
@@ -340,7 +328,7 @@ export default function LandingPage() {
             </Reveal>
 
             <div className="mt-16 space-y-8">
-              {steps.map((step, i) => (
+              {steps.map((step) => (
                 <div key={step.n} className="sticky top-28">
                   <article className="rounded-3xl border border-gray-200 bg-white p-8 shadow-xl shadow-gray-200/50 sm:p-10">
                     <div className="grid items-center gap-8 sm:grid-cols-[1.1fr_0.9fr]">
