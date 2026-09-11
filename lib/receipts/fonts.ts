@@ -1,6 +1,6 @@
 import fs from "fs";
 import path from "path";
-import opentype, { type Font } from "opentype.js";
+import { parse, type Font } from "opentype.js";
 
 import { ALONG_SANS_BOLD_BASE64, ALONG_SANS_SEMIBOLD_BASE64 } from "./fontData";
 
@@ -22,7 +22,7 @@ function loadFontWithFallback(fileName: string, base64Fallback: string): Font {
           buffer.byteOffset,
           buffer.byteOffset + buffer.byteLength
         );
-        return opentype.parse(arrayBuffer);
+        return parse(arrayBuffer);
       }
     } catch {
       // Continue to next candidate or fallback
@@ -35,7 +35,7 @@ function loadFontWithFallback(fileName: string, base64Fallback: string): Font {
     buffer.byteOffset,
     buffer.byteOffset + buffer.byteLength
   );
-  return opentype.parse(arrayBuffer);
+  return parse(arrayBuffer);
 }
 
 export function getReceiptFonts(): { bold: Font; semiBold: Font } {
