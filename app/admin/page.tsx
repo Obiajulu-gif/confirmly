@@ -54,6 +54,13 @@ function timeAgo(date: Date | null): string {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
+/** Masks a WhatsApp number for cross-tenant admin display: 2348••••567. */
+function maskNumber(value: string): string {
+  const digits = value.replace(/\D/g, "");
+  if (digits.length < 6) return value;
+  return `${digits.slice(0, 4)}••••${digits.slice(-3)}`;
+}
+
 export default async function AdminOverviewPage() {
   const since30d = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
   const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
@@ -73,6 +80,7 @@ export default async function AdminOverviewPage() {
     outbound24h,
     liveChats,
     topMerchantGroups,
+    recentSessions,
   ] = await Promise.all([
     prisma.waSession.count(),
     prisma.waSession.count({ where: { createdAt: { gte: since30d } } }),
@@ -108,6 +116,7 @@ export default async function AdminOverviewPage() {
       orderBy: { _count: { merchantId: "desc" } },
       take: 5,
     }),
+    prisma.waSession.findMany({ orderBy: { createdAt: "desc" }, take: 8 }),
   ]);
 
   const stateCount = (s: string) => convByState.find((r) => r.state === s)?._count._all ?? 0;
@@ -129,6 +138,24 @@ export default async function AdminOverviewPage() {
       merchant: topMerchants.find((m) => m.id === g.merchantId),
     }))
     .filter((r) => r.merchant);
+
+  // Enrich recent WhatsApp users with their onboarding details (name/email).
+  const userLeads = recentSessions.length
+    ? await prisma.lead.findMany({
+        where: { waId: { in: recentSessions.map((s) => s.waId) } },
+        select: { waId: true, name: true, email: true },
+      })
+    : [];
+  const recentUsers = recentSessions.map((s) => {
+    const lead = userLeads.find((l) => l.waId === s.waId);
+    return {
+      id: s.id,
+      name: lead?.name ?? s.profileName ?? null,
+      number: maskNumber(s.waId),
+      email: lead?.email ?? null,
+      joined: s.createdAt,
+    };
+  });
 
   return (
     <div className="space-y-6">
@@ -273,6 +300,53 @@ export default async function AdminOverviewPage() {
           )}
         </Card>
       </div>
+
+      {/* User details */}
+      <Card
+        title="Recent users"
+        action={
+          <Link href="/admin/sessions" className="text-sm font-medium text-brand-700 hover:underline">
+            All users →
+          </Link>
+        }
+      >
+        {recentUsers.length === 0 ? (
+          <p className="text-sm text-ink-500">No users yet.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[560px] text-left text-sm">
+              <thead>
+                <tr className="border-b border-ink-900/10 text-xs uppercase tracking-wide text-ink-500">
+                  <th className="py-2 pr-4 font-semibold">Name</th>
+                  <th className="py-2 pr-4 font-semibold">Number</th>
+                  <th className="py-2 pr-4 font-semibold">Email</th>
+                  <th className="py-2 font-semibold">Joined</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-ink-900/5">
+                {recentUsers.map((u) => (
+                  <tr key={u.id} className="hover:bg-brand-50/40">
+                    <td className="py-3 pr-4 font-medium text-ink-900">
+                      {u.name ?? <span className="text-ink-500">Unknown</span>}
+                    </td>
+                    <td className="py-3 pr-4 font-mono text-xs text-ink-700">{u.number}</td>
+                    <td className="py-3 pr-4 text-ink-700">
+                      {u.email ?? <span className="text-ink-500">—</span>}
+                    </td>
+                    <td className="py-3 text-xs tabular-nums text-ink-500">
+                      {u.joined.toLocaleDateString("en-NG", {
+                        day: "numeric",
+                        month: "short",
+                        year: "numeric",
+                      })}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
     </div>
   );
 }
