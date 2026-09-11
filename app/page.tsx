@@ -20,6 +20,7 @@ import {
   Users,
 } from "lucide-react";
 import { ConfirmlyLogo, ConfirmlyMark } from "@/components/logo";
+import { Navbar } from "@/components/navbar";
 import { PhoneDemo } from "@/components/phone-demo";
 import { Reveal } from "@/components/reveal";
 import { WhatsAppQr } from "@/components/whatsapp-qr";
@@ -223,50 +224,8 @@ const faqs = [
 export default function LandingPage() {
   return (
     <div className="flex min-h-screen flex-col bg-night-900 text-white">
-      {/* ------------------------------------------------ header */}
-      <header className="sticky top-0 z-30 border-b border-white/5 bg-night-900/95">
-        <div className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between px-4 sm:px-6">
-          <Link href="/" aria-label="Confirmly home">
-            <ConfirmlyLogo tone="dark" />
-          </Link>
-          <nav className="flex items-center gap-1 sm:gap-2">
-            {(
-              [
-                ["#how-it-works", "How it works"],
-                ["#for-merchants", "For merchants"],
-                ["#security", "Security"],
-                ["#faq", "FAQ"],
-              ] as const
-            ).map(([href, label]) => (
-              <Link
-                key={href}
-                href={href}
-                className="hidden rounded-lg px-3 py-2 text-sm font-medium text-white/70 transition hover:text-white lg:block"
-              >
-                {label}
-              </Link>
-            ))}
-            <Link
-              href="/login"
-              className="hidden rounded-lg px-3 py-2 text-sm font-medium text-white/70 transition hover:text-white sm:block"
-            >
-              Login
-            </Link>
-            <Link
-              href="/signup"
-              className="hidden rounded-xl border border-white/15 px-4 py-2 text-sm font-semibold text-white/85 transition hover:border-brand-400/50 hover:text-white sm:block"
-            >
-              Create business account
-            </Link>
-            <Link
-              href="/start"
-              className="cta-glow rounded-xl bg-brand-500 px-4 py-2 text-sm font-semibold text-night-900 transition hover:bg-brand-400"
-            >
-              Order from store
-            </Link>
-          </nav>
-        </div>
-      </header>
+      {/* ------------------------------------------------ floating 3-island navigation */}
+      <Navbar />
 
       <main className="flex-1">
         {/* ------------------------------------------------ hero */}
