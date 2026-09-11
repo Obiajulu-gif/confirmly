@@ -1,7 +1,7 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <path d="M20 4h24c8.837 0 16 7.163 16 16v16c0 8.837-7.163 16-16 16H24l-11 9c-2.05 1.677-5-.03-5-2.68V20C8 11.163 11.163 4 20 4Z" fill="#10b981"/>
-  <path d="M22 14l3.4-3 3.4 3 3.4-3 3.4 3 3.4-3 3.4 3V44a3 3 0 0 1-3 3H25a3 3 0 0 1-3-3V14Z" fill="#ffffff"/>
-  <rect x="27" y="20" width="14" height="2.6" rx="1.3" fill="#a7f3d0"/>
-  <rect x="27" y="26" width="10" height="2.6" rx="1.3" fill="#d1fae5"/>
-  <path d="M26 35.5l6.5 6.5L45 28" stroke="#059669" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <path d="M32 6C47 6 56 12 56 24C56 43 38 56 32 60C26 56 8 43 8 24C8 12 17 6 32 6Z" fill="#17c19a"/>
+  <path d="M20 21L23 17.5L26 21L29 17.5L32 21L35 17.5L38 21L41 17.5L44 21V40C44 44 41 47 37 47H27C23 47 20 44 20 40V21Z" fill="#ffffff"/>
+  <rect x="25" y="26" width="14" height="2.8" rx="1.4" fill="#a4e9db"/>
+  <rect x="25" y="31" width="10" height="2.8" rx="1.4" fill="#c9f5ec"/>
+  <path d="M23 37L31 44L47 24" stroke="#17c19a" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>

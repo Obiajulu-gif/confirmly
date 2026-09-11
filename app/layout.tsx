@@ -1,5 +1,60 @@
 import type { Metadata } from "next";
+import localFont from "next/font/local";
 import "./globals.css";
+
+const alongSansHeading = localFont({
+  src: [
+    {
+      path: "../font/along_sans/AlongSanss2-Regular.otf",
+      weight: "400",
+      style: "normal",
+    },
+    {
+      path: "../font/along_sans/AlongSanss2-Medium.otf",
+      weight: "500",
+      style: "normal",
+    },
+    {
+      path: "../font/along_sans/AlongSanss2-SemiBold.otf",
+      weight: "600",
+      style: "normal",
+    },
+    {
+      path: "../font/along_sans/AlongSanss2-Bold.otf",
+      weight: "700",
+      style: "normal",
+    },
+    {
+      path: "../font/along_sans/AlongSanss2-ExtraBold.otf",
+      weight: "800",
+      style: "normal",
+    },
+    {
+      path: "../font/along_sans/AlongSanss2-Black.otf",
+      weight: "900",
+      style: "normal",
+    },
+  ],
+  variable: "--font-along-sans",
+  display: "swap",
+});
+
+const confirmlyBody = localFont({
+  src: [
+    {
+      path: "../fonts/Confirmly-Regular.ttf",
+      weight: "400",
+      style: "normal",
+    },
+    {
+      path: "../fonts/Confirmly-Bold.ttf",
+      weight: "700",
+      style: "normal",
+    },
+  ],
+  variable: "--font-confirmly",
+  display: "swap",
+});
 
 const siteUrl = "https://www.confirmliy.com";
 const siteTitle = "Confirmly — Turn WhatsApp orders into verified payments";
@@ -56,10 +111,20 @@ export const metadata: Metadata = {
       "max-video-preview": -1,
     },
   },
+  icons: {
+    icon: [
+      { url: "/favicon.ico" },
+      { url: "/favicon.png", type: "image/png" },
+      { url: "/icon.svg", type: "image/svg+xml" },
+    ],
+    apple: "/confirmly-mark.png",
+  },
+
   verification: googleSiteVerification
     ? { google: googleSiteVerification }
     : undefined,
 };
+
 
 export default function RootLayout({
   children,
@@ -67,8 +132,19 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en-NG">
-      <body className="min-h-screen antialiased">{children}</body>
+    <html
+      lang="en-NG"
+      className={`${alongSansHeading.variable} ${confirmlyBody.variable}`}
+      suppressHydrationWarning
+    >
+      <body
+        className="min-h-screen antialiased font-sans bg-[#fcfcfc] text-[#16232e]"
+        suppressHydrationWarning
+      >
+        {children}
+      </body>
     </html>
   );
 }
+
+

@@ -1,29 +1,33 @@
 @import "tailwindcss";
 
 @theme {
-  /* Confirmly brand — emerald/teal primary, charcoal text, warm neutrals */
-  --color-brand-50: #ecfdf5;
-  --color-brand-100: #d1fae5;
-  --color-brand-200: #a7f3d0;
-  --color-brand-300: #6ee7b7;
-  --color-brand-400: #34d399;
-  --color-brand-500: #10b981;
-  --color-brand-600: #059669;
-  --color-brand-700: #047857;
-  --color-brand-800: #065f46;
-  --color-brand-900: #064e3b;
-  --color-ink-900: #16232e;
-  --color-ink-800: #1c2f3d;
-  --color-ink-700: #364450;
-  --color-ink-500: #5c6b76;
+  /* Confirmly brand — #17c19a primary, #fcfcfc background, #a9000c accent, charcoal text */
+  --color-brand-50: #e8f9f5;
+  --color-brand-100: #c9f2e8;
+  --color-brand-200: #94e5d2;
+  --color-brand-[#17c19a]: #17c19a;
+  --color-brand-300: #58d4b8;
+  --color-brand-400: #2bc5a4;
+  --color-brand-500: #17c19a;
+  --color-brand-600: #0fa17f;
+  --color-brand-700: #0d8067;
+  --color-brand-800: #0f6553;
+  --color-brand-900: #105346;
+  --color-brand-accent: #a9000c;
+
+  --color-ink-900: #111827;
+  --color-ink-800: #1f2937;
+  --color-ink-700: #374151;
+  --color-ink-500: #6b7280;
   --color-night-900: #071019;
   --color-night-800: #0a1622;
   --color-night-700: #10202e;
-  --color-surface: #fafaf8;
+  --color-surface: #fcfcfc;
   --color-surface-raised: #ffffff;
 
-  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
-    "Helvetica Neue", Arial, sans-serif;
+
+  --font-heading: var(--font-along-sans), var(--font-confirmly), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-confirmly), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 
   --radius-card: 1rem;
 
@@ -43,6 +47,18 @@ body {
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
 }
+
+h1, h2, h3, h4, h5, h6, .font-heading {
+  font-family: var(--font-heading);
+}
+
+.light-dot-grid {
+  background-image: radial-gradient(rgba(0, 0, 0, 0.12) 1.2px, transparent 1.2px);
+  background-size: 28px 28px;
+  mask-image: radial-gradient(ellipse 85% 75% at 50% 40%, black 40%, transparent 85%);
+}
+
+
 
 ::selection {
   background-color: var(--color-brand-200);
