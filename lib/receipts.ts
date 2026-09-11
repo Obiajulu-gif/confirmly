@@ -142,10 +142,12 @@ export async function findReceiptByIdOrToken(identifier: string) {
     });
   }
 
-  // Try order reference
+  // Try order id or order reference
   if (!receipt) {
-    const order = await prisma.order.findUnique({
-      where: { reference: id },
+    const order = await prisma.order.findFirst({
+      where: {
+        OR: [{ id }, { reference: id }],
+      },
       include: { receipt: true },
     });
     if (order?.receipt) {
@@ -154,6 +156,33 @@ export async function findReceiptByIdOrToken(identifier: string) {
   }
 
   return receipt;
+}
+
+/**
+ * Returns the receipt and its guaranteed PNG buffer.
+ * If not already cached in storage or tmpdir, dynamically renders it using Sharp.
+ */
+export async function getOrGenerateReceiptImage(identifier: string) {
+  const receipt = await findReceiptByIdOrToken(identifier);
+  if (!receipt) return null;
+
+  const { getStoredReceiptImage } = await import("@/lib/storage/receipts");
+  const cachedBuffer = await getStoredReceiptImage(receipt.id, receipt.issuedAt);
+  if (cachedBuffer && cachedBuffer.length > 0) {
+    return { receipt, imageBuffer: cachedBuffer };
+  }
+
+  // Dynamic serverless on-demand generation
+  const receiptData = await buildReceiptDataFromOrder(receipt.orderId, prisma);
+  if (!receiptData) return null;
+
+  receiptData.verification.verificationUrl = receiptVerifyUrl(receipt.token);
+  const imageBuffer = await generateReceipt(receiptData);
+
+  // Cache for future hits
+  await storeReceiptImage(receipt.id, imageBuffer, receipt.issuedAt);
+
+  return { receipt, imageBuffer };
 }
 
 /** Masks a provider reference for public display: MNFY|12|…9X2V */

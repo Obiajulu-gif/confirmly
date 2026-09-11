@@ -107,6 +107,27 @@ export default async function PayPage({
     }
   }
 
+  // Ensure WhatsApp receipt is delivered if the order is confirmed paid and not yet sent
+  if (
+    (order.state === "PAID" || order.state === "COMPLETED") &&
+    (!order.receipt || order.receipt.status !== "SENT")
+  ) {
+    try {
+      const { sendReceiptViaWhatsApp } = await import("@/lib/whatsapp/sendReceipt");
+      await sendReceiptViaWhatsApp({ orderId: order.id });
+      order =
+        (await prisma.order.findUnique({
+          where: { reference: orderReference },
+          include: ORDER_INCLUDE,
+        })) ?? order;
+    } catch (err) {
+      logger.warn("pay page receipt delivery dispatch failed", {
+        reference: orderReference,
+        error: err instanceof Error ? err.message : "unknown",
+      });
+    }
+  }
+
   const paid = order.state === "PAID" || order.state === "COMPLETED";
   const payment = order.payment;
   const va = payment?.virtualAccount as {
@@ -297,17 +318,20 @@ export default async function PayPage({
         )}
       </div>
 
-      <div className="mt-6 flex items-center justify-center gap-4 text-xs text-ink-500">
-        {waLink ? (
-          <a
-            href={waLink}
-            className="flex items-center gap-1.5 font-semibold text-brand-700 hover:underline"
-          >
-            <ArrowLeft className="h-3.5 w-3.5" aria-hidden />
-            Back to WhatsApp chat
-          </a>
-        ) : null}
-        <span>Payments verified by Monnify</span>
+      <div className="mt-8 flex flex-col items-center gap-2 text-xs text-ink-500">
+        <div className="flex items-center justify-center gap-4">
+          {waLink ? (
+            <a
+              href={waLink}
+              className="flex items-center gap-1.5 font-semibold text-brand-700 hover:underline"
+            >
+              <ArrowLeft className="h-3.5 w-3.5" aria-hidden />
+              Back to WhatsApp chat
+            </a>
+          ) : null}
+          <span>Payments verified by Monnify</span>
+        </div>
+        <p className="text-[11px] text-ink-400">Powered by Confirmly</p>
       </div>
     </div>
   );

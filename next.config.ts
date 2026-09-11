@@ -3,6 +3,12 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   poweredByHeader: false,
   serverExternalPackages: ["sharp"],
+  outputFileTracingIncludes: {
+    "/api/**/*": ["./font/**/*", "./templates/**/*", "./public/**/*"],
+    "/receipts/**/*": ["./font/**/*", "./templates/**/*", "./public/**/*"],
+    "/verify/**/*": ["./font/**/*", "./templates/**/*", "./public/**/*"],
+    "/pay/**/*": ["./font/**/*", "./templates/**/*", "./public/**/*"],
+  },
   async headers() {
     return [
       {

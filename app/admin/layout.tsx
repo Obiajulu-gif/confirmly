@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { getAdminSession } from "@/lib/auth";
 import { logoutAction } from "@/app/(auth)/login/actions";
 import { AdminNav } from "./admin-nav";
+import { ConfirmlyMark } from "@/components/logo";
 
 export const metadata = { title: "Admin · Confirmly" };
 
@@ -23,11 +24,9 @@ export default async function AdminLayout({
     <div className="flex min-h-screen flex-col lg:flex-row">
       <aside className="relative border-b border-white/5 bg-gradient-to-b from-night-900 via-night-900 to-black text-white lg:sticky lg:top-0 lg:flex lg:h-screen lg:w-64 lg:shrink-0 lg:flex-col lg:border-b-0 lg:border-r">
         <div className="relative flex items-center justify-between p-4 lg:block lg:p-5">
-          <Link href="/admin" aria-label="Admin home" className="flex items-center gap-2">
-            <span className="rounded-lg bg-brand-500 px-2 py-1 text-sm font-bold text-black">
-              CF
-            </span>
-            <span className="text-sm font-semibold tracking-tight">
+          <Link href="/admin" aria-label="Admin home" className="flex items-center gap-2.5">
+            <ConfirmlyMark className="h-7 w-7" />
+            <span className="text-sm font-bold tracking-tight">
               Platform Admin
             </span>
           </Link>

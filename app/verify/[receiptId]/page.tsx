@@ -97,7 +97,7 @@ export default async function VerifyReceiptPage({
                 View Receipt
               </Link>
               <a
-                href={`/api/receipts/${receipt.order.id}?format=png`}
+                href={`/api/receipts/${receipt.id}?format=png`}
                 download={`receipt_${receipt.order.reference}.png`}
                 className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
               >
@@ -134,9 +134,12 @@ export default async function VerifyReceiptPage({
           </div>
         )}
 
-        <div className="mt-8 text-center text-xs text-gray-500">
+        <div className="mt-8 flex flex-col items-center gap-2 text-center text-xs text-gray-500">
+          <Link href="/" aria-label="Confirmly home">
+            <ConfirmlyLogo tone="light" className="h-6 opacity-60 hover:opacity-100 transition-opacity" />
+          </Link>
           <p>Confirmly Official Digital Receipt Verification</p>
-          <p className="mt-1">Cryptographically authenticated and tamper-protected</p>
+          <p className="mt-0.5">Cryptographically authenticated and tamper-protected</p>
         </div>
       </div>
     </main>

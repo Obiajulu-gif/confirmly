@@ -6,6 +6,7 @@ import { randomCode } from "@/lib/references";
 import { formatCurrency } from "@/lib/receipts/formatReceiptData";
 import { issueAndGenerateReceipt, receiptUrl } from "@/lib/receipts";
 import { sendText, sendImageByUrl } from "@/lib/whatsapp/client";
+import { normalizeWhatsAppNumber } from "@/lib/orders/onboarding";
 
 export interface SendReceiptInput {
   orderId: string;
@@ -70,13 +71,39 @@ export async function sendReceiptViaWhatsApp(
   }
 
   // 1. Ensure receipt is generated and stored
-  const { receipt } = await issueAndGenerateReceipt(order.id);
+  let receipt = order.receipt;
+  try {
+    const res = await issueAndGenerateReceipt(order.id);
+    receipt = res.receipt;
+  } catch (receiptGenError) {
+    logger.error("failed to generate receipt image during WhatsApp send, ensuring receipt record", {
+      orderId: order.id,
+      error: receiptGenError instanceof Error ? receiptGenError.message : "unknown",
+    });
+    if (!receipt) {
+      const { issueReceipt } = await import("@/lib/receipts");
+      const res = await issueReceipt(order.id);
+      receipt = res.receipt;
+    }
+  }
+
+  if (!receipt) {
+    return { success: false, receiptId: "", error: "RECEIPT_ISSUANCE_FAILED" };
+  }
 
   // 2. Determine destination phone number
-  const to = (input.recipientPhone || order.customer.waId || order.customer.phoneNumber || "").replace(/\D/g, "");
-  if (!to || to.length < 7) {
+  const candidatePhone =
+    input.recipientPhone ||
+    (order.customer.phoneNumber && /\d{10,15}/.test(order.customer.phoneNumber) ? order.customer.phoneNumber : null) ||
+    order.customer.waId ||
+    order.customer.phoneNumber ||
+    "";
+  const normalized = normalizeWhatsAppNumber(candidatePhone);
+  const to = normalized || candidatePhone.replace(/\D/g, "");
+  if (!to || to.length < 10) {
     logger.warn("cannot send WhatsApp receipt: missing customer phone number", {
       orderId: order.id,
+      candidatePhone,
     });
     return {
       success: false,
