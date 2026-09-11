@@ -1,88 +1,22 @@
 import { defaultReceiptLayout } from "./receiptLayout";
 import { formatCurrency, formatReceiptDate, formatStoreName } from "./formatReceiptData";
+import { getReceiptFonts, renderTextPath, fitTextWithFont } from "./fonts";
 import type { ReceiptData, ReceiptLayoutConfig } from "./receiptTypes";
 
 /**
- * Text fitting & wrapping helper.
- * Computes approximate text width and adjusts font size or wraps text if necessary.
- */
-function fitText(
-  text: string,
-  initialFontSize: number,
-  maxWidth: number,
-  minFontSize = 24
-): { lines: string[]; fontSize: number } {
-  const words = text.split(/\s+/).filter(Boolean);
-  if (words.length === 0) return { lines: [""], fontSize: initialFontSize };
-
-  // Character width factor for bold / semi-bold UI sans
-  const charWidthFactor = 0.58;
-
-  let fontSize = initialFontSize;
-  const singleLineWidth = text.length * fontSize * charWidthFactor;
-
-  // 1. If single line fits, return it directly
-  if (singleLineWidth <= maxWidth) {
-    return { lines: [text], fontSize };
-  }
-
-  // 2. Try reducing font size down to minFontSize
-  while (fontSize > minFontSize) {
-    fontSize -= 2;
-    if (text.length * fontSize * charWidthFactor <= maxWidth) {
-      return { lines: [text], fontSize };
-    }
-  }
-
-  // 3. If it still doesn't fit on one line at minFontSize, wrap words into 2 lines
-  fontSize = Math.max(minFontSize, initialFontSize - 6);
-  const lines: string[] = [];
-  let currentLine = "";
-
-  for (const word of words) {
-    const testLine = currentLine ? `${currentLine} ${word}` : word;
-    if (testLine.length * fontSize * charWidthFactor <= maxWidth) {
-      currentLine = testLine;
-    } else {
-      if (currentLine) lines.push(currentLine);
-      currentLine = word;
-    }
-  }
-  if (currentLine) lines.push(currentLine);
-
-  // If word itself is too long for one line, truncate with ellipsis
-  return {
-    lines: lines.slice(0, 2).map((line, idx) => {
-      if (idx === 1 && lines.length > 2) {
-        return line + "…";
-      }
-      return line;
-    }),
-    fontSize,
-  };
-}
-
-/**
- * Escapes text for safe embedding in SVG XML.
- */
-function escapeXml(unsafe: string): string {
-  return unsafe
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&apos;");
-}
-
-/**
- * Generates transparent SVG overlay containing all dynamic transaction text.
+ * Generates transparent SVG overlay containing all dynamic transaction text
+ * converted directly to vector <path> elements using Along Sans s2.
  * PRD Section 7, 10, 11, 12, 13.
+ *
+ * Vector paths guarantee 100% crisp typography on any OS (including Linux/Vercel)
+ * without relying on system fonts or fontconfig.
  */
 export function generateTextLayer(
   data: ReceiptData,
   layout: ReceiptLayoutConfig = defaultReceiptLayout
 ): Buffer {
   const { width, height, fields, items: itemsLayout, pickupDelivery } = layout;
+  const fonts = getReceiptFonts();
 
   // Format dynamic fields
   const storeNameFormatted = formatStoreName(data.store.name);
@@ -98,7 +32,8 @@ export function generateTextLayer(
   );
 
   // Fit Store Name (can wrap to 2 lines if very long)
-  const storeFit = fitText(
+  const storeFit = fitTextWithFont(
+    fonts.bold,
     storeNameFormatted,
     fields.store.fontSize,
     fields.store.maxWidth || 520,
@@ -106,83 +41,69 @@ export function generateTextLayer(
   );
 
   // Fit Customer Name
-  const customerFit = fitText(
+  const customerFit = fitTextWithFont(
+    fonts.semiBold,
     customerNameFormatted,
     fields.customer.fontSize,
     fields.customer.maxWidth || 450,
     28
   );
 
-  // Build SVG text elements
-  const svgParts: string[] = [];
-
-  svgParts.push(
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">`,
-    `  <defs>`,
-    `    <style>
-      .receipt-text {
-        font-family: 'Along Sans s2', 'AlongSanss2', 'Along Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-        fill: #000000;
-        letter-spacing: -0.01em;
-      }
-      .receipt-bold { font-weight: 700; }
-      .receipt-semibold { font-weight: 600; }
-    </style>
-  </defs>`
-  );
+  // Build SVG path elements
+  const paths: string[] = [];
 
   // 1. STORE NAME
   if (storeFit.lines.length === 1) {
-    svgParts.push(
-      `  <text x="${fields.store.x}" y="${fields.store.y}" text-anchor="end" font-size="${storeFit.fontSize}" class="receipt-text receipt-semibold">${escapeXml(storeFit.lines[0] || "")}</text>`
+    paths.push(
+      renderTextPath(fonts.bold, storeFit.lines[0] || "", fields.store.x, fields.store.y, storeFit.fontSize, "end")
     );
   } else {
     // 2 lines: adjust Y baseline
     const lineSpacing = storeFit.fontSize + 6;
     const startY = fields.store.y - lineSpacing / 2;
-    svgParts.push(
-      `  <text x="${fields.store.x}" y="${startY}" text-anchor="end" font-size="${storeFit.fontSize}" class="receipt-text receipt-semibold">${escapeXml(storeFit.lines[0] || "")}</text>`,
-      `  <text x="${fields.store.x}" y="${startY + lineSpacing}" text-anchor="end" font-size="${storeFit.fontSize}" class="receipt-text receipt-semibold">${escapeXml(storeFit.lines[1] || "")}</text>`
+    paths.push(
+      renderTextPath(fonts.bold, storeFit.lines[0] || "", fields.store.x, startY, storeFit.fontSize, "end"),
+      renderTextPath(fonts.bold, storeFit.lines[1] || "", fields.store.x, startY + lineSpacing, storeFit.fontSize, "end")
     );
   }
 
   // 2. ORDER REFERENCE
-  svgParts.push(
-    `  <text x="${fields.orderReference.x}" y="${fields.orderReference.y}" text-anchor="end" font-size="${fields.orderReference.fontSize}" class="receipt-text receipt-semibold">${escapeXml(orderRefFormatted)}</text>`
+  paths.push(
+    renderTextPath(fonts.semiBold, orderRefFormatted, fields.orderReference.x, fields.orderReference.y, fields.orderReference.fontSize, "end")
   );
 
   // 3. CUSTOMER NAME
   if (customerFit.lines.length === 1) {
-    svgParts.push(
-      `  <text x="${fields.customer.x}" y="${fields.customer.y}" text-anchor="end" font-size="${customerFit.fontSize}" class="receipt-text receipt-semibold">${escapeXml(customerFit.lines[0] || "")}</text>`
+    paths.push(
+      renderTextPath(fonts.semiBold, customerFit.lines[0] || "", fields.customer.x, fields.customer.y, customerFit.fontSize, "end")
     );
   } else {
     const lineSpacing = customerFit.fontSize + 6;
     const startY = fields.customer.y - lineSpacing / 2;
-    svgParts.push(
-      `  <text x="${fields.customer.x}" y="${startY}" text-anchor="end" font-size="${customerFit.fontSize}" class="receipt-text receipt-semibold">${escapeXml(customerFit.lines[0] || "")}</text>`,
-      `  <text x="${fields.customer.x}" y="${startY + lineSpacing}" text-anchor="end" font-size="${customerFit.fontSize}" class="receipt-text receipt-semibold">${escapeXml(customerFit.lines[1] || "")}</text>`
+    paths.push(
+      renderTextPath(fonts.semiBold, customerFit.lines[0] || "", fields.customer.x, startY, customerFit.fontSize, "end"),
+      renderTextPath(fonts.semiBold, customerFit.lines[1] || "", fields.customer.x, startY + lineSpacing, customerFit.fontSize, "end")
     );
   }
 
   // 4. PAID ON
-  svgParts.push(
-    `  <text x="${fields.paidOn.x}" y="${fields.paidOn.y}" text-anchor="end" font-size="${fields.paidOn.fontSize}" class="receipt-text receipt-semibold">${escapeXml(paidOnFormatted)}</text>`
+  paths.push(
+    renderTextPath(fonts.semiBold, paidOnFormatted, fields.paidOn.x, fields.paidOn.y, fields.paidOn.fontSize, "end")
   );
 
   // 5. PAYMENT METHOD
-  svgParts.push(
-    `  <text x="${fields.paymentMethod.x}" y="${fields.paymentMethod.y}" text-anchor="end" font-size="${fields.paymentMethod.fontSize}" class="receipt-text receipt-semibold">${escapeXml(paymentMethodFormatted)}</text>`
+  paths.push(
+    renderTextPath(fonts.semiBold, paymentMethodFormatted, fields.paymentMethod.x, fields.paymentMethod.y, fields.paymentMethod.fontSize, "end")
   );
 
   // 6. PROVIDER REFERENCE
-  svgParts.push(
-    `  <text x="${fields.providerReference.x}" y="${fields.providerReference.y}" text-anchor="end" font-size="${fields.providerReference.fontSize}" class="receipt-text receipt-semibold">${escapeXml(providerRefFormatted)}</text>`
+  paths.push(
+    renderTextPath(fonts.semiBold, providerRefFormatted, fields.providerReference.x, fields.providerReference.y, fields.providerReference.fontSize, "end")
   );
 
   // 7. SETTLEMENT
-  svgParts.push(
-    `  <text x="${fields.settlement.x}" y="${fields.settlement.y}" text-anchor="end" font-size="${fields.settlement.fontSize}" class="receipt-text receipt-semibold">${escapeXml(settlementFormatted)}</text>`
+  paths.push(
+    renderTextPath(fonts.semiBold, settlementFormatted, fields.settlement.x, fields.settlement.y, fields.settlement.fontSize, "end")
   );
 
   // 8. ITEMS SECTION (PRD Section 13)
@@ -197,11 +118,11 @@ export function generateTextLayer(
     for (const item of items) {
       const itemTitle = `${item.quantity} x ${item.name}${item.variant ? ` (${item.variant})` : ""}:`;
       const itemAmount = formatCurrency(item.amountKobo, currency);
-      const titleFit = fitText(itemTitle, itemsLayout.fontSize, itemsLayout.maxWidthLeft, 26);
+      const titleFit = fitTextWithFont(fonts.bold, itemTitle, itemsLayout.fontSize, itemsLayout.maxWidthLeft, 26);
 
-      svgParts.push(
-        `  <text x="${itemsLayout.leftX}" y="${currentY}" text-anchor="start" font-size="${titleFit.fontSize}" class="receipt-text receipt-bold">${escapeXml(titleFit.lines[0] || "")}</text>`,
-        `  <text x="${itemsLayout.rightX}" y="${currentY}" text-anchor="end" font-size="${itemsLayout.fontSize}" class="receipt-text receipt-semibold">${escapeXml(itemAmount)}</text>`
+      paths.push(
+        renderTextPath(fonts.bold, titleFit.lines[0] || "", itemsLayout.leftX, currentY, titleFit.fontSize, "start"),
+        renderTextPath(fonts.semiBold, itemAmount, itemsLayout.rightX, currentY, itemsLayout.fontSize, "end")
       );
       currentY += lineHeight;
     }
@@ -215,18 +136,18 @@ export function generateTextLayer(
       if (!item) continue;
       const itemTitle = `${item.quantity} x ${item.name}${item.variant ? ` (${item.variant})` : ""}:`;
       const itemAmount = formatCurrency(item.amountKobo, currency);
-      const titleFit = fitText(itemTitle, itemsLayout.fontSize, itemsLayout.maxWidthLeft, 26);
+      const titleFit = fitTextWithFont(fonts.bold, itemTitle, itemsLayout.fontSize, itemsLayout.maxWidthLeft, 26);
 
-      svgParts.push(
-        `  <text x="${itemsLayout.leftX}" y="${currentY}" text-anchor="start" font-size="${titleFit.fontSize}" class="receipt-text receipt-bold">${escapeXml(titleFit.lines[0] || "")}</text>`,
-        `  <text x="${itemsLayout.rightX}" y="${currentY}" text-anchor="end" font-size="${itemsLayout.fontSize}" class="receipt-text receipt-semibold">${escapeXml(itemAmount)}</text>`
+      paths.push(
+        renderTextPath(fonts.bold, titleFit.lines[0] || "", itemsLayout.leftX, currentY, titleFit.fontSize, "start"),
+        renderTextPath(fonts.semiBold, itemAmount, itemsLayout.rightX, currentY, itemsLayout.fontSize, "end")
       );
       currentY += lineHeight;
     }
 
     // Overflow row
-    svgParts.push(
-      `  <text x="${itemsLayout.leftX}" y="${currentY}" text-anchor="start" font-size="${itemsLayout.fontSize}" class="receipt-text receipt-semibold" fill="#5c6b76">+ ${remainingCount} more items</text>`
+    paths.push(
+      renderTextPath(fonts.semiBold, `+ ${remainingCount} more items`, itemsLayout.leftX, currentY, itemsLayout.fontSize, "start", "#5c6b76")
     );
     currentY += lineHeight;
   }
@@ -238,17 +159,19 @@ export function generateTextLayer(
     : `Delivery${data.order.deliveryZone ? ` (${data.order.deliveryZone})` : ""}:`;
   const deliveryAmount = formatCurrency(data.totals.deliveryFeeKobo || 0, currency);
 
-  svgParts.push(
-    `  <text x="${pickupDelivery.leftX}" y="${currentY}" text-anchor="start" font-size="${pickupDelivery.fontSize}" class="receipt-text receipt-bold">${escapeXml(deliveryLabel)}</text>`,
-    `  <text x="${pickupDelivery.rightX}" y="${currentY}" text-anchor="end" font-size="${pickupDelivery.fontSize}" class="receipt-text receipt-semibold">${escapeXml(deliveryAmount)}</text>`
+  paths.push(
+    renderTextPath(fonts.bold, deliveryLabel, pickupDelivery.leftX, currentY, pickupDelivery.fontSize, "start"),
+    renderTextPath(fonts.semiBold, deliveryAmount, pickupDelivery.rightX, currentY, pickupDelivery.fontSize, "end")
   );
 
   // 10. TOTAL PAID
-  svgParts.push(
-    `  <text x="${fields.totalPaid.x}" y="${fields.totalPaid.y}" text-anchor="end" font-size="${fields.totalPaid.fontSize}" class="receipt-text receipt-bold">${escapeXml(totalPaidFormatted)}</text>`
+  paths.push(
+    renderTextPath(fonts.bold, totalPaidFormatted, fields.totalPaid.x, fields.totalPaid.y, fields.totalPaid.fontSize, "end")
   );
 
-  svgParts.push(`</svg>`);
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+${paths.filter(Boolean).join("\n")}
+</svg>`;
 
-  return Buffer.from(svgParts.join("\n"), "utf8");
+  return Buffer.from(svg, "utf8");
 }
