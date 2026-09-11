@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { logger } from "@/lib/logger";
 import { formatNaira } from "@/lib/money";
 import { storeLogos } from "@/lib/store-logo";
+import { FLOW_FALLBACK_IMAGE_BASE64 } from "@/lib/whatsapp/flow-image-fallback";
 import {
   cartSubtotalKobo,
   readFlowState,
@@ -45,9 +46,8 @@ const MAX_QUANTITY = 10;
 type Row = { id: string; title: string; description?: string };
 /**
  * A NavigationList store card: logo + name + category, tapped to open. Each item
- * carries its OWN data_exchange action with a literal store id — NavigationList
- * has no `name`, so a component-level `${form.*}` reference cannot resolve and
- * makes the client fail to render ("Something went wrong").
+ * carries its own data_exchange action with a literal store id. The component's
+ * required `name` identifies the list; it is not a selected form-field value.
  */
 type StoreNavItem = {
   id: string;
@@ -115,16 +115,15 @@ export function recoveryScreen(
 ): FlowScreenResponse {
   const base = errorFields(message);
   switch (screenId) {
+    case "START":
+      return { screen: "START", data: {} };
+    case "ONBOARDING":
+      return buildOnboardingScreen(message);
     case "SHOP":
       return {
         screen: "SHOP",
         data: {
-          store_name: "Your order",
-          has_cart: false,
-          cart_summary: "",
-          cart_total: "",
-          has_skus: false,
-          skus: [],
+          ...shopDefaults("Your order"),
           ...base,
         },
       };
@@ -133,11 +132,16 @@ export function recoveryScreen(
         screen: "DELIVERY",
         data: { has_zones: false, zones: [], ...base },
       };
+    case "REVIEW":
+      return {
+        screen: "REVIEW",
+        data: { summary: message, total_label: "", flow_token: "" },
+      };
     case "SEARCH":
     default:
       return {
         screen: "SEARCH",
-        data: { store_items: [EMPTY_STORE_ITEM] },
+        data: { store_items: [storeRetryItem(message)] },
       };
   }
 }
@@ -174,7 +178,7 @@ async function storeNavItems(
       metadata: store.storeCode.slice(0, 80),
     },
     start: {
-      image: logos.get(store.id) ?? "",
+      image: logos.get(store.id) || FLOW_FALLBACK_IMAGE_BASE64,
       "alt-text": `${store.name} logo`,
     },
     "on-click-action": storeOnClick(store.id),
@@ -193,21 +197,38 @@ const EMPTY_STORE_ITEM: StoreNavItem = {
     metadata: "",
   },
   start: {
-    image:
-      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M8AAAMBAQAY3Y2wAAAAAElFTkSuQmCC",
+    image: FLOW_FALLBACK_IMAGE_BASE64,
     "alt-text": "No stores",
   },
   "on-click-action": { name: "data_exchange", payload: { store_id: "__none__" } },
 };
 
+/** NavigationList must stand alone, so show errors as a tappable retry card. */
+function storeRetryItem(message: string): StoreNavItem {
+  return {
+    ...EMPTY_STORE_ITEM,
+    id: "__retry__",
+    "main-content": {
+      title: "Please try again",
+      description: "Tap to retry",
+      metadata: message.slice(0, 80),
+    },
+    "on-click-action": storeOnClick("__retry__"),
+  };
+}
+
 async function buildSearchScreen(
-  _params: { error?: string } = {}
+  params: { error?: string } = {}
 ): Promise<FlowScreenResponse> {
   const stores = await listEligibleStores();
   const items = stores.length ? await storeNavItems(stores) : [EMPTY_STORE_ITEM];
   return {
     screen: "SEARCH",
-    data: { store_items: items },
+    data: {
+      store_items: params.error
+        ? [storeRetryItem(params.error), ...items].slice(0, MAX_STORE_ROWS)
+        : items,
+    },
   };
 }
 
@@ -665,6 +686,10 @@ async function handleSearch(
   payload: Record<string, unknown>
 ): Promise<FlowScreenResponse> {
   const storeId = str(payload, "store_id");
+
+  if (storeId === "__none__" || storeId === "__retry__") {
+    return buildSearchScreen();
+  }
 
   if (storeId) {
     const merchant = await prisma.merchant.findFirst({

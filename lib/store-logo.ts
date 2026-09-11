@@ -5,6 +5,7 @@ import { appUrl } from "@/lib/env";
 import { logger } from "@/lib/logger";
 import { detectProductImageType } from "@/lib/product-images";
 import { getReceiptFonts, renderTextPath } from "@/lib/receipts/fonts";
+import { FLOW_FALLBACK_IMAGE_BASE64 } from "@/lib/whatsapp/flow-image-fallback";
 
 /**
  * Store logos for the WhatsApp store-picker cards. Bytes live inline in Postgres
@@ -78,9 +79,10 @@ export async function getStoreLogoBase64(merchant: {
   const cached = cache.get(merchant.id);
   if (cached) return cached;
 
-  const sharp = (await import("sharp")).default;
   let out: string | null = null;
   try {
+    // Native module loading can fail too; it must use the same safe fallback.
+    const sharp = (await import("sharp")).default;
     const asset = await prisma.merchantImageAsset.findUnique({
       where: { merchantId: merchant.id },
       select: { bytes: true },
@@ -108,8 +110,7 @@ export async function getStoreLogoBase64(merchant: {
         reason: err instanceof Error ? err.message : "unknown",
       });
       // 1x1 transparent PNG as a last resort so the Flow item still renders.
-      out =
-        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M8AAAMBAQAY3Y2wAAAAAElFTkSuQmCC";
+      out = FLOW_FALLBACK_IMAGE_BASE64;
     }
   }
 

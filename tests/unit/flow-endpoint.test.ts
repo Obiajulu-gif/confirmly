@@ -10,6 +10,7 @@ import {
   randomBytes,
 } from "node:crypto";
 import { resetEnvCache } from "@/lib/env";
+import flowJson from "@/flows/order-flow.json";
 import {
   cartSubtotalKobo,
   isFlowSessionUsable,
@@ -111,6 +112,7 @@ describe("flow endpoint", () => {
 
     expect(res.status).toBe(200);
     expect(decryptAsMeta(await res.text(), aesKey, iv)).toEqual({
+      version: "3.0",
       data: { status: "active" },
     });
     expect(getValidFlowSession).not.toHaveBeenCalled();
@@ -157,7 +159,7 @@ describe("flow endpoint", () => {
     const session = { id: "sess_1", currentScreen: "SEARCH" };
     getValidFlowSession.mockResolvedValue(session);
     const nextScreen = {
-      screen: "STORE",
+      screen: "SHOP",
       data: { store_name: "Ada Styles", products: [] },
     };
     resolveFlowScreen.mockResolvedValue(nextScreen);
@@ -173,7 +175,10 @@ describe("flow endpoint", () => {
     const res = await POST(makeRequest(envelope));
 
     expect(res.status).toBe(200);
-    expect(decryptAsMeta(await res.text(), aesKey, iv)).toEqual(nextScreen);
+    expect(decryptAsMeta(await res.text(), aesKey, iv)).toEqual({
+      version: "3.0",
+      ...nextScreen,
+    });
     expect(resolveFlowScreen).toHaveBeenCalledWith(
       expect.objectContaining({
         action: "data_exchange",
@@ -212,7 +217,65 @@ describe("flow endpoint", () => {
     // Forward-only: a SHOP failure must re-render SHOP, not jump to SEARCH.
     expect(body.screen).toBe("SHOP");
     expect(body.data.has_error).toBe(true);
-    expect(body.data.has_skus).toBe(false);
+    expect(body.data.show_products).toBe(false);
+    const shop = flowJson.screens.find((screen) => screen.id === "SHOP")!;
+    expect(Object.keys(body.data).sort()).toEqual(Object.keys(shop.data!).sort());
+  });
+
+  it("returns an encrypted retry screen when the session database is unavailable", async () => {
+    getValidFlowSession.mockRejectedValue(new Error("database unavailable"));
+    const { envelope, aesKey, iv } = encryptAsMeta({
+      version: "3.0",
+      action: "data_exchange",
+      screen: "SEARCH",
+      data: { store_id: "m1" },
+      flow_token: "good-token",
+    });
+
+    const res = await POST(makeRequest(envelope));
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toBe("text/plain");
+    const body = decryptAsMeta(await res.text(), aesKey, iv);
+    expect(body.version).toBe("3.0");
+    expect(body.screen).toBe("SEARCH");
+    expect(body.data.store_items[0]["main-content"].description).toBe("Tap to retry");
+    expect(resolveFlowScreen).not.toHaveBeenCalled();
+  });
+
+  it("keeps INIT failures on START instead of jumping into the store picker", async () => {
+    getValidFlowSession.mockRejectedValue(new Error("database unavailable"));
+    const { envelope, aesKey, iv } = encryptAsMeta({
+      version: "3.0",
+      action: "INIT",
+      flow_token: "good-token",
+    });
+
+    const res = await POST(makeRequest(envelope));
+
+    expect(res.status).toBe(200);
+    expect(decryptAsMeta(await res.text(), aesKey, iv)).toEqual({
+      version: "3.0",
+      screen: "START",
+      data: {},
+    });
+  });
+
+  it("acknowledges client rendering errors without looking up a session", async () => {
+    const { envelope, aesKey, iv } = encryptAsMeta({
+      version: "3.0",
+      action: "data_exchange",
+      screen: "SEARCH",
+      data: { error: "invalid_data", error_message: "Unable to decode image" },
+    });
+
+    const res = await POST(makeRequest(envelope));
+
+    expect(decryptAsMeta(await res.text(), aesKey, iv)).toEqual({
+      version: "3.0",
+      data: { acknowledged: true },
+    });
+    expect(getValidFlowSession).not.toHaveBeenCalled();
   });
 });
 

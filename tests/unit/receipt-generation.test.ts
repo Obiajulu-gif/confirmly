@@ -1,5 +1,4 @@
 import { describe, it, expect } from "vitest";
-import fs from "fs";
 import sharp from "sharp";
 import {
   formatCurrency,
@@ -197,9 +196,6 @@ describe("Complete Receipt Generation with Sharp (PRD Section 21, 35)", () => {
 
     const pngBuffer = await generateReceipt(receiptData);
     expect(Buffer.isBuffer(pngBuffer)).toBe(true);
-
-    const artifactPath = "C:/Users/U S E R/.gemini/antigravity/brain/f3d827d7-46ba-4b70-b5cb-d74ae3450575/sample_receipt.png";
-    fs.writeFileSync(artifactPath, pngBuffer);
 
     const imageInfo = await sharp(pngBuffer).metadata();
     expect(imageInfo.format).toBe("png");
