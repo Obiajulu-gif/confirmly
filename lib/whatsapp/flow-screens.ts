@@ -124,11 +124,7 @@ export function recoveryScreen(
     default:
       return {
         screen: "SEARCH",
-        data: {
-          has_stores: false,
-          store_items: [],
-          empty_message: message,
-        },
+        data: { store_items: [EMPTY_STORE_ITEM] },
       };
   }
 }
@@ -171,31 +167,32 @@ async function storeNavItems(
   }));
 }
 
+/**
+ * The NavigationList needs at least one item, so an empty marketplace shows a
+ * single non-store card. Tapping it just re-renders the (still empty) list.
+ */
+const EMPTY_STORE_ITEM: StoreNavItem = {
+  id: "__none__",
+  "main-content": {
+    title: "No stores available",
+    description: "Check back soon",
+    metadata: "",
+  },
+  start: {
+    image:
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M8AAAMBAQAY3Y2wAAAAAElFTkSuQmCC",
+    "alt-text": "No stores",
+  },
+};
+
 async function buildSearchScreen(
-  params: { error?: string } = {}
+  _params: { error?: string } = {}
 ): Promise<FlowScreenResponse> {
   const stores = await listEligibleStores();
-  const items = await storeNavItems(stores);
-  const emptyMessage =
-    params.error ??
-    "No stores are open right now. Please check back in a little while.";
+  const items = stores.length ? await storeNavItems(stores) : [EMPTY_STORE_ITEM];
   return {
     screen: "SEARCH",
-    data: {
-      has_stores: items.length > 0,
-      // New NavigationList (image cards) shape.
-      store_items: items,
-      empty_message: emptyMessage,
-      // Backward-compatible fields for the previous radio-list Flow version, so
-      // deploying the app never breaks the currently-published Flow before the
-      // new Flow JSON is published. Safe to drop once the new Flow is live.
-      search_hint: "Pick a store to start your order.",
-      stores: stores.map((s) => ({
-        id: s.id,
-        title: title30(s.name),
-        description: `${s.category ?? "Store"} · ${s.storeCode}`,
-      })),
-    },
+    data: { store_items: items },
   };
 }
 

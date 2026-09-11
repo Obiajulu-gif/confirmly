@@ -136,14 +136,6 @@
       "title": "Choose a store",
       "terminal": false,
       "data": {
-        "has_stores": {
-          "type": "boolean",
-          "__example__": true
-        },
-        "empty_message": {
-          "type": "string",
-          "__example__": "No stores are open right now. Please check back soon."
-        },
         "store_items": {
           "type": "array",
           "items": {
@@ -199,31 +191,15 @@
         "type": "SingleColumnLayout",
         "children": [
           {
-            "type": "If",
-            "condition": "${data.has_stores}",
-            "then": [
-              {
-                "type": "NavigationList",
-                "name": "store_id",
-                "list-items": "${data.store_items}",
-                "on-click-action": {
-                  "name": "data_exchange",
-                  "payload": {
-                    "store_id": "${form.store_id}"
-                  }
-                }
+            "type": "NavigationList",
+            "name": "store_id",
+            "list-items": "${data.store_items}",
+            "on-click-action": {
+              "name": "data_exchange",
+              "payload": {
+                "store_id": "${form.store_id}"
               }
-            ],
-            "else": [
-              {
-                "type": "TextHeading",
-                "text": "No stores available"
-              },
-              {
-                "type": "TextBody",
-                "text": "${data.empty_message}"
-              }
-            ]
+            }
           }
         ]
       }
