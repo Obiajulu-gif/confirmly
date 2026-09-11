@@ -109,9 +109,12 @@ export default async function VerifyReceiptPage({
           </p>
         </div>
       )}
-      <Link href="/" className="mt-8 text-sm font-medium text-ink-500 underline">
-        What is Confirmly?
-      </Link>
+      <div className="mt-8 flex flex-col items-center gap-2">
+        <Link href="/" className="text-sm font-medium text-ink-500 hover:text-ink-700 underline">
+          What is Confirmly?
+        </Link>
+        <p className="text-xs text-ink-400">Official Payment Verification</p>
+      </div>
     </div>
   );
 }

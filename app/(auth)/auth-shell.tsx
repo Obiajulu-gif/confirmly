@@ -65,9 +65,9 @@ export function AuthShell({
       {/* Form column */}
       <div className="flex w-full flex-col justify-center px-4 py-10 sm:px-8 lg:w-1/2">
         <div className="mx-auto w-full max-w-sm">
-          <div className="mb-8 lg:hidden">
-            <Link href="/" aria-label="Confirmly home">
-              <ConfirmlyLogo />
+          <div className="mb-6">
+            <Link href="/" aria-label="Confirmly home" className="inline-block hover:opacity-90 transition-opacity">
+              <ConfirmlyLogo className="h-9" />
             </Link>
           </div>
           <h1 className="text-2xl font-bold tracking-tight text-ink-900">
@@ -76,6 +76,9 @@ export function AuthShell({
           <p className="mt-1.5 text-sm text-ink-500">{subtitle}</p>
           {children}
           {footer ? <div className="mt-6">{footer}</div> : null}
+          <div className="mt-10 border-t border-ink-900/5 pt-6 text-center text-xs text-ink-400">
+            <p>© {new Date().getFullYear()} Confirmly · All rights reserved</p>
+          </div>
         </div>
       </div>
     </div>

@@ -30,14 +30,14 @@ export function ConfirmlyLogo({
 }) {
   const isDark = tone === "dark";
   return (
-    <span className={`inline-flex items-center shrink-0 ${className}`}>
+    <span className={`inline-flex items-center shrink-0 ${className || "h-8 sm:h-9"}`}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={isDark ? "/brand/confirmly-logo-dark.png" : "/brand/confirmly-logo.png"}
         alt="Confirmly"
         width={172}
         height={51}
-        className="h-8 sm:h-9 w-auto max-w-none select-none object-contain"
+        className="h-full w-auto max-w-none select-none object-contain"
       />
     </span>
   );

@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import QRCode from "qrcode";
 import { findReceiptByToken, maskReference, receiptVerifyUrl } from "@/lib/receipts";
 import { formatNaira } from "@/lib/money";
-import { ConfirmlyMark } from "@/components/logo";
+import { ConfirmlyLogo, ConfirmlyMark } from "@/components/logo";
 import { Badge } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
@@ -32,6 +32,14 @@ export default async function ReceiptPage({
 
   return (
     <div className="mx-auto flex min-h-screen w-full max-w-lg flex-col px-4 py-8">
+      <div className="mb-6 flex items-center justify-between">
+        <Link href="/" aria-label="Confirmly home" className="hover:opacity-85 transition-opacity">
+          <ConfirmlyLogo tone="light" className="h-8" />
+        </Link>
+        <span className="text-[11px] font-bold text-ink-500 uppercase tracking-wider rounded-full bg-ink-900/5 px-3 py-1">
+          Official Receipt
+        </span>
+      </div>
       <div className="rounded-card border border-ink-900/5 bg-surface-raised shadow-sm">
         {/* Header */}
         <div className="flex items-center justify-between gap-3 border-b border-dashed border-ink-900/10 p-6">
@@ -182,10 +190,15 @@ export default async function ReceiptPage({
           </div>
         </div>
       </div>
-      <p className="mt-6 text-center text-xs text-ink-500">
-        Issued {new Date(receipt.issuedAt).toLocaleString("en-NG")} · Payments
-        verified by Monnify
-      </p>
+      <div className="mt-8 flex flex-col items-center gap-2">
+        <Link href="/" aria-label="Confirmly home">
+          <ConfirmlyLogo tone="light" className="h-6 opacity-70 hover:opacity-100 transition-opacity" />
+        </Link>
+        <p className="text-center text-xs text-ink-500">
+          Issued {new Date(receipt.issuedAt).toLocaleString("en-NG")} · Payments
+          verified by Monnify
+        </p>
+      </div>
     </div>
   );
 }

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, Download, ShieldCheck } from "lucide-react";
 import { findReceiptByIdOrToken, receiptVerifyUrl } from "@/lib/receipts";
+import { ConfirmlyLogo } from "@/components/logo";
 
 export const dynamic = "force-dynamic";
 
@@ -25,10 +26,11 @@ export default async function ReceiptViewerPage({
         <div className="w-full flex items-center justify-between mb-6">
           <Link
             href="/"
-            className="inline-flex items-center gap-1.5 text-xs text-gray-400 hover:text-white transition-colors"
+            className="inline-flex items-center gap-2 text-xs text-gray-400 hover:text-white transition-colors"
+            aria-label="Confirmly home"
           >
             <ArrowLeft className="h-4 w-4" />
-            Back to Confirmly
+            <ConfirmlyLogo tone="dark" className="h-7" />
           </Link>
           <div className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-400 border border-emerald-500/20">
             <ShieldCheck className="h-3.5 w-3.5" />
@@ -67,9 +69,14 @@ export default async function ReceiptViewerPage({
           </Link>
         </div>
 
-        <p className="mt-6 text-center text-xs text-gray-400">
-          Issued by {receipt.order.merchant.name} · Verified by Confirmly
-        </p>
+        <div className="mt-8 flex flex-col items-center gap-2">
+          <Link href="/" aria-label="Confirmly home">
+            <ConfirmlyLogo tone="dark" className="h-6 opacity-75 hover:opacity-100 transition-opacity" />
+          </Link>
+          <p className="text-center text-xs text-gray-400">
+            Issued by {receipt.order.merchant.name} · Verified by Confirmly
+          </p>
+        </div>
       </div>
     </main>
   );
