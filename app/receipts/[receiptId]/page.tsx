@@ -15,7 +15,7 @@ export default async function ReceiptViewerPage({
 
   if (!receipt) notFound();
 
-  const imageUrl = `/api/receipts/${receipt.order.id}?format=png`;
+  const imageUrl = `/api/receipts/${receipt.id}?format=png`;
   const verifyUrl = receiptVerifyUrl(receipt.token);
 
   return (

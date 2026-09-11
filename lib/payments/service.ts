@@ -440,13 +440,18 @@ export async function verifyAndApplyPayment(
   return applyVerifiedTransaction(payment.id, verified);
 }
 
-/** Sends the WhatsApp receipt exactly once per PAID transition. */
+/** Sends the WhatsApp receipt once per PAID order. */
 export async function sendPaidNotification(result: ApplyResult) {
-  if (!result.transitionedToPaid || !result.receiptToken) return;
-  const order = await prisma.order.findUniqueOrThrow({
+  if (!result.orderId) return;
+  const order = await prisma.order.findUnique({
     where: { id: result.orderId },
-    include: { customer: true },
+    include: { customer: true, receipt: true },
   });
+  if (!order) return;
+  if (order.receipt?.status === "SENT") return;
+  if (!result.transitionedToPaid && order.state !== "PAID" && order.state !== "COMPLETED") return;
+  const token = result.receiptToken || order.receipt?.token;
+  if (!token) return;
   const { sendReceiptViaWhatsApp } = await import("@/lib/whatsapp/sendReceipt");
   try {
     const delivery = await sendReceiptViaWhatsApp({ orderId: result.orderId });
@@ -467,7 +472,7 @@ export async function sendPaidNotification(result: ApplyResult) {
         customer: order.customer,
         conversationId: order.conversationId,
         kind: "text",
-        text: buildReceiptText(receiptUrl(result.receiptToken), order.reference),
+        text: buildReceiptText(receiptUrl(token), order.reference),
       });
       await recordAudit({
         merchantId: result.merchantId,

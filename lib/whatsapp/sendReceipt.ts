@@ -6,6 +6,7 @@ import { randomCode } from "@/lib/references";
 import { formatCurrency } from "@/lib/receipts/formatReceiptData";
 import { issueAndGenerateReceipt, receiptUrl } from "@/lib/receipts";
 import { sendText, sendImageByUrl } from "@/lib/whatsapp/client";
+import { normalizeWhatsAppNumber } from "@/lib/orders/onboarding";
 
 export interface SendReceiptInput {
   orderId: string;
@@ -73,10 +74,13 @@ export async function sendReceiptViaWhatsApp(
   const { receipt } = await issueAndGenerateReceipt(order.id);
 
   // 2. Determine destination phone number
-  const to = (input.recipientPhone || order.customer.waId || order.customer.phoneNumber || "").replace(/\D/g, "");
-  if (!to || to.length < 7) {
+  const rawPhone = input.recipientPhone || order.customer.waId || order.customer.phoneNumber || "";
+  const normalized = normalizeWhatsAppNumber(rawPhone);
+  const to = normalized || rawPhone.replace(/\D/g, "");
+  if (!to || to.length < 10) {
     logger.warn("cannot send WhatsApp receipt: missing customer phone number", {
       orderId: order.id,
+      rawPhone,
     });
     return {
       success: false,

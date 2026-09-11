@@ -107,6 +107,22 @@ export default async function PayPage({
     }
   }
 
+  // Ensure WhatsApp receipt is delivered if the order is confirmed paid and not yet sent
+  if (
+    (order.state === "PAID" || order.state === "COMPLETED") &&
+    (!order.receipt || order.receipt.status !== "SENT")
+  ) {
+    try {
+      const { sendReceiptViaWhatsApp } = await import("@/lib/whatsapp/sendReceipt");
+      await sendReceiptViaWhatsApp({ orderId: order.id });
+    } catch (err) {
+      logger.warn("pay page receipt delivery dispatch failed", {
+        reference: orderReference,
+        error: err instanceof Error ? err.message : "unknown",
+      });
+    }
+  }
+
   const paid = order.state === "PAID" || order.state === "COMPLETED";
   const payment = order.payment;
   const va = payment?.virtualAccount as {

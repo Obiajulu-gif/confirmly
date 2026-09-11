@@ -97,7 +97,7 @@ export default async function VerifyReceiptPage({
                 View Receipt
               </Link>
               <a
-                href={`/api/receipts/${receipt.order.id}?format=png`}
+                href={`/api/receipts/${receipt.id}?format=png`}
                 download={`receipt_${receipt.order.reference}.png`}
                 className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
               >

@@ -3,9 +3,9 @@ import { prisma } from "@/lib/db";
 import {
   issueAndGenerateReceipt,
   findReceiptByIdOrToken,
+  getOrGenerateReceiptImage,
   receiptVerifyUrl,
 } from "@/lib/receipts";
-import { getStoredReceiptImage } from "@/lib/storage/receipts";
 import { formatCurrency, formatReceiptDate } from "@/lib/receipts/formatReceiptData";
 
 export const dynamic = "force-dynamic";
@@ -84,35 +84,30 @@ export async function GET(
     const accept = req.headers.get("accept") || "";
     const wantsImage = accept.includes("image/png") || req.nextUrl.searchParams.get("format") === "png";
 
+    if (wantsImage) {
+      const result = await getOrGenerateReceiptImage(transactionId);
+      if (!result || !result.imageBuffer || result.imageBuffer.length === 0) {
+        return NextResponse.json(
+          { error: "RECEIPT_NOT_FOUND", message: "Receipt image could not be generated" },
+          { status: 404 }
+        );
+      }
+
+      return new NextResponse(new Uint8Array(result.imageBuffer), {
+        headers: {
+          "Content-Type": "image/png",
+          "Content-Disposition": `inline; filename="receipt_${result.receipt.order.reference}.png"`,
+          "Cache-Control": "public, max-age=86400, stale-while-revalidate=604800",
+        },
+      });
+    }
+
     const receipt = await findReceiptByIdOrToken(transactionId);
     if (!receipt) {
       return NextResponse.json(
         { error: "RECEIPT_NOT_FOUND", message: "Receipt not found" },
         { status: 404 }
       );
-    }
-
-    if (wantsImage) {
-      const buffer = await getStoredReceiptImage(receipt.id, receipt.issuedAt);
-      if (buffer) {
-        return new NextResponse(new Uint8Array(buffer), {
-          headers: {
-            "Content-Type": "image/png",
-            "Content-Disposition": `inline; filename="receipt_${receipt.order.reference}.png"`,
-            "Cache-Control": "public, max-age=86400, stale-while-revalidate=604800",
-          },
-        });
-      }
-
-      // If not stored yet, generate it on demand
-      const generated = await issueAndGenerateReceipt(receipt.orderId);
-      const outputBuffer = generated.imageBuffer || (await getStoredReceiptImage(receipt.id, receipt.issuedAt)) || Buffer.from("");
-      return new NextResponse(new Uint8Array(outputBuffer), {
-        headers: {
-          "Content-Type": "image/png",
-          "Content-Disposition": `inline; filename="receipt_${receipt.order.reference}.png"`,
-        },
-      });
     }
 
     return NextResponse.json({
