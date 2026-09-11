@@ -215,6 +215,7 @@
         "children": [
           {
             "type": "NavigationList",
+            "name": "store_nav",
             "list-items": "${data.store_items}"
           }
         ]

@@ -6,9 +6,12 @@ import { Button, Input } from "@/components/ui";
 export function StoreLogoWidget({
   merchantId,
   hasLogo,
+  targetMerchantId,
 }: {
   merchantId: string;
   hasLogo: boolean;
+  /** When set (branch pages), authorize + target this specific store. */
+  targetMerchantId?: string;
 }) {
   const version = useRef(Date.now());
   const [uploaded, setUploaded] = useState(hasLogo);
@@ -29,6 +32,7 @@ export function StoreLogoWidget({
     try {
       const body = new FormData();
       body.append("file", file);
+      if (targetMerchantId) body.append("merchantId", targetMerchantId);
       const res = await fetch("/api/store-logo", { method: "POST", body });
       const data = (await res.json().catch(() => ({}))) as { error?: string };
       if (res.ok) {
@@ -50,7 +54,10 @@ export function StoreLogoWidget({
   async function remove() {
     setBusy(true);
     setResult(null);
-    const res = await fetch("/api/store-logo", { method: "DELETE" });
+    const url = targetMerchantId
+      ? `/api/store-logo?merchantId=${encodeURIComponent(targetMerchantId)}`
+      : "/api/store-logo";
+    const res = await fetch(url, { method: "DELETE" });
     if (res.ok) {
       setUploaded(false);
       setPreview(null);
