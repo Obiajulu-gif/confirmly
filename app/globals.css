@@ -24,6 +24,7 @@
 
   --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
     "Helvetica Neue", Arial, sans-serif;
+  --font-heading: var(--font-along-sans), ui-sans-serif, system-ui, sans-serif;
 
   --radius-card: 1rem;
 
@@ -42,6 +43,14 @@ body {
   color: var(--color-ink-900);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
+}
+
+/* Big headlines use Along Sans official brand typography; the rest are reserved as-is */
+h1,
+h2,
+.font-heading,
+.font-display {
+  font-family: var(--font-along-sans), var(--font-sans);
 }
 
 ::selection {

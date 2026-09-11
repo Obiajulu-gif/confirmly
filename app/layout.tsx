@@ -1,5 +1,43 @@
 import type { Metadata } from "next";
+import localFont from "next/font/local";
 import "./globals.css";
+
+const alongSans = localFont({
+  src: [
+    {
+      path: "../font/along_sans/AlongSanss2-Regular.otf",
+      weight: "400",
+      style: "normal",
+    },
+    {
+      path: "../font/along_sans/AlongSanss2-Medium.otf",
+      weight: "500",
+      style: "normal",
+    },
+    {
+      path: "../font/along_sans/AlongSanss2-SemiBold.otf",
+      weight: "600",
+      style: "normal",
+    },
+    {
+      path: "../font/along_sans/AlongSanss2-Bold.otf",
+      weight: "700",
+      style: "normal",
+    },
+    {
+      path: "../font/along_sans/AlongSanss2-ExtraBold.otf",
+      weight: "800",
+      style: "normal",
+    },
+    {
+      path: "../font/along_sans/AlongSanss2-Black.otf",
+      weight: "900",
+      style: "normal",
+    },
+  ],
+  variable: "--font-along-sans",
+  display: "swap",
+});
 
 const siteUrl = "https://www.confirmliy.com";
 const siteTitle = "Confirmly — Turn WhatsApp orders into verified payments";
@@ -78,8 +116,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en-NG">
-      <body className="min-h-screen antialiased">{children}</body>
+    <html lang="en-NG" className={alongSans.variable}>
+      <body className="min-h-screen antialiased font-sans">{children}</body>
     </html>
   );
 }
