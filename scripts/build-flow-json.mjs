@@ -95,20 +95,12 @@ function assetBase64(fileNames, generate) {
   return { base64: bytes.toString("base64"), fromDisk: false, bytes };
 }
 
-// Confirmly brand emerald/teal.
+// Confirmly brand emerald.
 const EMERALD = [5, 150, 105]; // #059669
-const EMERALD_LIGHT = [16, 185, 129]; // #10b981
-const TEAL_DARK = [4, 120, 87]; // #047857
 
 const assets = {
   __ASSET_BANNER__: assetBase64(["banner.jpg", "banner.png"], () =>
     solidPng(640, 320, EMERALD)
-  ),
-  __ASSET_ICON_SEARCH__: assetBase64("icon-search.png", () =>
-    solidPng(96, 96, EMERALD_LIGHT)
-  ),
-  __ASSET_ICON_MARKETPLACE__: assetBase64("icon-marketplace.png", () =>
-    solidPng(96, 96, TEAL_DARK)
   ),
 };
 

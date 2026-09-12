@@ -8,6 +8,7 @@ import { Badge, Card } from "@/components/ui";
 import {
   DemoResetWidget,
   ReconcileWidget,
+  StoreLogoWidget,
   TestSendWidget,
 } from "./settings-widgets";
 
@@ -20,6 +21,7 @@ export default async function SettingsPage() {
 
   const merchant = await prisma.merchant.findUniqueOrThrow({
     where: { id: session.merchantId },
+    include: { logoAsset: { select: { id: true } } },
   });
   const integrations = integrationStatus();
   const appUrl = env().APP_URL;
@@ -90,6 +92,13 @@ export default async function SettingsPage() {
               </dd>
             </div>
           </dl>
+        </Card>
+
+        <Card title="Store logo">
+          <StoreLogoWidget
+            merchantId={merchant.id}
+            hasLogo={merchant.logoAsset !== null}
+          />
         </Card>
 
         <Card title="Integration health">

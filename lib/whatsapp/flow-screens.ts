@@ -3,7 +3,8 @@ import type { WhatsAppFlowSession } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { logger } from "@/lib/logger";
 import { formatNaira } from "@/lib/money";
-import { searchScore } from "@/lib/orders/matching";
+import { storeLogos } from "@/lib/store-logo";
+import { FLOW_FALLBACK_IMAGE_BASE64 } from "@/lib/whatsapp/flow-image-fallback";
 import {
   cartSubtotalKobo,
   readFlowState,
@@ -41,9 +42,26 @@ const MAX_STORE_ROWS = 20;
 /** Image-rich catalogue rows are heavier, so cap tighter than a text list. */
 const MAX_PRODUCT_ROWS = 20;
 const MAX_QUANTITY = 10;
-const SEARCH_THRESHOLD = 0.5;
 
 type Row = { id: string; title: string; description?: string };
+/**
+ * A NavigationList store card: logo + name + category, tapped to open. Each item
+ * carries its own data_exchange action with a literal store id. The component's
+ * required `name` identifies the list; it is not a selected form-field value.
+ */
+type StoreNavItem = {
+  id: string;
+  "main-content": { title: string; description: string; metadata: string };
+  start: { image: string; "alt-text": string };
+  "on-click-action": {
+    name: "data_exchange";
+    payload: { store_id: string };
+  };
+};
+
+function storeOnClick(storeId: string): StoreNavItem["on-click-action"] {
+  return { name: "data_exchange", payload: { store_id: storeId } };
+}
 /** A catalogue row may carry a Base64 thumbnail + alt text. */
 type ProductRow = Row & { image?: string; "alt-text"?: string };
 
@@ -97,16 +115,15 @@ export function recoveryScreen(
 ): FlowScreenResponse {
   const base = errorFields(message);
   switch (screenId) {
+    case "START":
+      return { screen: "START", data: {} };
+    case "ONBOARDING":
+      return buildOnboardingScreen(message);
     case "SHOP":
       return {
         screen: "SHOP",
         data: {
-          store_name: "Your order",
-          has_cart: false,
-          cart_summary: "",
-          cart_total: "",
-          has_skus: false,
-          skus: [],
+          ...shopDefaults("Your order"),
           ...base,
         },
       };
@@ -115,91 +132,102 @@ export function recoveryScreen(
         screen: "DELIVERY",
         data: { has_zones: false, zones: [], ...base },
       };
+    case "REVIEW":
+      return {
+        screen: "REVIEW",
+        data: { summary: message, total_label: "", flow_token: "" },
+      };
     case "SEARCH":
     default:
       return {
         screen: "SEARCH",
-        data: {
-          search_hint: "Type a store name or code and tap Continue.",
-          has_stores: false,
-          stores: [],
-          ...base,
-        },
+        data: { store_items: [storeRetryItem(message)] },
       };
   }
 }
 
 // ---- Store list / search ---------------------------------------------------
 
-async function listActiveStores() {
+/**
+ * Stores shown in the picker are limited to those with at least one in-stock
+ * product, so tapping a card always advances to a shop that has something to
+ * sell (the NavigationList screen can't display an inline "no items" error).
+ */
+async function listEligibleStores() {
   return prisma.merchant.findMany({
-    where: { active: true },
+    where: {
+      active: true,
+      products: { some: { active: true, stockQuantity: { gt: 0 } } },
+    },
     orderBy: { name: "asc" },
     take: MAX_STORE_ROWS,
     select: { id: true, name: true, category: true, storeCode: true },
   });
 }
 
-function storeRows(
-  stores: Array<{ name: string; category: string | null; storeCode: string; id: string }>
-): Row[] {
+/** Builds the NavigationList store cards, each with its logo (or generated tile). */
+async function storeNavItems(
+  stores: Array<{ id: string; name: string; category: string | null; storeCode: string }>
+): Promise<StoreNavItem[]> {
+  const logos = await storeLogos(stores);
   return stores.map((store) => ({
     id: store.id,
-    title: title30(store.name),
-    description: `${store.category ?? "Store"} · ${store.storeCode}`,
+    "main-content": {
+      title: title30(store.name),
+      description: (store.category ?? "Store").slice(0, 20),
+      metadata: store.storeCode.slice(0, 80),
+    },
+    start: {
+      image: logos.get(store.id) || FLOW_FALLBACK_IMAGE_BASE64,
+      "alt-text": `${store.name} logo`,
+    },
+    "on-click-action": storeOnClick(store.id),
   }));
 }
 
-async function searchStores(query: string) {
-  const stores = await prisma.merchant.findMany({
-    where: { active: true },
-    select: { id: true, name: true, category: true, storeCode: true },
-  });
-  return stores
-    .map((store) => ({
-      store,
-      score: Math.max(
-        searchScore(query, store.name),
-        searchScore(query, store.category ?? ""),
-        searchScore(query, store.storeCode)
-      ),
-    }))
-    .filter((entry) => entry.score >= SEARCH_THRESHOLD)
-    .sort((a, b) => b.score - a.score)
-    .slice(0, MAX_STORE_ROWS)
-    .map((entry) => entry.store);
+/**
+ * The NavigationList needs at least one item, so an empty marketplace shows a
+ * single non-store card. Tapping it just re-renders the (still empty) list.
+ */
+const EMPTY_STORE_ITEM: StoreNavItem = {
+  id: "__none__",
+  "main-content": {
+    title: "No stores available",
+    description: "Check back soon",
+    metadata: "",
+  },
+  start: {
+    image: FLOW_FALLBACK_IMAGE_BASE64,
+    "alt-text": "No stores",
+  },
+  "on-click-action": { name: "data_exchange", payload: { store_id: "__none__" } },
+};
+
+/** NavigationList must stand alone, so show errors as a tappable retry card. */
+function storeRetryItem(message: string): StoreNavItem {
+  return {
+    ...EMPTY_STORE_ITEM,
+    id: "__retry__",
+    "main-content": {
+      title: "Please try again",
+      description: "Tap to retry",
+      metadata: message.slice(0, 80),
+    },
+    "on-click-action": storeOnClick("__retry__"),
+  };
 }
 
-async function buildSearchScreen(params: {
-  mode: "search" | "marketplace";
-  query?: string | null;
-  error?: string;
-}): Promise<FlowScreenResponse> {
-  const query = params.query?.trim() ?? "";
-  let stores: Array<{
-    id: string;
-    name: string;
-    category: string | null;
-    storeCode: string;
-  }>;
-  if (query) stores = await searchStores(query);
-  else if (params.mode === "marketplace") stores = await listActiveStores();
-  else stores = [];
-
-  const hint = query
-    ? `Results for "${query}". Pick a store, or edit your search and tap Continue.`
-    : params.mode === "marketplace"
-      ? "Pick a store to browse, or type a name to search."
-      : "Type a store name or code, then tap Continue.";
-
-  const rows = storeRows(stores);
+async function buildSearchScreen(
+  params: { error?: string } = {}
+): Promise<FlowScreenResponse> {
+  const stores = await listEligibleStores();
+  const items = stores.length ? await storeNavItems(stores) : [EMPTY_STORE_ITEM];
   return {
     screen: "SEARCH",
     data: {
-      search_hint: hint,
-      has_stores: rows.length > 0,
-      stores: rows,
-      ...errorFields(params.error),
+      store_items: params.error
+        ? [storeRetryItem(params.error), ...items].slice(0, MAX_STORE_ROWS)
+        : items,
     },
   };
 }
@@ -557,7 +585,7 @@ async function handleStart(
     state: { ...state, entryPoint: mode },
     currentScreen: "SEARCH",
   });
-  return buildSearchScreen({ mode });
+  return buildSearchScreen();
 }
 
 async function handleOnboarding(
@@ -593,7 +621,6 @@ async function handleOnboarding(
       reason: err instanceof Error ? err.message : "unknown",
     });
   }
-  const mode = state.entryPoint === "search" ? "search" : "marketplace";
   await updateFlowSession(session.id, {
     state: {
       ...state,
@@ -603,7 +630,7 @@ async function handleOnboarding(
     },
     currentScreen: "SEARCH",
   });
-  return buildSearchScreen({ mode });
+  return buildSearchScreen();
 }
 
 /**
@@ -658,9 +685,11 @@ async function handleSearch(
   state: FlowOrderState,
   payload: Record<string, unknown>
 ): Promise<FlowScreenResponse> {
-  const mode = state.entryPoint === "search" ? "search" : "marketplace";
   const storeId = str(payload, "store_id");
-  const query = str(payload, "store_query");
+
+  if (storeId === "__none__" || storeId === "__retry__") {
+    return buildSearchScreen();
+  }
 
   if (storeId) {
     const merchant = await prisma.merchant.findFirst({
@@ -669,20 +698,16 @@ async function handleSearch(
     });
     if (!merchant) {
       return buildSearchScreen({
-        mode,
-        query,
         error: "That store is no longer available. Pick another.",
       });
     }
     // Confirm the store has something to sell before advancing — SEARCH can
-    // re-render itself with a hint, but SHOP cannot navigate back to SEARCH.
+    // re-render itself, but SHOP cannot navigate back to SEARCH.
     const productCount = await prisma.product.count({
       where: { merchantId: merchant.id, active: true, stockQuantity: { gt: 0 } },
     });
     if (productCount === 0) {
       return buildSearchScreen({
-        mode,
-        query,
         error: `${merchant.name} has no items available right now. Try another store.`,
       });
     }
@@ -703,7 +728,7 @@ async function handleSearch(
     return buildShopScreen(merchant.id, nextState);
   }
 
-  return buildSearchScreen({ mode, query });
+  return buildSearchScreen();
 }
 
 /**
@@ -976,9 +1001,9 @@ export async function resolveFlowScreen(input: {
       case "REVIEW":
         return handleReview(input.session, input.flowToken);
       default:
-        return buildSearchScreen({ mode: "marketplace" });
+        return buildSearchScreen();
     }
   }
 
-  return buildSearchScreen({ mode: "marketplace" });
+  return buildSearchScreen();
 }

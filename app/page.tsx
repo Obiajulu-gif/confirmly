@@ -18,6 +18,8 @@ import {
   Users,
 } from "lucide-react";
 import { ConfirmlyLogo, ConfirmlyMark } from "@/components/logo";
+import { Navbar } from "@/components/navbar";
+import { PhoneDemo } from "@/components/phone-demo";
 import { Reveal } from "@/components/reveal";
 import { WhatsAppQr } from "@/components/whatsapp-qr";
 import { Hero3DCarousel } from "@/components/hero-3d-carousel";
@@ -216,6 +218,9 @@ export default function LandingPage() {
     <div className="flex min-h-screen flex-col bg-[#fcfcfc] text-[#111827]">
       {/* ------------------------------------------------ header: separate rounded containers with mobile support */}
       <LandingNav />
+    <div className="flex min-h-screen flex-col bg-night-900 text-white">
+      {/* ------------------------------------------------ floating 3-island navigation */}
+      <Navbar />
 
       <main className="flex-1">
         {/* ------------------------------------------------ hero section */}
