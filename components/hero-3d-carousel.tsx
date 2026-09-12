@@ -1,482 +1,396 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import * as THREE from "three";
+import { useEffect, useMemo, useRef } from "react";
 
-interface VisualCardData {
+/* ---------------------------------------------------------------------------
+   Hero 3D carousel — a depth "tunnel fan".
+
+   Cards ride a conveyor that sits far behind the screen at the centre and
+   comes right up against the camera at both edges, so the row reads as a
+   funnel opening toward the viewer. Cards travel right → centre → left, which
+   means each one enters large, shrinks into the distance, then swells again
+   on its way out.
+
+   Pure CSS 3D on real DOM nodes — no WebGL, no canvas textures — so the
+   screenshots stay sharp and the copy stays selectable.
+
+   Motion comes from three sources that all feed one `offset`, measured in
+   slots: page scroll (scrubbed), a slow ambient drift, and pointer drag.
+--------------------------------------------------------------------------- */
+
+type HeroCard = {
   id: string;
-  imageUrl: string;
-  tag: string;
-  badge: string;
+  image: string;
   title: string;
-  chatBubble?: string;
-  statusPill?: string;
-  gradColor1: string;
-  gradColor2: string;
-}
+  /** object-position Y, to frame the part of the screenshot that matters. */
+  focus: string;
+};
 
-const VISUAL_CARDS: VisualCardData[] = [
+/**
+ * Order is the story the visitor reads as cards stream in from the right.
+ * The last entry is the one sitting large in the foreground on first paint.
+ */
+const HERO_CARDS: HeroCard[] = [
   {
-    id: "whatsapp-customer",
-    imageUrl: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=600&auto=format&fit=crop&q=80",
-    tag: "Customer Chat",
-    badge: "WhatsApp",
-    title: "Customer orders in plain chat",
-    chatBubble: "START ADASTYLES — 2 black polos, large, to Yaba",
-    gradColor1: "#105346",
-    gradColor2: "#17c19a",
+    id: "chat",
+    image: "/hero/chat.jpg",
+    title: "Customers order without leaving WhatsApp",
+    focus: "42%",
   },
   {
-    id: "product-catalogue",
-    imageUrl: "https://images.unsplash.com/photo-1552374196-1ab2a1c593e8?w=600&auto=format&fit=crop&q=80",
-    tag: "Store Catalogue",
-    badge: "Ada Styles",
-    title: "Catalogue prices calculated automatically",
-    statusPill: "2 × Polo Shirts (L) · ₦24,000",
-    gradColor1: "#1f2937",
-    gradColor2: "#0d8067",
+    id: "shop",
+    image: "/hero/dashboard_whatsapp.jpg",
+    title: "Find a store and check out inside the chat",
+    focus: "38%",
   },
   {
-    id: "monnify-payment",
-    imageUrl: "https://images.unsplash.com/photo-1563013544-824ae1b704d3?w=600&auto=format&fit=crop&q=80",
-    tag: "Monnify Payment",
-    badge: "100% Verified",
-    title: "Server verified bank checkout",
-    statusPill: "₦26,500 · Monnify PAID",
-    gradColor1: "#0f6553",
-    gradColor2: "#17c19a",
+    id: "stores",
+    image: "/hero/stores.jpg",
+    title: "One number, every branch",
+    focus: "46%",
   },
   {
-    id: "anti-fraud",
-    imageUrl: "https://images.unsplash.com/photo-1556742049-0a67c5574f73?w=600&auto=format&fit=crop&q=80",
-    tag: "Anti-Fraud Guard",
-    badge: "Dispute Proof",
-    title: "Never ship against fake payment screenshots",
-    chatBubble: "Screenshot claims rejected · Provider verified",
-    gradColor1: "#7f1d1d",
-    gradColor2: "#a9000c",
+    id: "catalogue",
+    image: "/hero/catalogue.jpg",
+    title: "Your catalogue, priced automatically",
+    focus: "40%",
   },
   {
-    id: "digital-receipt",
-    imageUrl: "https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=600&auto=format&fit=crop&q=80",
-    tag: "Digital Receipt",
-    badge: "QR Scannable",
-    title: "Cryptographic proof issued to customer",
-    statusPill: "Receipt #CF-8942 · VALID",
-    gradColor1: "#111827",
-    gradColor2: "#17c19a",
+    id: "product",
+    image: "/hero/product_detail.jpg",
+    title: "Variants and quantities, no guesswork",
+    focus: "40%",
   },
   {
-    id: "merchant-hub",
-    imageUrl: "https://images.unsplash.com/photo-1556740758-90de374c12ad?w=600&auto=format&fit=crop&q=80",
-    tag: "Merchant Backoffice",
-    badge: "Live Orders",
-    title: "One dashboard for all WhatsApp branch sales",
-    statusPill: "Storefront Active · Subaccount Connected",
-    gradColor1: "#134e4a",
-    gradColor2: "#0f766e",
+    id: "dashboard",
+    image: "/hero/merchant_dashboard.jpeg",
+    title: "One dashboard, verified payment data only",
+    focus: "44%",
   },
   {
-    id: "bank-settlement",
-    imageUrl: "https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?w=600&auto=format&fit=crop&q=80",
-    tag: "Bank Settlement",
-    badge: "Direct Payout",
-    title: "Funds settled directly to merchant subaccount",
-    statusPill: "Settlement 100% routed to your bank",
-    gradColor1: "#064e3b",
-    gradColor2: "#10b981",
-  },
-  {
-    id: "delivery-customer",
-    imageUrl: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=600&auto=format&fit=crop&q=80",
-    tag: "Order Fulfilment",
-    badge: "Dispatched",
-    title: "Real-time updates delivered on WhatsApp",
-    chatBubble: "Your order has been verified and dispatched!",
-    gradColor1: "#1e1b4b",
-    gradColor2: "#17c19a",
+    id: "receipt",
+    image: "/hero/receipt.jpg",
+    title: "A verified receipt the moment they pay",
+    focus: "40%",
   },
 ];
 
-/** Renders an image collage texture with brand overlays */
-function createCollageCardTexture(data: VisualCardData): THREE.CanvasTexture {
-  const canvas = document.createElement("canvas");
-  canvas.width = 600;
-  canvas.height = 800;
-  const ctx = canvas.getContext("2d")!;
+/* --------------------------------------------------------------- tuning ---
+   `cardW` is a fraction of the stage width. `slots` is how many positions sit
+   on the conveyor — kept at a multiple of HERO_CARDS.length so a repeated
+   screenshot is always as far from its twin as the loop allows.
+   `s0`/`s1` are the scale of the deepest (centre) card and of the outermost
+   one; `es` controls how back-loaded the growth between them is.
+--------------------------------------------------------------------------- */
+type Tuning = {
+  slots: number;
+  cardW: number;
+  cardWMax: number;
+  s0: number;
+  s1: number;
+  es: number;
+  rot: number;
+  gap: number;
+  perspective: number;
+};
 
-  const texture = new THREE.CanvasTexture(canvas);
+const TIERS: Array<{ upTo: number; t: Tuning }> = [
+  { upTo: 520, t: { slots: 7, cardW: 0.26, cardWMax: 124, s0: 0.58, s1: 1.9, es: 1.8, rot: 34, gap: 0.86, perspective: 1100 } },
+  { upTo: 820, t: { slots: 7, cardW: 0.18, cardWMax: 142, s0: 0.5, s1: 2.2, es: 1.9, rot: 38, gap: 0.88, perspective: 1250 } },
+  { upTo: 1180, t: { slots: 14, cardW: 0.125, cardWMax: 148, s0: 0.34, s1: 2.9, es: 2.1, rot: 42, gap: 0.9, perspective: 1400 } },
+  { upTo: Infinity, t: { slots: 14, cardW: 0.108, cardWMax: 172, s0: 0.3, s1: 3.3, es: 2.2, rot: 44, gap: 0.92, perspective: 1500 } },
+];
 
-  const drawCard = (img?: HTMLImageElement) => {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+const MAX_SLOTS = 14;
+/** Phone screenshots are 9:20; a hair of crop trims the status bar. */
+const CARD_RATIO = 2.15;
+/** Slots advanced per viewport-height of page scroll. */
+const SCROLL_SPAN = 3.0;
+/** Slots per second of ambient drift. */
+const DRIFT = 0.13;
+/** n at which a card starts fading out — it is off-screen by then. */
+const FADE_FROM = 0.93;
+/** n range over which a card's title fades in. */
+const UI_FROM = 0.52;
+const UI_TO = 0.8;
+const MIN_HEIGHT = 320;
+const MAX_HEIGHT = 600;
 
-    const radius = 52;
-    ctx.save();
-    ctx.beginPath();
-    ctx.roundRect(0, 0, canvas.width, canvas.height, radius);
-    ctx.clip();
+const tuningFor = (w: number) => (TIERS.find((tier) => w <= tier.upTo) ?? TIERS[TIERS.length - 1]!).t;
 
-    // 1. Image or Fallback Gradient
-    if (img && img.complete && img.naturalWidth > 0) {
-      const scale = Math.max(canvas.width / img.width, canvas.height / img.height);
-      const w = img.width * scale;
-      const h = img.height * scale;
-      const x = (canvas.width - w) / 2;
-      const y = (canvas.height - h) / 2;
-      ctx.drawImage(img, x, y, w, h);
-
-      // Scrim overlay for readability
-      const scrim = ctx.createLinearGradient(0, 0, 0, canvas.height);
-      scrim.addColorStop(0, "rgba(0, 0, 0, 0.45)");
-      scrim.addColorStop(0.35, "rgba(0, 0, 0, 0.15)");
-      scrim.addColorStop(0.65, "rgba(0, 0, 0, 0.70)");
-      scrim.addColorStop(1, "rgba(0, 0, 0, 0.94)");
-      ctx.fillStyle = scrim;
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-    } else {
-      const bgGrad = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
-      bgGrad.addColorStop(0, data.gradColor1);
-      bgGrad.addColorStop(1, data.gradColor2);
-      ctx.fillStyle = bgGrad;
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-    }
-
-    // 2. Top Header Pill Badges
-    ctx.fillStyle = "#17c19a";
-    ctx.beginPath();
-    ctx.roundRect(30, 30, 210, 46, 23);
-    ctx.fill();
-
-    ctx.fillStyle = "#ffffff";
-    ctx.font = "bold 20px system-ui, sans-serif";
-    ctx.textAlign = "center";
-    ctx.fillText(data.tag.toUpperCase(), 135, 60);
-
-    // Right Badge
-    ctx.fillStyle = "rgba(255, 255, 255, 0.22)";
-    ctx.beginPath();
-    ctx.roundRect(canvas.width - 200, 30, 170, 46, 23);
-    ctx.fill();
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.4)";
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
-
-    ctx.fillStyle = "#ffffff";
-    ctx.font = "600 19px system-ui, sans-serif";
-    ctx.fillText(data.badge, canvas.width - 115, 60);
-    ctx.textAlign = "left";
-
-    // 3. Middle Floating UI Element
-    if (data.chatBubble) {
-      ctx.fillStyle = "#ffffff";
-      ctx.beginPath();
-      ctx.roundRect(30, 380, canvas.width - 60, 95, 20);
-      ctx.fill();
-
-      ctx.fillStyle = "#17c19a";
-      ctx.beginPath();
-      ctx.arc(65, 427, 16, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.fillStyle = "#ffffff";
-      ctx.font = "bold 18px system-ui, sans-serif";
-      ctx.fillText("💬", 54, 433);
-
-      ctx.fillStyle = "#111827";
-      ctx.font = "600 20px system-ui, sans-serif";
-      ctx.fillText(data.chatBubble, 96, 434);
-    } else if (data.statusPill) {
-      ctx.fillStyle = "rgba(23, 193, 154, 0.95)";
-      ctx.beginPath();
-      ctx.roundRect(30, 400, canvas.width - 60, 75, 20);
-      ctx.fill();
-
-      ctx.fillStyle = "#ffffff";
-      ctx.font = "bold 22px system-ui, sans-serif";
-      ctx.fillText("✓  " + data.statusPill, 55, 446);
-    }
-
-    // 4. Bottom Title Text
-    ctx.fillStyle = "#ffffff";
-    ctx.font = "bold 32px system-ui, sans-serif";
-    ctx.fillText(data.title, 34, canvas.height - 60);
-
-    ctx.restore();
-
-    // 5. Outer Rounded Card Border
-    ctx.strokeStyle = "rgba(23, 193, 154, 0.4)";
-    ctx.lineWidth = 6;
-    ctx.beginPath();
-    ctx.roundRect(3, 3, canvas.width - 6, canvas.height - 6, radius);
-    ctx.stroke();
-
-    texture.needsUpdate = true;
-  };
-
-  drawCard();
-
-  const img = new Image();
-  img.crossOrigin = "anonymous";
-  img.src = data.imageUrl;
-  img.onload = () => drawCard(img);
-
-  return texture;
-}
+const clamp = (v: number, a: number, b: number) => Math.min(b, Math.max(a, v));
+const smoothstep = (a: number, b: number, x: number) => {
+  const t = clamp((x - a) / (b - a), 0, 1);
+  return t * t * (3 - 2 * t);
+};
 
 export function Hero3DCarousel() {
-  const containerRef = useRef<HTMLDivElement>(null);
+  const stageRef = useRef<HTMLDivElement>(null);
+  const trackRef = useRef<HTMLDivElement>(null);
+  const slotRefs = useRef<Array<HTMLDivElement | null>>([]);
+  const titleRefs = useRef<Array<HTMLDivElement | null>>([]);
+
+  const slots = useMemo(
+    () => Array.from({ length: MAX_SLOTS }, (_, i) => ({ i, card: HERO_CARDS[i % HERO_CARDS.length]! })),
+    []
+  );
 
   useEffect(() => {
-    if (!containerRef.current) return;
-    const container = containerRef.current;
+    const stage = stageRef.current;
+    const track = trackRef.current;
+    if (!stage || !track) return;
 
-    // Three.js Scene setup
-    const scene = new THREE.Scene();
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-    const getResponsiveSettings = () => {
-      const w = container.clientWidth || window.innerWidth;
-      if (w < 480) {
-        return {
-          cameraZ: 13.5,
-          cameraY: -0.1,
-          baseGroupY: 0.35,
-          sensitivity: 2.8,
-          spacingX: 7.14,
-          cardScale: 1.18,
-          forwardCurve: 2.6,
-        };
-      } else if (w < 768) {
-        return {
-          cameraZ: 13.4,
-          cameraY: -0.05,
-          baseGroupY: 0.38,
-          sensitivity: 2.3,
-          spacingX: 6.9,
-          cardScale: 1.12,
-          forwardCurve: 3.0,
-        };
-      } else if (w < 1024) {
-        return {
-          cameraZ: 13.0,
-          cameraY: 0,
-          baseGroupY: 0.4,
-          sensitivity: 1.9,
-          spacingX: 6.95,
-          cardScale: 1.12,
-          forwardCurve: 3.3,
-        };
-      } else {
-        return {
-          cameraZ: 12.8,
-          cameraY: 0,
-          baseGroupY: 0.4,
-          sensitivity: 1.8,
-          spacingX: 7.15,
-          cardScale: 1.18,
-          forwardCurve: 3.5,
-        };
+    let tuning = tuningFor(window.innerWidth);
+    let cardW = 0;
+    let cardH = 0;
+    let uMax = tuning.slots / 2;
+
+    const SAMPLE = 0.01;
+    let table: number[] = [];
+
+    const scaleAt = (u: number) => {
+      const n = Math.min(1, u / uMax);
+      return tuning.s0 * Math.pow(tuning.s1 / tuning.s0, Math.pow(n, tuning.es));
+    };
+    const rotAt = (u: number) => tuning.rot * Math.min(1, u / uMax);
+    /** How wide a card actually reads on screen, foreshortening included. */
+    const projectedAt = (u: number) => scaleAt(u) * Math.cos((rotAt(u) * Math.PI) / 180);
+
+    const buildTable = () => {
+      table = [0];
+      for (let u = SAMPLE; u <= uMax + SAMPLE; u += SAMPLE) {
+        table.push(table[table.length - 1]! + ((projectedAt(u - SAMPLE) + projectedAt(u)) / 2) * SAMPLE);
+      }
+    };
+    /** Cumulative projected width out to `u` — keeps on-screen packing even. */
+    const spread = (u: number) => {
+      const i = u / SAMPLE;
+      const lo = Math.floor(i);
+      if (lo >= table.length - 1) return table[table.length - 1]!;
+      return table[lo]! + (table[lo + 1]! - table[lo]!) * (i - lo);
+    };
+
+    const measure = () => {
+      const w = stage.clientWidth || window.innerWidth;
+      tuning = tuningFor(w);
+      uMax = tuning.slots / 2;
+      cardW = Math.min(tuning.cardWMax, w * tuning.cardW);
+      cardH = cardW * CARD_RATIO;
+      buildTable();
+
+      // Tall enough for the foreground cards to dominate, short enough that
+      // the very outermost still run off the top and bottom on purpose.
+      const height = clamp(cardH * scaleAt(uMax * 0.86), MIN_HEIGHT, MAX_HEIGHT);
+
+      stage.style.height = `${Math.round(height)}px`;
+      stage.style.perspective = `${tuning.perspective}px`;
+
+      for (let i = 0; i < MAX_SLOTS; i++) {
+        const el = slotRefs.current[i];
+        if (!el) continue;
+        el.style.display = i < tuning.slots ? "" : "none";
+        el.style.width = `${cardW}px`;
+        el.style.height = `${cardH}px`;
+        el.style.marginLeft = `${-cardW / 2}px`;
+        el.style.marginTop = `${-cardH / 2}px`;
+        el.style.fontSize = `${cardW / 13}px`;
+        el.style.borderRadius = `${cardW / 8}px`;
       }
     };
 
-    const initialSettings = getResponsiveSettings();
+    let offset = 0; // what is drawn
+    let target = 0; // where it is heading
+    let drift = 0;
+    let dragOffset = 0;
+    let scrollOffset = 0;
+    let tiltX = 0;
+    let tiltY = 0;
+    let tiltTargetX = 0;
+    let tiltTargetY = 0;
 
-    const camera = new THREE.PerspectiveCamera(
-      45,
-      (container.clientWidth || window.innerWidth) / (container.clientHeight || 500),
-      0.1,
-      1000
-    );
-    camera.position.set(0, initialSettings.cameraY, initialSettings.cameraZ);
+    const layout = () => {
+      const n = tuning.slots;
+      for (let i = 0; i < n; i++) {
+        const el = slotRefs.current[i];
+        const title = titleRefs.current[i];
+        if (!el) continue;
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-    renderer.setSize(container.clientWidth || window.innerWidth, container.clientHeight || 500);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    container.appendChild(renderer.domElement);
+        let t = i - offset;
+        t = (((t % n) + n * 1.5) % n) - n / 2; // wrap into [-uMax, uMax)
+        const u = Math.abs(t);
+        const sign = t < 0 ? -1 : 1;
+        const norm = Math.min(1, u / uMax);
 
-    // Lighting
-    const ambientLight = new THREE.AmbientLight(0xffffff, 1.35);
-    scene.add(ambientLight);
+        const s = scaleAt(u);
+        const z = tuning.perspective - tuning.perspective / s;
+        const x = (sign * tuning.gap * cardW * spread(u)) / s;
+        const rotY = -sign * rotAt(u);
 
-    const dirLight = new THREE.DirectionalLight(0xffffff, 0.95);
-    dirLight.position.set(5, 12, 8);
-    scene.add(dirLight);
-
-    // Carousel 3D Group - lifted slightly up
-    const carouselGroup = new THREE.Group();
-    carouselGroup.position.y = initialSettings.baseGroupY;
-    scene.add(carouselGroup);
-
-    // Create 12 continuous cylindrical slot meshes from visual cards
-    const totalSlots = 12;
-    const cardMeshes: THREE.Mesh[] = [];
-    const geometry = new THREE.PlaneGeometry(2.85, 4.05, 16, 16);
-
-    for (let i = 0; i < totalSlots; i++) {
-      const data = VISUAL_CARDS[i % VISUAL_CARDS.length]!;
-      const texture = createCollageCardTexture(data);
-      const material = new THREE.MeshStandardMaterial({
-        map: texture,
-        side: THREE.DoubleSide,
-        roughness: 0.25,
-        metalness: 0.05,
-        transparent: true,
-        alphaTest: 0.02,
-      });
-
-      const mesh = new THREE.Mesh(geometry, material);
-      mesh.userData = { index: i };
-      carouselGroup.add(mesh);
-      cardMeshes.push(mesh);
-    }
-
-    const centerDepth = -3.0;
-
-    let currentScroll = 0;
-    let targetScroll = 0;
-    let isDragging = false;
-    let previousMouseX = 0;
-    let mouseXNorm = 0;
-    let mouseYNorm = 0;
-
-    const updateCardPositions = (scroll: number) => {
-      const currentSettings = getResponsiveSettings();
-      cardMeshes.forEach((mesh, index) => {
-        // Continuous 360-degree angle for each slot
-        const theta = (index / totalSlots) * Math.PI * 2 + scroll;
-        // Normalize theta to [-PI, PI]
-        const normTheta = ((((theta % (Math.PI * 2)) + Math.PI * 3) % (Math.PI * 2))) - Math.PI;
-
-        const absTheta = Math.abs(normTheta);
-
-        // Visible in front arc (~100 degrees each side)
-        if (absTheta < 1.75) {
-          mesh.visible = true;
-          // Apply responsive card scaling
-          mesh.scale.set(currentSettings.cardScale, currentSettings.cardScale, 1);
-          // Linear angle mapping guarantees uniform, non-overlapping spacing
-          mesh.position.x = normTheta * currentSettings.spacingX;
-          // Parabolic depth: center recedes (-3.0), sides curve forward towards camera
-          mesh.position.z = centerDepth + (1 - Math.cos(normTheta)) * currentSettings.forwardCurve;
-          // Inward perspective rotation
-          mesh.rotation.y = -normTheta * 0.38;
-          mesh.rotation.x = 0.02;
-
-          // Edge fade out for ultra smooth continuous entry and exit
-          const opacity = absTheta > 1.25 ? Math.max(0, 1 - (absTheta - 1.25) * 2.5) : 1;
-          (mesh.material as THREE.MeshStandardMaterial).opacity = opacity;
-        } else {
-          mesh.visible = false;
-        }
-      });
+        el.style.transform = `translate3d(${x.toFixed(2)}px, 0, ${z.toFixed(2)}px) rotateY(${rotY.toFixed(2)}deg)`;
+        el.style.opacity = (1 - smoothstep(FADE_FROM, 1, norm)).toFixed(3);
+        el.style.zIndex = String(Math.round(4000 + z));
+        if (title) title.style.opacity = smoothstep(UI_FROM, UI_TO, norm).toFixed(3);
+      }
+      track.style.transform = `rotateX(${tiltX.toFixed(3)}deg) rotateY(${tiltY.toFixed(3)}deg)`;
     };
 
-    // Initial positioning
-    updateCardPositions(0);
-
-    const handlePointerDown = (e: PointerEvent) => {
-      isDragging = true;
-      previousMouseX = e.clientX;
-      try {
-        container.setPointerCapture(e.pointerId);
-      } catch {}
+    const readScroll = () => {
+      scrollOffset = (window.scrollY / Math.max(1, window.innerHeight)) * SCROLL_SPAN;
     };
 
-    const handlePointerMove = (e: PointerEvent) => {
-      const rect = container.getBoundingClientRect();
+    /* ------------------------------------------------------------ drag --- */
+    let dragging = false;
+    let lastX = 0;
+
+    const onPointerDown = (e: PointerEvent) => {
+      if (e.pointerType === "mouse" && e.button !== 0) return;
+      dragging = true;
+      lastX = e.clientX;
+      stage.setPointerCapture?.(e.pointerId);
+    };
+    const onPointerMove = (e: PointerEvent) => {
       if (e.pointerType === "mouse") {
-        mouseXNorm = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-        mouseYNorm = -(((e.clientY - rect.top) / rect.height) * 2 - 1);
+        const rect = stage.getBoundingClientRect();
+        tiltTargetY = (((e.clientX - rect.left) / rect.width) * 2 - 1) * 1.6;
+        tiltTargetX = -((((e.clientY - rect.top) / rect.height) * 2 - 1) * 1.1);
       }
-
-      if (isDragging) {
-        const deltaX = e.clientX - previousMouseX;
-        const currentSettings = getResponsiveSettings();
-        targetScroll += (deltaX / rect.width) * currentSettings.sensitivity;
-        previousMouseX = e.clientX;
-      }
+      if (!dragging) return;
+      dragOffset -= (e.clientX - lastX) / (cardW * 1.6);
+      lastX = e.clientX;
+    };
+    const endDrag = (e: PointerEvent) => {
+      if (!dragging) return;
+      dragging = false;
+      stage.releasePointerCapture?.(e.pointerId);
+    };
+    const onPointerLeave = () => {
+      tiltTargetX = 0;
+      tiltTargetY = 0;
     };
 
-    const handlePointerUp = (e: PointerEvent) => {
-      isDragging = false;
-      try {
-        container.releasePointerCapture(e.pointerId);
-      } catch {}
+    stage.addEventListener("pointerdown", onPointerDown);
+    window.addEventListener("pointermove", onPointerMove, { passive: true });
+    window.addEventListener("pointerup", endDrag);
+    window.addEventListener("pointercancel", endDrag);
+    stage.addEventListener("pointerleave", onPointerLeave);
+    window.addEventListener("scroll", readScroll, { passive: true });
+
+    /* ------------------------------------------------------------ loop --- */
+    let raf = 0;
+    let last = performance.now();
+    let onScreen = true;
+
+    const frame = (now: number) => {
+      const dt = Math.min(0.05, (now - last) / 1000);
+      last = now;
+
+      if (!reduced && !dragging) drift += dt * DRIFT;
+      target = drift + scrollOffset + dragOffset;
+
+      offset += (target - offset) * (1 - Math.pow(0.001, dt));
+      tiltX += (tiltTargetX - tiltX) * (1 - Math.pow(0.004, dt));
+      tiltY += (tiltTargetY - tiltY) * (1 - Math.pow(0.004, dt));
+
+      layout();
+      raf = onScreen ? requestAnimationFrame(frame) : 0;
     };
 
-    container.addEventListener("pointerdown", handlePointerDown);
-    window.addEventListener("pointermove", handlePointerMove);
-    window.addEventListener("pointerup", handlePointerUp);
+    const visibility = new IntersectionObserver(
+      ([entry]) => {
+        onScreen = !!entry?.isIntersecting;
+        if (onScreen && !raf) {
+          last = performance.now();
+          raf = requestAnimationFrame(frame);
+        }
+      },
+      { rootMargin: "160px" }
+    );
+    visibility.observe(stage);
 
-    // Animation Loop
-    let animationFrameId: number;
-    const clock = new THREE.Clock();
-
-    const animate = () => {
-      animationFrameId = requestAnimationFrame(animate);
-      const elapsedTime = clock.getElapsedTime();
-
-      // Slow ambient drift when not actively dragging
-      if (!isDragging) {
-        targetScroll += 0.0008;
-      }
-
-      // Smooth scroll easing
-      currentScroll += (targetScroll - currentScroll) * 0.06;
-      updateCardPositions(currentScroll);
-
-      // Parallax mouse tilt (desktop only)
-      carouselGroup.rotation.x = mouseYNorm * 0.05;
-      carouselGroup.rotation.y = mouseXNorm * 0.03;
-
-      const currentSettings = getResponsiveSettings();
-      carouselGroup.position.y = currentSettings.baseGroupY + Math.sin(elapsedTime * 1.5) * 0.06;
-
-      renderer.render(scene, camera);
-    };
-
-    animate();
-
-    const handleResize = () => {
-      if (!container) return;
-      const w = container.clientWidth || window.innerWidth;
-      const h = container.clientHeight || 500;
-      const settings = getResponsiveSettings();
-      camera.position.z = settings.cameraZ;
-      camera.position.y = settings.cameraY;
-      camera.aspect = w / h;
-      camera.updateProjectionMatrix();
-      renderer.setSize(w, h);
-    };
-
-    window.addEventListener("resize", handleResize);
-
-    const resizeObserver = new ResizeObserver(() => {
-      handleResize();
+    const resize = new ResizeObserver(() => {
+      measure();
+      layout();
     });
-    resizeObserver.observe(container);
+    resize.observe(stage);
+
+    measure();
+    readScroll();
+    offset = scrollOffset;
+    layout();
+    raf = requestAnimationFrame(frame);
 
     return () => {
-      cancelAnimationFrame(animationFrameId);
-      resizeObserver.disconnect();
-      container.removeEventListener("pointerdown", handlePointerDown);
-      window.removeEventListener("pointermove", handlePointerMove);
-      window.removeEventListener("pointerup", handlePointerUp);
-      window.removeEventListener("resize", handleResize);
-      if (renderer.domElement) {
-        container.removeChild(renderer.domElement);
-      }
-      renderer.dispose();
+      if (raf) cancelAnimationFrame(raf);
+      visibility.disconnect();
+      resize.disconnect();
+      stage.removeEventListener("pointerdown", onPointerDown);
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", endDrag);
+      window.removeEventListener("pointercancel", endDrag);
+      stage.removeEventListener("pointerleave", onPointerLeave);
+      window.removeEventListener("scroll", readScroll);
     };
   }, []);
 
   return (
-    <div className="relative w-full overflow-hidden select-none py-0">
-      {/* 3D WebGL Canvas */}
+    <div className="relative left-1/2 -ml-[50vw] w-screen select-none">
+      {/* brand glow sitting behind the waist of the fan */}
       <div
-        ref={containerRef}
-        className="h-[395px] xs:h-[425px] w-full cursor-grab active:cursor-grabbing sm:h-[480px] lg:h-[570px] xl:h-[590px] touch-pan-y"
-        aria-label="Confirmly Business and Customer Visual World 3D Carousel"
+        aria-hidden
+        className="pointer-events-none absolute inset-0"
+        style={{
+          background:
+            "radial-gradient(ellipse 40% 48% at 50% 50%, rgba(23,193,154,0.18), rgba(23,193,154,0) 72%)",
+        }}
       />
+      <div
+        ref={stageRef}
+        role="group"
+        aria-label="Confirmly in use: ordering on WhatsApp, paying, and receiving a verified receipt"
+        className="relative h-[360px] w-full cursor-grab touch-pan-y overflow-hidden active:cursor-grabbing"
+        style={{ perspective: "1500px", perspectiveOrigin: "50% 50%" }}
+      >
+        <div ref={trackRef} className="absolute inset-0 [transform-style:preserve-3d]">
+          {slots.map(({ i, card }) => (
+            <div
+              key={i}
+              ref={(el) => {
+                slotRefs.current[i] = el;
+              }}
+              className="absolute left-1/2 top-1/2 overflow-hidden bg-[#0b1220] shadow-[0_30px_60px_-20px_rgba(0,0,0,0.45)] [backface-visibility:hidden] [will-change:transform,opacity]"
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={card.image}
+                alt=""
+                draggable={false}
+                loading={i < 7 ? "eager" : "lazy"}
+                decoding="async"
+                className="absolute inset-0 h-full w-full object-cover"
+                style={{ objectPosition: `center ${card.focus}` }}
+              />
+
+              <div aria-hidden className="absolute inset-0 rounded-[inherit] ring-1 ring-inset ring-white/12" />
+
+              <div
+                ref={(el) => {
+                  titleRefs.current[i] = el;
+                }}
+                className="absolute inset-x-0 bottom-0 flex items-end p-[0.85em] pt-[2.4em]"
+                style={{
+                  background: "linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.62) 52%, rgba(0,0,0,0.9) 100%)",
+                }}
+              >
+                <p className="line-clamp-3 text-[1em] font-bold leading-[1.2] tracking-[-0.01em] text-white">
+                  {card.title}
+                </p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
