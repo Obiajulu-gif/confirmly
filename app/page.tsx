@@ -21,6 +21,7 @@ import { ConfirmlyLogo, ConfirmlyMark } from "@/components/logo";
 import { Reveal } from "@/components/reveal";
 import { WhatsAppQr } from "@/components/whatsapp-qr";
 import { Hero3DCarousel } from "@/components/hero-3d-carousel";
+import { HowItWorksPhone } from "@/components/how-it-works-phone";
 import { LandingNav } from "@/components/landing-nav";
 
 const problems = [
@@ -312,9 +313,9 @@ export default function LandingPage() {
 
         {/* ------------------- how it works — stacked scroll cards */}
         <section id="how-it-works" className="relative py-24 bg-[#fcfcfc]">
-          <div className="mx-auto w-full max-w-4xl px-4 sm:px-6">
+          <div className="mx-auto w-full max-w-6xl px-4 sm:px-6">
             <Reveal>
-              <div className="text-center">
+              <div className="mx-auto max-w-3xl text-center">
                 <span className="rounded-full bg-[#17c19a]/10 px-4 py-1.5 text-xs font-bold uppercase tracking-wider text-[#17c19a]">
                   How it works
                 </span>
@@ -327,29 +328,42 @@ export default function LandingPage() {
               </div>
             </Reveal>
 
-            <div className="mt-16 space-y-8">
-              {steps.map((step) => (
-                <div key={step.n} className="sticky top-28">
-                  <article className="rounded-3xl border border-gray-200 bg-white p-8 shadow-xl shadow-gray-200/50 sm:p-10">
-                    <div className="grid items-center gap-8 sm:grid-cols-[1.1fr_0.9fr]">
-                      <div>
-                        <div className="flex items-baseline gap-4">
-                          <span className="font-mono text-4xl font-extrabold text-[#17c19a]/40 sm:text-5xl">
-                            {step.n}
-                          </span>
-                          <h3 className="text-2xl font-extrabold text-[#111827]">
-                            {step.title}
-                          </h3>
-                        </div>
-                        <p className="mt-4 text-base leading-relaxed text-gray-600">
-                          {step.body}
-                        </p>
-                      </div>
-                      <div className="sm:justify-self-end">{step.visual}</div>
-                    </div>
-                  </article>
+            <div className="mt-16 grid gap-12 lg:grid-cols-[minmax(0,300px)_minmax(0,1fr)] lg:gap-14">
+              {/* silent walkthrough, pinned beside the steps on desktop */}
+              <div>
+                <div className="lg:sticky lg:top-28">
+                  <HowItWorksPhone
+                    src="/video/how-it-works.mp4"
+                    poster="/video/how-it-works-poster.jpg"
+                    label="A customer ordering from a Confirmly store inside WhatsApp, from the first message through to a verified receipt"
+                  />
                 </div>
-              ))}
+              </div>
+
+              <div className="space-y-8">
+                {steps.map((step) => (
+                  <div key={step.n} className="sticky top-28">
+                    <article className="rounded-3xl border border-gray-200 bg-white p-8 shadow-xl shadow-gray-200/50 sm:p-10">
+                      <div className="grid items-center gap-8 sm:grid-cols-[1.1fr_0.9fr]">
+                        <div>
+                          <div className="flex items-baseline gap-4">
+                            <span className="font-mono text-4xl font-extrabold text-[#17c19a]/40 sm:text-5xl">
+                              {step.n}
+                            </span>
+                            <h3 className="text-2xl font-extrabold text-[#111827]">
+                              {step.title}
+                            </h3>
+                          </div>
+                          <p className="mt-4 text-base leading-relaxed text-gray-600">
+                            {step.body}
+                          </p>
+                        </div>
+                        <div className="sm:justify-self-end">{step.visual}</div>
+                      </div>
+                    </article>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </section>
