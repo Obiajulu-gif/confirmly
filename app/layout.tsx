@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
 
-const alongSansHeading = localFont({
+const alongSans = localFont({
   src: [
     {
       path: "../font/along_sans/AlongSanss2-Regular.otf",
@@ -36,23 +36,6 @@ const alongSansHeading = localFont({
     },
   ],
   variable: "--font-along-sans",
-  display: "swap",
-});
-
-const confirmlyBody = localFont({
-  src: [
-    {
-      path: "../fonts/Confirmly-Regular.ttf",
-      weight: "400",
-      style: "normal",
-    },
-    {
-      path: "../fonts/Confirmly-Bold.ttf",
-      weight: "700",
-      style: "normal",
-    },
-  ],
-  variable: "--font-confirmly",
   display: "swap",
 });
 
@@ -111,20 +94,21 @@ export const metadata: Metadata = {
       "max-video-preview": -1,
     },
   },
-  icons: {
-    icon: [
-      { url: "/favicon.ico" },
-      { url: "/favicon.png", type: "image/png" },
-      { url: "/icon.svg", type: "image/svg+xml" },
-    ],
-    apple: "/confirmly-mark.png",
-  },
-
   verification: googleSiteVerification
     ? { google: googleSiteVerification }
     : undefined,
+  icons: {
+    icon: [
+      { url: "/favicon.ico", sizes: "any" },
+      { url: "/icon.svg", type: "image/svg+xml" },
+      { url: "/brand/confirmly-mark.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: [
+      { url: "/apple-icon.png", sizes: "180x180", type: "image/png" },
+    ],
+    shortcut: "/favicon.ico",
+  },
 };
-
 
 export default function RootLayout({
   children,
@@ -132,19 +116,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html
-      lang="en-NG"
-      className={`${alongSansHeading.variable} ${confirmlyBody.variable}`}
-      suppressHydrationWarning
-    >
-      <body
-        className="min-h-screen antialiased font-sans bg-[#fcfcfc] text-[#16232e]"
-        suppressHydrationWarning
-      >
-        {children}
-      </body>
+    <html lang="en-NG" className={alongSans.variable}>
+      <body className="min-h-screen antialiased font-sans">{children}</body>
     </html>
   );
 }
-
-

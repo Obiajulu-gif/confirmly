@@ -1,44 +1,44 @@
-import Image from "next/image";
-
 /**
- * Confirmly brand mark — using transparent official shield checkmark asset.
+ * Confirmly brand mark — official shield mark with verified receipt and checkmark.
  */
-export function ConfirmlyMark({ className = "h-7 w-7 sm:h-8 sm:w-8" }: { className?: string }) {
+export function ConfirmlyMark({ className = "h-8 w-8" }: { className?: string }) {
   return (
-    <Image
-      src="/confirmly-mark.png"
-      alt="Confirmly"
-      width={120}
-      height={120}
-      className={`object-contain ${className}`}
-      priority
-    />
-  );
-}
-
-/**
- * Confirmly full logo — balanced sizing to fit seamlessly with navigation.
- */
-export function ConfirmlyLogo({
-  className = "",
-  tone = "light",
-  markClassName = "h-7 w-7 sm:h-8 sm:w-8",
-}: {
-  className?: string;
-  tone?: "light" | "dark";
-  markClassName?: string;
-}) {
-  return (
-    <span className={`inline-flex items-center gap-2 ${className}`}>
-      <ConfirmlyMark className={markClassName} />
-      <span
-        className={`text-lg sm:text-[1.3rem] font-extrabold tracking-tight font-heading leading-none ${
-          tone === "dark" ? "text-white" : "text-[#111827]"
-        }`}
-      >
-        Conf<span className="relative">i<span className="absolute -top-[0.16em] left-1/2 h-[0.22em] w-[0.22em] -translate-x-1/2 rounded-full bg-[#17c19a]" aria-hidden="true" /></span>rmly
-      </span>
+    <span className={`inline-flex items-center justify-center shrink-0 ${className}`}>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src="/brand/confirmly-mark.png"
+        alt="Confirmly Mark"
+        width={64}
+        height={64}
+        className="h-full w-full select-none object-contain"
+      />
     </span>
   );
 }
 
+/**
+ * Confirmly full brand logo (shield mark + "Confirmly" wordmark).
+ * Supports "light" (dark text on light background) and "dark" (white text on dark background).
+ */
+export function ConfirmlyLogo({
+  className = "",
+  tone = "light",
+}: {
+  className?: string;
+  /** "light" = dark text for light backgrounds; "dark" = white text. */
+  tone?: "light" | "dark";
+}) {
+  const isDark = tone === "dark";
+  return (
+    <span className={`inline-flex items-center shrink-0 ${className || "h-8 sm:h-9"}`}>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={isDark ? "/brand/confirmly-logo-dark.png" : "/brand/confirmly-logo.png"}
+        alt="Confirmly"
+        width={172}
+        height={51}
+        className="h-full w-auto max-w-none select-none object-contain"
+      />
+    </span>
+  );
+}

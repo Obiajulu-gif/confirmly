@@ -1,5 +1,7 @@
 import Link from "next/link";
 import {
+  ArrowDown,
+  ArrowRight,
   BadgeCheck,
   Banknote,
   CheckCircle2,
@@ -22,8 +24,14 @@ import { Navbar } from "@/components/navbar";
 import { PhoneDemo } from "@/components/phone-demo";
 import { Reveal } from "@/components/reveal";
 import { WhatsAppQr } from "@/components/whatsapp-qr";
-import { Hero3DCarousel } from "@/components/hero-3d-carousel";
-import { LandingNav } from "@/components/landing-nav";
+
+const flowStrip = [
+  "WhatsApp order",
+  "structured order",
+  "Monnify checkout",
+  "payment verified",
+  "receipt issued",
+];
 
 const problems = [
   {
@@ -65,10 +73,10 @@ const steps = [
     body: "Sign up, register the business, and add a settlement bank account. Monnify validates the account name and issues a dedicated subaccount.",
     visual: (
       <div className="space-y-2 font-mono text-xs">
-        <div className="rounded-xl border border-[#17c19a]/30 bg-[#17c19a]/10 px-4 py-2.5 text-[#0d8067]">
+        <div className="rounded-xl border border-brand-500/30 bg-brand-500/10 px-4 py-2.5 text-brand-300">
           Account name resolved: ADA STYLES LTD
         </div>
-        <div className="rounded-xl border border-[#17c19a]/30 bg-[#17c19a]/10 px-4 py-2.5 text-[#0d8067]">
+        <div className="rounded-xl border border-brand-500/30 bg-brand-500/10 px-4 py-2.5 text-brand-300">
           Subaccount created: MFY_SUB_…
         </div>
       </div>
@@ -79,7 +87,7 @@ const steps = [
     title: "Customers chat like always",
     body: "A customer picks your store with its code, then orders in plain language — English, Nigerian English, or Pidgin. No app to download.",
     visual: (
-      <div className="rounded-2xl rounded-br-md bg-[#e8f9f5] border border-[#17c19a]/30 px-4 py-3 text-sm text-[#111827] shadow-sm">
+      <div className="rounded-2xl rounded-br-md bg-[#d7fbe4] px-4 py-3 text-sm text-ink-900 shadow-lg">
         START ADASTYLES — I need two black polo shirts, large, to Yaba
       </div>
     ),
@@ -89,7 +97,7 @@ const steps = [
     title: "Confirmly structures the order",
     body: "NVIDIA NIM extracts intent, your catalogue supplies every price, and the server does the maths in integer kobo. One summary, one explicit confirmation.",
     visual: (
-      <div className="rounded-2xl border border-gray-200 bg-white px-5 py-4 font-mono text-sm text-gray-800 shadow-sm">
+      <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-5 py-4 font-mono text-sm text-white/80">
         <div className="flex justify-between gap-8">
           <span>2 × Polo Shirt</span>
           <span>₦24,000</span>
@@ -98,7 +106,7 @@ const steps = [
           <span>Delivery · Yaba</span>
           <span>₦2,500</span>
         </div>
-        <div className="mt-2 flex justify-between gap-8 border-t border-gray-200 pt-2 font-bold text-[#17c19a]">
+        <div className="mt-2 flex justify-between gap-8 border-t border-white/15 pt-2 font-bold text-brand-300">
           <span>TOTAL</span>
           <span>₦26,500</span>
         </div>
@@ -111,13 +119,13 @@ const steps = [
     body: "The customer pays a Monnify-generated checkout — never your personal account. The webhook is signature-checked, then the transaction is re-verified server-to-server.",
     visual: (
       <div className="space-y-2 font-mono text-xs">
-        <div className="rounded-xl border border-[#17c19a]/30 bg-[#17c19a]/10 px-4 py-2.5 text-[#0d8067]">
+        <div className="rounded-xl border border-brand-500/30 bg-brand-500/10 px-4 py-2.5 text-brand-300">
           monnify-signature · HMAC-SHA512 valid
         </div>
-        <div className="rounded-xl border border-[#17c19a]/30 bg-[#17c19a]/10 px-4 py-2.5 text-[#0d8067]">
+        <div className="rounded-xl border border-brand-500/30 bg-brand-500/10 px-4 py-2.5 text-brand-300">
           GET /v2/transactions/… → PAID
         </div>
-        <div className="rounded-xl border border-[#a9000c]/30 bg-[#a9000c]/10 px-4 py-2.5 text-[#a9000c]">
+        <div className="rounded-xl border border-red-400/30 bg-red-500/10 px-4 py-2.5 text-red-300">
           screenshot.jpg → REJECTED
         </div>
       </div>
@@ -128,18 +136,18 @@ const steps = [
     title: "Settlement routed to you",
     body: "Every checkout carries your subaccount in its income split, so Monnify settles your share straight to your registered bank account — tracked separately from payment verification.",
     visual: (
-      <div className="rounded-2xl border border-gray-200 bg-white px-5 py-4 font-mono text-xs text-gray-800 shadow-sm">
+      <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-5 py-4 font-mono text-xs text-white/80">
         <div className="flex justify-between gap-6">
           <span>splitPercentage</span>
-          <span className="text-[#17c19a] font-bold">100</span>
+          <span className="text-brand-300">100</span>
         </div>
         <div className="flex justify-between gap-6">
           <span>payment</span>
-          <span className="text-[#17c19a] font-bold">VERIFIED</span>
+          <span className="text-brand-300">VERIFIED</span>
         </div>
         <div className="flex justify-between gap-6">
           <span>settlement</span>
-          <span className="text-amber-600 font-bold">PENDING</span>
+          <span className="text-amber-300">PENDING</span>
         </div>
       </div>
     ),
@@ -215,65 +223,105 @@ const faqs = [
 
 export default function LandingPage() {
   return (
-    <div className="flex min-h-screen flex-col bg-[#fcfcfc] text-[#111827]">
-      {/* ------------------------------------------------ header: separate rounded containers with mobile support */}
-      <LandingNav />
     <div className="flex min-h-screen flex-col bg-night-900 text-white">
       {/* ------------------------------------------------ floating 3-island navigation */}
       <Navbar />
 
       <main className="flex-1">
-        {/* ------------------------------------------------ hero section */}
-        <section id="product" className="relative overflow-hidden pt-4 sm:pt-8 pb-16 sm:pb-20">
-          {/* Light Dot Grid Background */}
-          <div className="pointer-events-none absolute inset-0 light-dot-grid" />
+        {/* ------------------------------------------------ hero */}
+        <section id="product" className="relative overflow-hidden">
+          <div className="pointer-events-none absolute inset-0">
+            <div className="night-grid absolute inset-0" />
+            <div className="absolute -left-40 -top-40 h-[480px] w-[480px] orb animate-orb" />
+            <div
+              className="absolute -right-40 top-40 h-[420px] w-[420px] orb orb-teal animate-orb"
+              style={{ animationDelay: "-9s" }}
+            />
+          </div>
 
-          <div className="relative mx-auto flex w-full max-w-7xl flex-col items-center px-4 text-center sm:px-6 lg:px-8">
-            {/* BIG EMOTIONAL STATEMENT - responsive font scaling */}
-            <h1 className="mt-2 sm:mt-4 max-w-4xl text-4xl sm:text-6xl md:text-7xl lg:text-8xl font-extrabold tracking-tight text-[#111827] leading-[1.08] sm:leading-[1.05] font-heading">
-              Your next sale <br />
-              should feel <span className="text-[#17c19a]">this easy.</span>
-            </h1>
+          <div className="relative mx-auto grid w-full max-w-6xl gap-14 px-4 pb-20 pt-14 sm:px-6 sm:pt-20 lg:grid-cols-[1.05fr_0.95fr] lg:items-center">
+            <div>
+              <div
+                className="anim-fade-up mb-6 inline-flex items-center gap-2 rounded-full border border-brand-500/30 bg-brand-500/10 px-3.5 py-1.5 text-xs font-semibold text-brand-300"
+                style={{ "--d": "0.05s" } as React.CSSProperties}
+              >
+                <ConfirmlyMark className="h-4 w-4" />
+                <span>The Official WhatsApp-Native Commerce &amp; Receipt Engine</span>
+              </div>
 
-            {/* Smaller type underneath headline */}
-            <p className="mt-2.5 sm:mt-3 text-xs sm:text-sm md:text-base font-bold tracking-widest text-[#17c19a] uppercase">
-              Chat. Order. Pay. Confirm.
-            </p>
+              <h1
+                className="anim-fade-up text-[2.5rem] font-extrabold leading-[1.05] tracking-tight sm:text-6xl lg:text-[3.9rem]"
+                style={{ "--d": "0.15s" } as React.CSSProperties}
+              >
+                Turn WhatsApp orders into{" "}
+                <span className="text-gradient">verified payments.</span>
+              </h1>
 
-            {/* BUSINESS + CUSTOMER VISUAL WORLD (Hero's Main Character) */}
-            <div className="w-full -mt-2 sm:-mt-5">
-              <Hero3DCarousel />
+              <p
+                className="anim-fade-up mt-6 max-w-xl text-lg leading-relaxed text-white/60"
+                style={{ "--d": "0.3s" } as React.CSSProperties}
+              >
+                Confirmly helps merchants structure customer orders, collect
+                payments through Monnify, and issue trusted receipts without
+                leaving the sales flow they already use.
+              </p>
+
+              <div
+                className="anim-fade-up mt-9 flex flex-col gap-3 sm:flex-row"
+                style={{ "--d": "0.45s" } as React.CSSProperties}
+              >
+                <Link
+                  href="/signup"
+                  className="cta-glow inline-flex items-center justify-center gap-2 rounded-2xl bg-brand-500 px-7 py-3.5 text-base font-bold text-night-900 transition hover:bg-brand-400"
+                >
+                  Create business account
+                  <ArrowRight className="h-4.5 w-4.5" aria-hidden />
+                </Link>
+                <Link
+                  href="#how-it-works"
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/15 px-7 py-3.5 text-base font-semibold text-white/85 transition hover:border-brand-400/50 hover:text-white"
+                >
+                  View product flow
+                  <ArrowDown className="h-4 w-4" aria-hidden />
+                </Link>
+              </div>
+
+              {/* flow strip */}
+              <div
+                className="anim-fade-up mt-10 flex flex-wrap items-center gap-2 text-[13px] font-medium text-white/55"
+                style={{ "--d": "0.6s" } as React.CSSProperties}
+              >
+                {flowStrip.map((item, i) => (
+                  <span key={item} className="flex items-center gap-2">
+                    <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5">
+                      {item}
+                    </span>
+                    {i < flowStrip.length - 1 ? (
+                      <ArrowRight className="h-3.5 w-3.5 text-brand-400" aria-hidden />
+                    ) : null}
+                  </span>
+                ))}
+              </div>
             </div>
 
-            {/* ONE SHORT EXPLANATION */}
-            <p className="mt-2 sm:mt-3 max-w-2xl text-base sm:text-lg md:text-xl font-medium leading-relaxed text-gray-600 px-2 sm:px-0">
-              Confirmly brings your WhatsApp sales together, so you can spend less time chasing orders and payments and more time serving your customers.
-            </p>
-
-            {/* ONE STRONG CTA */}
-            <div className="mt-6 sm:mt-8 flex w-full sm:w-auto flex-col sm:flex-row items-center justify-center gap-3 px-4 sm:px-0">
-              <Link
-                href="/signup"
-                className="w-full sm:w-auto inline-flex items-center justify-center rounded-full bg-[#17c19a] px-8 py-3.5 sm:py-4 text-base font-bold text-white shadow-xl shadow-[#17c19a]/25 transition hover:bg-[#0fa17f] hover:shadow-2xl active:scale-95"
-              >
-                Get Started
-              </Link>
+            <div
+              className="anim-fade-up relative"
+              style={{ "--d": "0.5s" } as React.CSSProperties}
+            >
+              <PhoneDemo />
             </div>
           </div>
         </section>
 
-
-
-
         {/* ------------------------------------------------ metrics band */}
-        <section className="border-y border-gray-200 bg-white py-12">
-          <div className="mx-auto grid w-full max-w-7xl grid-cols-2 gap-8 px-4 sm:px-6 lg:grid-cols-4 lg:px-8">
+        <section className="border-y border-white/5 bg-white/[0.015]">
+          <div className="mx-auto grid w-full max-w-6xl grid-cols-2 divide-x divide-y divide-white/5 px-0 sm:px-6 lg:grid-cols-4 lg:divide-y-0">
             {metrics.map((m) => (
-              <div key={m.label} className="text-center">
-                <p className="text-4xl font-extrabold text-[#17c19a] sm:text-5xl">
+              <div key={m.label} className="px-4 py-9 text-center sm:py-11">
+                <p className="text-gradient text-3xl font-extrabold tracking-tight sm:text-4xl">
                   {m.value}
                 </p>
-                <p className="mx-auto mt-2 max-w-[15rem] text-sm font-medium leading-relaxed text-gray-600">
+                <p className="mx-auto mt-2 max-w-[15rem] text-xs leading-relaxed text-white/50 sm:text-sm">
                   {m.label}
                 </p>
               </div>
@@ -282,29 +330,27 @@ export default function LandingPage() {
         </section>
 
         {/* ------------------------------------------------ problems */}
-        <section className="py-20 bg-[#f8faf9] border-b border-gray-200/80">
-          <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
+        <section className="border-y border-white/5 bg-white/[0.02] py-20">
+          <div className="mx-auto w-full max-w-6xl px-4 sm:px-6">
             <Reveal>
-              <div className="text-center max-w-3xl mx-auto">
-                <span className="rounded-full bg-[#a9000c]/10 px-4 py-1.5 text-xs font-bold uppercase tracking-wider text-[#a9000c]">
-                  The Problem
-                </span>
-                <h2 className="mt-4 text-3xl font-extrabold tracking-tight text-[#111827] sm:text-5xl">
-                  Selling on WhatsApp works. Managing it doesn&apos;t.
-                </h2>
-              </div>
+              <p className="text-xs font-bold uppercase tracking-[0.25em] text-brand-400">
+                The problem
+              </p>
+              <h2 className="mt-3 max-w-2xl text-3xl font-extrabold tracking-tight sm:text-4xl">
+                Selling on WhatsApp works. Managing it doesn&apos;t.
+              </h2>
             </Reveal>
-            <div className="mt-14 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
               {problems.map((p, i) => {
                 const Icon = p.icon;
                 return (
                   <Reveal key={p.title} delay={(i % 3) * 0.08}>
-                    <div className="h-full rounded-2xl border border-gray-200 bg-white p-7 shadow-sm transition hover:shadow-md hover:border-[#a9000c]/30">
-                      <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#a9000c]/10 text-[#a9000c]">
-                        <Icon className="h-6 w-6" aria-hidden />
+                    <div className="lift-card glass-card h-full rounded-2xl p-6">
+                      <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-red-500/10 text-red-300">
+                        <Icon className="h-5 w-5" aria-hidden />
                       </span>
-                      <h3 className="mt-5 text-xl font-bold text-[#111827]">{p.title}</h3>
-                      <p className="mt-2 text-sm leading-relaxed text-gray-600">
+                      <h3 className="mt-4 font-bold">{p.title}</h3>
+                      <p className="mt-2 text-sm leading-relaxed text-white/55">
                         {p.body}
                       </p>
                     </div>
@@ -315,42 +361,58 @@ export default function LandingPage() {
           </div>
         </section>
 
-        {/* ------------------- how it works — stacked scroll cards */}
-        <section id="how-it-works" className="relative py-24 bg-[#fcfcfc]">
+        {/* ------------------- how it works — stacked sticky scroll cards */}
+        <section id="how-it-works" className="relative py-24">
           <div className="mx-auto w-full max-w-4xl px-4 sm:px-6">
             <Reveal>
-              <div className="text-center">
-                <span className="rounded-full bg-[#17c19a]/10 px-4 py-1.5 text-xs font-bold uppercase tracking-wider text-[#17c19a]">
-                  How it works
-                </span>
-                <h2 className="mt-4 text-3xl font-extrabold tracking-tight text-[#111827] sm:text-5xl">
-                  From registration to settlement, verified at every step.
-                </h2>
-                <p className="mt-4 text-lg text-gray-600">
-                  Each step builds on the last, guaranteeing verified funds before goods ship.
-                </p>
-              </div>
+              <p className="text-xs font-bold uppercase tracking-[0.25em] text-brand-400">
+                How it works
+              </p>
+              <h2 className="mt-3 max-w-2xl text-3xl font-extrabold tracking-tight sm:text-5xl">
+                From registration to settlement, verified at every step.
+              </h2>
+              <p className="mt-4 max-w-xl text-white/55">
+                Keep scrolling — each step stacks on the last, exactly like the
+                flow itself.
+              </p>
             </Reveal>
 
-            <div className="mt-16 space-y-8">
-              {steps.map((step) => (
-                <div key={step.n} className="sticky top-28">
-                  <article className="rounded-3xl border border-gray-200 bg-white p-8 shadow-xl shadow-gray-200/50 sm:p-10">
+            <div className="mt-16">
+              {steps.map((step, i) => (
+                <div
+                  key={step.n}
+                  className="sticky mb-8"
+                  style={{ top: `${84 + i * 30}px` }}
+                >
+                  <article className="stack-card p-7 sm:p-10">
                     <div className="grid items-center gap-8 sm:grid-cols-[1.1fr_0.9fr]">
                       <div>
                         <div className="flex items-baseline gap-4">
-                          <span className="font-mono text-4xl font-extrabold text-[#17c19a]/40 sm:text-5xl">
+                          <span className="font-mono text-4xl font-extrabold text-brand-500/40 sm:text-5xl">
                             {step.n}
                           </span>
-                          <h3 className="text-2xl font-extrabold text-[#111827]">
+                          <h3 className="text-xl font-extrabold tracking-tight sm:text-2xl">
                             {step.title}
                           </h3>
                         </div>
-                        <p className="mt-4 text-base leading-relaxed text-gray-600">
+                        <p className="mt-4 max-w-md leading-relaxed text-white/60">
                           {step.body}
                         </p>
                       </div>
                       <div className="sm:justify-self-end">{step.visual}</div>
+                    </div>
+                    <div
+                      className="mt-8 flex items-center gap-1.5"
+                      aria-hidden="true"
+                    >
+                      {steps.map((_, j) => (
+                        <span
+                          key={j}
+                          className={`h-1 rounded-full transition-all ${
+                            j <= i ? "w-6 bg-brand-400" : "w-3 bg-white/15"
+                          }`}
+                        />
+                      ))}
                     </div>
                   </article>
                 </div>
@@ -360,78 +422,95 @@ export default function LandingPage() {
         </section>
 
         {/* ------------------------------------- payment ≠ settlement spotlight */}
-        <section className="border-t border-gray-200 bg-[#f8faf9] py-24">
-          <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
+        <section className="border-t border-white/5 bg-white/[0.02] py-24">
+          <div className="mx-auto w-full max-w-6xl px-4 sm:px-6">
             <Reveal>
-              <div className="max-w-3xl">
-                <span className="rounded-full bg-[#17c19a]/10 px-4 py-1.5 text-xs font-bold uppercase tracking-wider text-[#17c19a]">
-                  Protection System
-                </span>
-                <h2 className="mt-4 text-3xl font-extrabold tracking-tight text-[#111827] sm:text-4xl">
-                  &ldquo;They paid&rdquo; and &ldquo;I have the money&rdquo; are two different facts.
-                </h2>
-                <p className="mt-4 text-lg text-gray-600">
-                  Most tools stop at &ldquo;transaction successful.&rdquo; Confirmly tracks payment and settlement as separate, verified states.
-                </p>
-              </div>
+              <p className="text-xs font-bold uppercase tracking-[0.25em] text-brand-400">
+                The distinction that protects your money
+              </p>
+              <h2 className="mt-3 max-w-3xl text-3xl font-extrabold tracking-tight sm:text-4xl">
+                &ldquo;They paid&rdquo; and &ldquo;I have the money&rdquo; are two
+                different facts.
+              </h2>
+              <p className="mt-4 max-w-2xl leading-relaxed text-white/55">
+                Most tools stop at &ldquo;transaction successful.&rdquo; Confirmly
+                tracks payment and settlement as separate, verified states — so you
+                only ship against money that has actually arrived.
+              </p>
             </Reveal>
 
-            <div className="mt-12 grid gap-6 lg:grid-cols-2">
+            <div className="mt-12 grid gap-5 lg:grid-cols-2">
               <Reveal>
-                <div className="h-full rounded-2xl border border-[#17c19a]/30 bg-white p-8 shadow-sm">
-                  <span className="inline-flex items-center gap-2 rounded-full bg-[#e8f9f5] px-3.5 py-1 text-xs font-bold uppercase tracking-wider text-[#0d8067]">
-                    <CheckCircle2 className="h-4 w-4 text-[#17c19a]" aria-hidden />
+                <div className="glass-card h-full rounded-2xl border-brand-500/20 p-7">
+                  <span className="inline-flex items-center gap-2 rounded-full bg-brand-500/15 px-3 py-1 text-xs font-bold uppercase tracking-wider text-brand-300">
+                    <CheckCircle2 className="h-3.5 w-3.5" aria-hidden />
                     Verified · Payment
                   </span>
-                  <h3 className="mt-5 text-xl font-bold text-[#111827]">
+                  <h3 className="mt-4 text-lg font-bold">
                     The customer&apos;s money left their account
                   </h3>
-                  <p className="mt-2 leading-relaxed text-gray-600">
-                    Established only by a server-side Monnify verification. No client redirect, no screenshot, and no unsigned webhook can set it.
+                  <p className="mt-2 leading-relaxed text-white/55">
+                    Established only by a server-side Monnify verification. No client
+                    redirect, no screenshot, and no unsigned webhook can set it.
                   </p>
                 </div>
               </Reveal>
               <Reveal delay={0.08}>
-                <div className="h-full rounded-2xl border border-amber-300 bg-white p-8 shadow-sm">
-                  <span className="inline-flex items-center gap-2 rounded-full bg-amber-50 px-3.5 py-1 text-xs font-bold uppercase tracking-wider text-amber-700">
-                    <Clock className="h-4 w-4 text-amber-600" aria-hidden />
+                <div className="glass-card h-full rounded-2xl border-amber-400/20 p-7">
+                  <span className="inline-flex items-center gap-2 rounded-full bg-amber-400/15 px-3 py-1 text-xs font-bold uppercase tracking-wider text-amber-300">
+                    <Clock className="h-3.5 w-3.5" aria-hidden />
                     Pending · Settlement
                   </span>
-                  <h3 className="mt-5 text-xl font-bold text-[#111827]">
+                  <h3 className="mt-4 text-lg font-bold">
                     Your bank has not been credited yet
                   </h3>
-                  <p className="mt-2 leading-relaxed text-gray-600">
-                    Stays pending until a Monnify settlement event confirms payout. Your dashboard shows both, so the two are never confused.
+                  <p className="mt-2 leading-relaxed text-white/55">
+                    Stays pending until a Monnify settlement event confirms payout.
+                    Your dashboard shows both, so the two are never confused.
                   </p>
                 </div>
               </Reveal>
             </div>
+
+            <Reveal>
+              <div className="mt-5 flex items-start gap-3 rounded-2xl border border-white/8 bg-white/[0.03] p-5 text-sm text-white/55">
+                <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-brand-400" aria-hidden />
+                <p className="leading-relaxed">
+                  A scheduled reconciliation pass re-verifies against Monnify to
+                  recover any payment whose webhook was dropped — so a missed
+                  delivery degrades into a delay, never a lost order.
+                </p>
+              </div>
+            </Reveal>
           </div>
         </section>
 
         {/* ------------------------------------------------ for merchants */}
-        <section id="for-merchants" className="py-24 bg-white border-t border-gray-200">
-          <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
+        <section id="for-merchants" className="relative py-10 pb-24">
+          <div className="orb pointer-events-none absolute inset-x-0 top-0 mx-auto h-[400px] max-w-4xl" />
+          <div className="relative mx-auto w-full max-w-6xl px-4 sm:px-6">
             <Reveal>
-              <div className="text-center max-w-3xl mx-auto">
-                <span className="rounded-full bg-[#17c19a]/10 px-4 py-1.5 text-xs font-bold uppercase tracking-wider text-[#17c19a]">
-                  For Merchants
-                </span>
-                <h2 className="mt-4 text-3xl font-extrabold tracking-tight text-[#111827] sm:text-5xl">
-                  A back office for the shop you run from your phone.
-                </h2>
-              </div>
+              <p className="text-xs font-bold uppercase tracking-[0.25em] text-brand-400">
+                For merchants
+              </p>
+              <h2 className="mt-3 max-w-2xl text-3xl font-extrabold tracking-tight sm:text-4xl">
+                A back office for the shop you run from your phone.
+              </h2>
+              <p className="mt-4 max-w-2xl leading-relaxed text-white/55">
+                Everything you need to run verified WhatsApp commerce — catalogue,
+                settlement, conversations and reporting — in one dashboard.
+              </p>
             </Reveal>
-            <div className="mt-14 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
               {[
                 {
                   icon: Store,
-                  title: "Catalogue & Variants",
+                  title: "Catalogue and variants",
                   body: "Products, aliases, sizes, colours, stock and delivery zones — the single source of truth for every order.",
                 },
                 {
                   icon: Landmark,
-                  title: "Settlement Account",
+                  title: "Settlement account",
                   body: "Validated bank account, dedicated Monnify subaccount, masked everywhere, replaceable only with reauthentication.",
                 },
                 {
@@ -441,19 +520,19 @@ export default function LandingPage() {
                 },
                 {
                   icon: BadgeCheck,
-                  title: "Payments & Revenue",
+                  title: "Payments and settlements",
                   body: "Verified revenue, pending settlements and settled amounts — tracked separately, honestly.",
                 },
               ].map((f, i) => {
                 const Icon = f.icon;
                 return (
                   <Reveal key={f.title} delay={(i % 4) * 0.08}>
-                    <div className="h-full rounded-2xl border border-gray-200 bg-[#fcfcfc] p-7 shadow-xs transition hover:shadow-md hover:border-[#17c19a]/40">
-                      <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#17c19a]/15 text-[#17c19a]">
-                        <Icon className="h-6 w-6" aria-hidden />
+                    <div className="lift-card glass-card h-full rounded-2xl p-6">
+                      <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-500/15 text-brand-300">
+                        <Icon className="h-5 w-5" aria-hidden />
                       </span>
-                      <h3 className="mt-5 text-lg font-bold text-[#111827]">{f.title}</h3>
-                      <p className="mt-2 text-sm leading-relaxed text-gray-600">
+                      <h3 className="mt-4 font-bold">{f.title}</h3>
+                      <p className="mt-2 text-sm leading-relaxed text-white/55">
                         {f.body}
                       </p>
                     </div>
@@ -465,29 +544,31 @@ export default function LandingPage() {
         </section>
 
         {/* ------------------------------------------------ security / trust */}
-        <section id="security" className="py-24 bg-[#f8faf9] border-t border-gray-200">
-          <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
+        <section id="security" className="border-t border-white/5 py-24">
+          <div className="mx-auto w-full max-w-6xl px-4 sm:px-6">
             <Reveal>
-              <div className="text-center max-w-3xl mx-auto">
-                <span className="rounded-full bg-[#17c19a]/10 px-4 py-1.5 text-xs font-bold uppercase tracking-wider text-[#17c19a]">
-                  Security
-                </span>
-                <h2 className="mt-4 text-3xl font-extrabold tracking-tight text-[#111827] sm:text-5xl">
-                  Trust, engineered in.
-                </h2>
-              </div>
+              <p className="text-xs font-bold uppercase tracking-[0.25em] text-brand-400">
+                Security
+              </p>
+              <h2 className="mt-3 max-w-2xl text-3xl font-extrabold tracking-tight sm:text-4xl">
+                Trust, engineered in.
+              </h2>
+              <p className="mt-4 max-w-2xl leading-relaxed text-white/55">
+                The rules that make a payment real are enforced by the server, not
+                by convention — so fraud is designed out, not policed after the fact.
+              </p>
             </Reveal>
-            <div className="mt-14 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
               {trust.map((t, i) => {
                 const Icon = t.icon;
                 return (
                   <Reveal key={t.title} delay={(i % 3) * 0.08}>
-                    <div className="h-full rounded-2xl border border-gray-200 bg-white p-7 shadow-xs transition hover:shadow-md">
-                      <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#17c19a]/15 text-[#17c19a]">
-                        <Icon className="h-6 w-6" aria-hidden />
+                    <div className="lift-card glass-card h-full rounded-2xl p-6">
+                      <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-500/15 text-brand-300">
+                        <Icon className="h-5 w-5" aria-hidden />
                       </span>
-                      <h3 className="mt-5 text-lg font-bold text-[#111827]">{t.title}</h3>
-                      <p className="mt-2 text-sm leading-relaxed text-gray-600">
+                      <h3 className="mt-4 font-bold">{t.title}</h3>
+                      <p className="mt-2 text-sm leading-relaxed text-white/55">
                         {t.body}
                       </p>
                     </div>
@@ -499,59 +580,58 @@ export default function LandingPage() {
         </section>
 
         {/* ------------------------------------------------ FAQ */}
-        <section id="faq" className="py-24 bg-white border-t border-gray-200">
-          <div className="mx-auto w-full max-w-4xl px-4 sm:px-6">
+        <section id="faq" className="border-t border-white/5 py-24">
+          <div className="mx-auto w-full max-w-3xl px-4 sm:px-6">
             <Reveal>
-              <div className="text-center">
-                <span className="rounded-full bg-[#17c19a]/10 px-4 py-1.5 text-xs font-bold uppercase tracking-wider text-[#17c19a]">
-                  FAQ
-                </span>
-                <h2 className="mt-4 text-3xl font-extrabold tracking-tight text-[#111827] sm:text-4xl">
-                  Frequently Asked Questions
-                </h2>
-              </div>
+              <p className="text-xs font-bold uppercase tracking-[0.25em] text-brand-400">
+                FAQ
+              </p>
+              <h2 className="mt-3 text-3xl font-extrabold tracking-tight sm:text-4xl">
+                Questions, answered.
+              </h2>
             </Reveal>
-            <div className="mt-12 divide-y divide-gray-200 border-y border-gray-200">
+            <div className="mt-10 divide-y divide-white/[0.08] border-y border-white/[0.08]">
               {faqs.map((f) => (
                 <details key={f.q} className="group">
-                  <summary className="flex cursor-pointer list-none items-center justify-between gap-4 py-6 font-bold text-gray-900 transition hover:text-[#17c19a] text-lg">
+                  <summary className="flex cursor-pointer list-none items-center justify-between gap-4 py-5 font-semibold text-white/90 transition hover:text-white [&::-webkit-details-marker]:hidden">
                     {f.q}
                     <ChevronDown
-                      className="h-5 w-5 shrink-0 text-[#17c19a] transition-transform duration-300 group-open:rotate-180"
+                      className="h-5 w-5 shrink-0 text-brand-400 transition-transform duration-300 group-open:rotate-180"
                       aria-hidden
                     />
                   </summary>
-                  <p className="pb-6 pr-8 text-base leading-relaxed text-gray-600">{f.a}</p>
+                  <p className="pb-5 pr-9 leading-relaxed text-white/55">{f.a}</p>
                 </details>
               ))}
             </div>
           </div>
         </section>
 
-        {/* ------------------------------------- WhatsApp QR */}
+        {/* ------------------------------------- scan to chat on WhatsApp */}
         <WhatsAppQr />
 
         {/* ------------------------------------------------ final CTA */}
-        <section className="mx-auto w-full max-w-7xl px-4 py-20 sm:px-6 lg:px-8">
+        <section className="mx-auto w-full max-w-6xl px-4 pb-24 sm:px-6">
           <Reveal>
-            <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#17c19a] via-[#0fa17f] to-[#0d8067] px-6 py-16 text-center text-white shadow-2xl sm:px-12">
+            <div className="relative overflow-hidden rounded-3xl border border-brand-500/25 bg-gradient-to-br from-night-700 via-night-800 to-night-900 px-6 py-14 text-center sm:px-12">
+              <div className="night-grid pointer-events-none absolute inset-0" />
               <div className="relative">
-                <ConfirmlyMark className="mx-auto h-16 w-16 drop-shadow-md" />
-                <h2 className="mx-auto mt-6 max-w-2xl text-3xl font-extrabold tracking-tight sm:text-5xl">
+                <ConfirmlyMark className="mx-auto h-14 w-14" />
+                <h2 className="mx-auto mt-6 max-w-2xl text-3xl font-extrabold tracking-tight sm:text-4xl">
                   Start selling with clearer orders and verified payments.
                 </h2>
-                <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
+                <div className="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row">
                   <Link
                     href="/signup"
-                    className="inline-flex items-center justify-center rounded-full bg-white px-8 py-4 text-base font-bold text-[#111827] shadow-xl transition hover:bg-gray-100 active:scale-95"
+                    className="cta-glow inline-flex items-center justify-center rounded-2xl bg-brand-500 px-7 py-3.5 text-base font-bold text-night-900 transition hover:bg-brand-400"
                   >
-                    Create Business Account
+                    Create business account
                   </Link>
                   <Link
                     href="/start"
-                    className="inline-flex items-center justify-center rounded-full border-2 border-white/30 bg-white/10 px-8 py-4 text-base font-semibold text-white transition hover:bg-white/20 active:scale-95"
+                    className="inline-flex items-center justify-center rounded-2xl border border-white/15 px-7 py-3.5 text-base font-semibold text-white/85 transition hover:border-brand-400/50 hover:text-white"
                   >
-                    Order from Store on WhatsApp
+                    Order from a store on WhatsApp
                   </Link>
                 </div>
               </div>
@@ -561,18 +641,19 @@ export default function LandingPage() {
       </main>
 
       {/* ------------------------------------------------ footer */}
-      <footer className="border-t border-gray-200 bg-white text-gray-600">
-        <div className="mx-auto w-full max-w-7xl px-4 py-14 sm:px-6 lg:px-8">
+      <footer className="border-t border-white/5 bg-white/[0.015]">
+        <div className="mx-auto w-full max-w-6xl px-4 py-14 sm:px-6">
           <div className="grid gap-10 md:grid-cols-[1.6fr_1fr_1fr_1fr]">
             <div>
-              <ConfirmlyLogo tone="light" />
-              <p className="mt-4 max-w-xs text-sm leading-relaxed text-gray-600">
-                From chat to confirmed payment. WhatsApp-native ordering with Monnify-verified settlement.
+              <ConfirmlyLogo tone="dark" />
+              <p className="mt-4 max-w-xs text-sm leading-relaxed text-white/45">
+                From chat to confirmed payment. WhatsApp-native ordering with
+                Monnify-verified settlement.
               </p>
             </div>
 
             <div>
-              <p className="text-xs font-bold uppercase tracking-widest text-gray-900">
+              <p className="text-xs font-bold uppercase tracking-widest text-white/40">
                 Product
               </p>
               <ul className="mt-4 space-y-2.5 text-sm">
@@ -585,7 +666,7 @@ export default function LandingPage() {
                   ] as const
                 ).map(([href, label]) => (
                   <li key={label}>
-                    <Link href={href} className="text-gray-600 transition hover:text-[#17c19a]">
+                    <Link href={href} className="text-white/55 transition hover:text-white">
                       {label}
                     </Link>
                   </li>
@@ -594,7 +675,7 @@ export default function LandingPage() {
             </div>
 
             <div>
-              <p className="text-xs font-bold uppercase tracking-widest text-gray-900">
+              <p className="text-xs font-bold uppercase tracking-widest text-white/40">
                 Get started
               </p>
               <ul className="mt-4 space-y-2.5 text-sm">
@@ -606,7 +687,7 @@ export default function LandingPage() {
                   ] as const
                 ).map(([href, label]) => (
                   <li key={label}>
-                    <Link href={href} className="text-gray-600 transition hover:text-[#17c19a]">
+                    <Link href={href} className="text-white/55 transition hover:text-white">
                       {label}
                     </Link>
                   </li>
@@ -615,10 +696,10 @@ export default function LandingPage() {
             </div>
 
             <div>
-              <p className="text-xs font-bold uppercase tracking-widest text-gray-900">
+              <p className="text-xs font-bold uppercase tracking-widest text-white/40">
                 Powered by
               </p>
-              <ul className="mt-4 space-y-2.5 text-sm text-gray-600">
+              <ul className="mt-4 space-y-2.5 text-sm text-white/55">
                 <li>Monnify · payments &amp; settlement</li>
                 <li>NVIDIA NIM · order understanding</li>
                 <li>WhatsApp Cloud API</li>
@@ -626,9 +707,11 @@ export default function LandingPage() {
             </div>
           </div>
 
-          <div className="mt-12 flex flex-col items-center justify-between gap-4 border-t border-gray-200 pt-6 text-sm text-gray-500 sm:flex-row">
+          <div className="mt-12 flex flex-col items-center justify-between gap-4 border-t border-white/[0.08] pt-6 text-sm text-white/40 sm:flex-row">
             <span>© {new Date().getFullYear()} Confirmly. All rights reserved.</span>
-            <span>Payments by Monnify · Orders understood by NVIDIA NIM</span>
+            <span className="text-white/35">
+              Payments by Monnify · Orders understood by NVIDIA NIM
+            </span>
           </div>
         </div>
       </footer>
