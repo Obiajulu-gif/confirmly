@@ -239,7 +239,9 @@ describe("flow endpoint", () => {
     const body = decryptAsMeta(await res.text(), aesKey, iv);
     expect(body.version).toBe("3.0");
     expect(body.screen).toBe("SEARCH");
-    expect(body.data.store_items[0]["main-content"].description).toBe("Tap to retry");
+    expect(body.data.has_stores).toBe(false);
+    expect(body.data.stores).toEqual([]);
+    expect(typeof body.data.empty_message).toBe("string");
     expect(resolveFlowScreen).not.toHaveBeenCalled();
   });
 
