@@ -1,10 +1,9 @@
-import { ShoppingBag } from "lucide-react";
 import type { PublicStore } from "@/lib/stores";
 
 /**
  * Card artwork for a store: a grid of the vendor's logo and their product
- * photos. A store with neither gets a tinted placeholder carrying its
- * initials, so a brand-new store still looks deliberate rather than empty.
+ * photos. A store with neither gets a plain tinted placeholder with its
+ * initials.
  */
 
 const MAX_TILES = 4;
@@ -44,19 +43,14 @@ export function StoreArtwork({
   if (tiles.length === 0) {
     return (
       <div
-        className={`relative flex h-full w-full flex-col items-center justify-center overflow-hidden ${className}`}
+        className={`flex h-full w-full items-center justify-center overflow-hidden ${className}`}
         style={{ background: tint }}
       >
-        <div className="absolute inset-0 opacity-40 [background-image:radial-gradient(rgba(17,24,39,0.25)_1px,transparent_1px)] [background-size:14px_14px]" />
         <span
-          className="relative flex h-[3.6em] w-[3.6em] items-center justify-center rounded-[1em] bg-white text-[1.35em] font-extrabold tracking-tight shadow-md"
-          style={{ color: `hsl(${hue} 55% 32%)` }}
+          className="text-[3em] font-extrabold tracking-tight"
+          style={{ color: `hsl(${hue} 45% 35% / 0.85)` }}
         >
           {initials(store.name)}
-        </span>
-        <span className="relative mt-[0.8em] inline-flex items-center gap-[0.35em] text-[0.7em] font-semibold uppercase tracking-[0.14em] text-[#111827]/50">
-          <ShoppingBag className="h-[1.1em] w-[1.1em]" aria-hidden />
-          Photos coming soon
         </span>
       </div>
     );
