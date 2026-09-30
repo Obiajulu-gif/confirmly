@@ -1,9 +1,12 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
+import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { getBranchContext } from "@/lib/business/scope";
 import { formatNaira } from "@/lib/money";
 import { Badge, Card, EmptyState } from "@/components/ui";
 import { ProductForm, ZoneForm } from "./product-forms";
+import { ProductFilters, type ProductFilterValues } from "./product-filters";
 import {
   duplicateProductAction,
   toggleProductActiveAction,
@@ -36,20 +39,89 @@ function imageBadge(product: {
   return <Badge tone="neutral">No image</Badge>;
 }
 
-export default async function ProductsPage() {
+const PAGE_SIZE = 30;
+const LOW_STOCK = 5;
+
+type Search = Record<string, string | string[] | undefined>;
+const param = (sp: Search, key: string) => {
+  const v = sp[key];
+  return ((Array.isArray(v) ? v[0] : v) ?? "").trim();
+};
+
+/** Translates the filter form's query string into a Prisma query. */
+function productQuery(branchId: string, f: ProductFilterValues) {
+  const and: Prisma.ProductWhereInput[] = [{ merchantId: branchId }];
+  if (f.q) {
+    const contains = { contains: f.q, mode: "insensitive" as const };
+    and.push({
+      OR: [
+        { name: contains },
+        { description: contains },
+        { category: contains },
+        { variants: { some: { sku: contains } } },
+      ],
+    });
+  }
+  if (f.category) and.push({ category: f.category });
+  if (f.status === "active") and.push({ active: true });
+  if (f.status === "hidden") and.push({ active: false });
+  if (f.stock === "in") and.push({ stockQuantity: { gt: 0 } });
+  if (f.stock === "low") and.push({ stockQuantity: { gt: 0, lte: LOW_STOCK } });
+  if (f.stock === "out") and.push({ stockQuantity: { lte: 0 } });
+  if (f.image === "with") and.push({ imageUrl: { not: null } });
+  if (f.image === "missing") and.push({ imageUrl: null });
+  if (f.image === "pending") and.push({ imageSource: "AI_GENERATED", imageApprovedAt: null });
+
+  const orderBy: Prisma.ProductOrderByWithRelationInput[] =
+    f.sort === "newest"
+      ? [{ createdAt: "desc" }]
+      : f.sort === "price-asc"
+        ? [{ priceKobo: "asc" }, { name: "asc" }]
+        : f.sort === "price-desc"
+          ? [{ priceKobo: "desc" }, { name: "asc" }]
+          : f.sort === "stock-asc"
+            ? [{ stockQuantity: "asc" }, { name: "asc" }]
+            : [{ category: "asc" }, { name: "asc" }];
+
+  return { where: { AND: and }, orderBy };
+}
+
+export default async function ProductsPage({
+  searchParams,
+}: {
+  searchParams: Promise<Search>;
+}) {
   const ctx = await getBranchContext();
   if (!ctx) redirect("/dashboard");
   const branchId = ctx.branchId;
 
-  const [merchant, products, zones] = await Promise.all([
+  const sp = await searchParams;
+  const filters: ProductFilterValues = {
+    q: param(sp, "q").slice(0, 100),
+    category: param(sp, "category"),
+    status: param(sp, "status"),
+    stock: param(sp, "stock"),
+    image: param(sp, "image"),
+    sort: param(sp, "sort"),
+  };
+  const filtered = Boolean(
+    filters.q || filters.category || filters.status || filters.stock || filters.image
+  );
+  const { where, orderBy } = productQuery(branchId, filters);
+  const requestedPage = Math.max(1, Number.parseInt(param(sp, "page"), 10) || 1);
+
+  const [merchant, totalProducts, matching, categoryRows, zones] = await Promise.all([
     prisma.merchant.findUnique({
       where: { id: branchId },
       select: { name: true, storeCode: true },
     }),
+    prisma.product.count({ where: { merchantId: branchId } }),
+    prisma.product.count({ where }),
     prisma.product.findMany({
-      where: { merchantId: branchId },
-      include: { variants: true },
-      orderBy: [{ category: "asc" }, { name: "asc" }],
+      where: { merchantId: branchId, category: { not: null } },
+      distinct: ["category"],
+      select: { category: true },
+      orderBy: { category: "asc" },
     }),
     prisma.deliveryZone.findMany({
       where: { merchantId: branchId },
@@ -57,9 +129,27 @@ export default async function ProductsPage() {
     }),
   ]);
 
-  const categories = [
-    ...new Set(products.map((product) => product.category).filter(Boolean)),
-  ];
+  const pageCount = Math.max(1, Math.ceil(matching / PAGE_SIZE));
+  const page = Math.min(requestedPage, pageCount);
+  const products = await prisma.product.findMany({
+    where,
+    include: { variants: true },
+    orderBy,
+    skip: (page - 1) * PAGE_SIZE,
+    take: PAGE_SIZE,
+  });
+  const categories = categoryRows.flatMap((row) => (row.category ? [row.category] : []));
+
+  /** Same filters, different page, for the pager links. */
+  const pageHref = (n: number) => {
+    const qs = new URLSearchParams();
+    for (const [key, value] of Object.entries(filters)) if (value) qs.set(key, value);
+    if (n > 1) qs.set("page", String(n));
+    const query = qs.toString();
+    return query ? `/dashboard/products?${query}` : "/dashboard/products";
+  };
+  const first = matching === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
+  const last = (page - 1) * PAGE_SIZE + products.length;
 
   return (
     <div className="space-y-6">
@@ -79,19 +169,26 @@ export default async function ProductsPage() {
         <ProductForm />
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        {categories.map((category) => (
-          <Badge key={category} tone="neutral">
-            {category}
-          </Badge>
-        ))}
-      </div>
-
       <Card title="Catalogue">
-        {products.length === 0 ? (
+        {totalProducts > 0 ? (
+          <div className="mb-5 space-y-3 border-b border-ink-900/5 pb-5">
+            <ProductFilters values={filters} categories={categories} filtered={filtered} />
+            <p className="text-sm text-ink-500" aria-live="polite">
+              {matching === 0
+                ? "No products match."
+                : `Showing ${first}–${last} of ${matching}${filtered ? ` matching (${totalProducts} in total)` : ""}`}
+            </p>
+          </div>
+        ) : null}
+        {totalProducts === 0 ? (
           <EmptyState
             title="No products yet"
             hint="Add products so customers can browse and the assistant can match free-text orders."
+          />
+        ) : products.length === 0 ? (
+          <EmptyState
+            title="No products match these filters"
+            hint="Try a different search, or clear the filters to see the whole catalogue."
           />
         ) : (
           <ul className="divide-y divide-ink-900/5">
@@ -201,6 +298,36 @@ export default async function ProductsPage() {
             ))}
           </ul>
         )}
+        {pageCount > 1 ? (
+          <nav
+            aria-label="Product pages"
+            className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-ink-900/5 pt-4 text-sm"
+          >
+            {page > 1 ? (
+              <Link
+                href={pageHref(page - 1)}
+                className="rounded-lg border border-ink-900/10 px-3 py-1.5 font-semibold text-ink-700 hover:bg-ink-900/5"
+              >
+                ← Previous
+              </Link>
+            ) : (
+              <span />
+            )}
+            <span className="text-ink-500">
+              Page {page} of {pageCount}
+            </span>
+            {page < pageCount ? (
+              <Link
+                href={pageHref(page + 1)}
+                className="rounded-lg border border-ink-900/10 px-3 py-1.5 font-semibold text-ink-700 hover:bg-ink-900/5"
+              >
+                Next →
+              </Link>
+            ) : (
+              <span />
+            )}
+          </nav>
+        ) : null}
       </Card>
 
       <Card title="Delivery zones">

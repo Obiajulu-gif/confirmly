@@ -94,7 +94,10 @@ export default async function BranchDetailPage({
         {branch.branchAssignments.length === 0 ? (
           <p className="text-sm text-ink-500">
             No agents assigned.{" "}
-            <Link href="/dashboard/agents/invite" className="text-brand-700 hover:underline">
+            <Link
+              href={`/dashboard/agents?branch=${encodeURIComponent(branch.id)}#invite`}
+              className="text-brand-700 hover:underline"
+            >
               Invite one
             </Link>
             .

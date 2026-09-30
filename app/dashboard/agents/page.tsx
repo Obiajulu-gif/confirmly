@@ -13,7 +13,13 @@ import {
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Agents" };
 
-export default async function AgentsPage() {
+export default async function AgentsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ branch?: string | string[] }>;
+}) {
+  const { branch } = await searchParams;
+  const defaultBranchId = Array.isArray(branch) ? branch[0] : branch;
   const session = await requireMerchantRole().catch((err) => {
     if (err instanceof BusinessAccessError) return null;
     throw err;
@@ -54,9 +60,11 @@ export default async function AgentsPage() {
         </p>
       </div>
 
-      <Card title="Invite a Branch Agent">
-        <InviteForm branches={branches} />
-      </Card>
+      <div id="invite" className="scroll-mt-24">
+        <Card title="Invite a Branch Agent">
+          <InviteForm branches={branches} defaultBranchId={defaultBranchId} />
+        </Card>
+      </div>
 
       <Card title="Agents">
         {agents.length === 0 ? (

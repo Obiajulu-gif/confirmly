@@ -3,6 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { appUrl } from "@/lib/env";
+import { prisma } from "@/lib/db";
+import { agentInvitationEmail, sendEmail } from "@/lib/email";
 import { requireMerchantRole } from "@/lib/authz/business-access";
 import {
   AgentError,
@@ -16,8 +18,11 @@ import {
 
 export interface InviteState {
   error: string | null;
-  /** The shareable invitation link (shown once — no email is sent in v1). */
+  /** The one-time invitation link, shown once as a backup to the email. */
   link: string | null;
+  /** Who the invitation went to, and whether the email actually went out. */
+  email?: string;
+  emailStatus?: "sent" | "not_configured" | "failed";
 }
 
 const inviteSchema = z.object({
@@ -40,14 +45,30 @@ export async function inviteAgentAction(
     return { error: "Enter a valid email and choose a branch.", link: null };
   }
   try {
-    const { token } = await inviteAgent({
+    const invite = await inviteAgent({
       businessId: session.businessId,
       branchId: parsed.data.branchId,
       email: parsed.data.email,
       invitedByUserId: session.userId,
     });
+    const link = `${appUrl()}/invite/${invite.token}`;
+
+    // The invitation exists either way; email is best-effort delivery of the link.
+    const inviter = await prisma.user.findUnique({
+      where: { id: session.userId },
+      select: { name: true, email: true },
+    });
+    const message = agentInvitationEmail({
+      businessName: invite.businessName,
+      branchName: invite.branchName,
+      inviterName: inviter?.name ?? null,
+      link,
+      expiresAt: invite.expiresAt,
+    });
+    const sent = await sendEmail({ to: parsed.data.email, replyTo: inviter?.email, ...message });
+
     revalidatePath("/dashboard/agents");
-    return { error: null, link: `${appUrl()}/invite/${token}` };
+    return { error: null, link, email: parsed.data.email, emailStatus: sent.status };
   } catch (err) {
     return {
       error: err instanceof AgentError ? err.message : "Could not create the invitation.",

@@ -21,7 +21,13 @@ export async function inviteAgent(input: {
   branchId: string;
   email: string;
   invitedByUserId: string;
-}): Promise<{ token: string; invitationId: string }> {
+}): Promise<{
+  token: string;
+  invitationId: string;
+  expiresAt: Date;
+  branchName: string;
+  businessName: string;
+}> {
   const email = input.email.trim().toLowerCase();
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
     throw new AgentError("Enter a valid email address.");
@@ -29,7 +35,7 @@ export async function inviteAgent(input: {
   // Branch must belong to this business.
   const branch = await prisma.merchant.findFirst({
     where: { id: input.branchId, businessId: input.businessId },
-    select: { id: true },
+    select: { id: true, name: true, business: { select: { name: true } } },
   });
   if (!branch) throw new AgentError("That branch is not part of your business.");
 
@@ -52,7 +58,13 @@ export async function inviteAgent(input: {
     branchId: input.branchId,
     metadata: { email },
   });
-  return { token, invitationId: invitation.id };
+  return {
+    token,
+    invitationId: invitation.id,
+    expiresAt: invitation.expiresAt,
+    branchName: branch.name,
+    businessName: branch.business?.name ?? branch.name,
+  };
 }
 
 export async function revokeInvite(
