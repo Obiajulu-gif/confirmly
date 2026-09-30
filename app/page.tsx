@@ -182,13 +182,6 @@ const trust = [
   },
 ];
 
-const metrics = [
-  { value: "100%", label: "Payments verified with Monnify, server-side" },
-  { value: "0", label: "Screenshots ever accepted as proof" },
-  { value: "7", label: "Monnify APIs integrated end to end" },
-  { value: "24/7", label: "Automated ordering on WhatsApp" },
-];
-
 const faqs = [
   {
     q: "Do my customers need to download an app?",
@@ -268,27 +261,8 @@ export default async function LandingPage() {
           </div>
         </section>
 
-
-
-
-        {/* ------------------------------------------------ metrics band */}
-        <section className="border-y border-gray-200 bg-white py-12">
-          <div className="mx-auto grid w-full max-w-7xl grid-cols-2 gap-8 px-4 sm:px-6 lg:grid-cols-4 lg:px-8">
-            {metrics.map((m) => (
-              <div key={m.label} data-scroll="rise" className="text-center">
-                <p {...(/^\d+%?$/.test(m.value) ? { "data-count": "" } : {})} className="text-4xl font-extrabold text-[#17c19a] sm:text-5xl">
-                  {m.value}
-                </p>
-                <p className="mx-auto mt-2 max-w-[15rem] text-sm font-medium leading-relaxed text-gray-600">
-                  {m.label}
-                </p>
-              </div>
-            ))}
-          </div>
-        </section>
-
         {/* ------------------------------------------------ problems */}
-        <section className="py-20 bg-[#f8faf9] border-b border-gray-200/80">
+        <section className="border-t border-gray-200 py-20 bg-[#f8faf9] border-b border-gray-200/80">
           <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
             <Reveal>
               <div data-speed="0.12" className="text-center max-w-3xl mx-auto">
@@ -517,11 +491,11 @@ export default async function LandingPage() {
           </div>
         </section>
 
-        {/* ------------------------------------- WhatsApp QR */}
-        <WhatsAppQr />
-
         {/* ------------------------------------- store showcase (curved wall) */}
         <StoreShowcase stores={stores} />
+
+        {/* ------------------------------------- WhatsApp QR */}
+        <WhatsAppQr />
 
         {/* ------------------------------------------------ final CTA */}
         <section className="mx-auto w-full max-w-7xl px-4 py-20 sm:px-6 lg:px-8">
