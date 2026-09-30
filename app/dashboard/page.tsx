@@ -111,9 +111,9 @@ export default async function OverviewPage() {
         ) : (
           <ul className="divide-y divide-ink-900/5 text-sm">
             {recent.map((event) => (
-              <li key={event.id} className="flex items-center justify-between py-2">
-                <span className="text-ink-700">{event.event}</span>
-                <span className="flex items-center gap-3">
+              <li key={event.id} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 py-2">
+                <span className="min-w-0 break-words text-ink-700">{event.event}</span>
+                <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
                   <Badge tone="neutral">{event.merchant.name}</Badge>
                   <span className="text-xs tabular-nums text-ink-500">
                     {event.createdAt.toLocaleString("en-NG", {

@@ -88,7 +88,7 @@ export default async function AgentsPage() {
                       </Badge>
                     </td>
                     <td className="py-3">
-                      <div className="flex gap-2">
+                      <div className="flex flex-wrap gap-2">
                         {a.status === "ACTIVE" ? (
                           <form action={suspendAgentAction}>
                             <input type="hidden" name="membershipId" value={a.id} />
@@ -124,8 +124,8 @@ export default async function AgentsPage() {
         <Card title="Pending invitations">
           <ul className="divide-y divide-ink-900/5 text-sm">
             {invites.map((inv) => (
-              <li key={inv.id} className="flex items-center justify-between py-2">
-                <span>
+              <li key={inv.id} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 py-2">
+                <span className="min-w-0 break-words">
                   <span className="font-medium text-ink-900">{inv.email}</span>{" "}
                   <span className="text-ink-500">→ {inv.branch.name}</span>
                 </span>

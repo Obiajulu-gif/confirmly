@@ -113,7 +113,7 @@ export default async function ProductsPage() {
                     )}
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
-                        <p className="font-semibold text-ink-900">
+                        <p className="min-w-0 break-words font-semibold text-ink-900">
                           {product.name}
                         </p>
                         <Badge tone={product.active ? "success" : "neutral"}>

@@ -349,7 +349,7 @@ export function Hero3DCarousel() {
         ref={stageRef}
         role="group"
         aria-label="Confirmly in use: ordering on WhatsApp, paying, and receiving a verified receipt"
-        className="relative h-[360px] w-full cursor-grab touch-pan-y overflow-hidden active:cursor-grabbing"
+        className="relative h-[360px] w-full cursor-grab touch-pan-y overflow-hidden active:cursor-grabbing lg:overflow-visible lg:[clip-path:inset(-100vh_0_0_0)]"
         style={{ perspective: "1500px", perspectiveOrigin: "50% 50%" }}
       >
         <div ref={trackRef} className="absolute inset-0 [transform-style:preserve-3d]">

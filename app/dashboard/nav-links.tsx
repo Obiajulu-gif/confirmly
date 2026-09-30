@@ -19,21 +19,27 @@ import {
 } from "lucide-react";
 import type { BusinessRole } from "@/lib/authz/policy";
 
-type NavItem = {
+export type NavItem = {
   href: string;
   label: string;
   icon: typeof LayoutDashboard;
   exact?: boolean;
   merchantOnly?: boolean;
+  /**
+   * Pinned to the mobile bottom tab bar (with this shorter label). Tab pages
+   * are left out of the mobile "More" sidebar so no page is listed twice.
+   */
+  tab?: string;
 };
 
-const links: NavItem[] = [
-  { href: "/dashboard", label: "Overview", icon: LayoutDashboard, exact: true },
+/** Single source for every dashboard nav surface (sidebar, tabs, drawer). */
+export const dashboardLinks: NavItem[] = [
+  { href: "/dashboard", label: "Overview", icon: LayoutDashboard, exact: true, tab: "Overview" },
+  { href: "/dashboard/orders", label: "Orders", icon: Receipt, tab: "Orders" },
+  { href: "/dashboard/conversations", label: "Conversations", icon: MessagesSquare, tab: "Chats" },
+  { href: "/dashboard/products", label: "Products", icon: Package, tab: "Products" },
   { href: "/dashboard/storefront", label: "WhatsApp store", icon: QrCode },
   { href: "/dashboard/branches", label: "Branches", icon: Store, merchantOnly: true },
-  { href: "/dashboard/conversations", label: "Conversations", icon: MessagesSquare },
-  { href: "/dashboard/orders", label: "Orders", icon: Receipt },
-  { href: "/dashboard/products", label: "Products", icon: Package },
   { href: "/dashboard/inventory", label: "Inventory", icon: Boxes },
   { href: "/dashboard/payments", label: "Payments", icon: CreditCard, merchantOnly: true },
   { href: "/dashboard/withdrawals", label: "Withdrawals", icon: Wallet, merchantOnly: true },
@@ -43,23 +49,42 @@ const links: NavItem[] = [
   { href: "/dashboard/settings", label: "Settings", icon: Settings, merchantOnly: true },
 ];
 
-export function NavLinks({ role }: { role: BusinessRole }) {
+export function visibleLinks(role: BusinessRole): NavItem[] {
+  return dashboardLinks.filter((l) => role === "MERCHANT" || !l.merchantOnly);
+}
+
+export function isActive(link: Pick<NavItem, "href" | "exact">, pathname: string): boolean {
+  return link.exact ? pathname === link.href : pathname.startsWith(link.href);
+}
+
+/**
+ * Vertical link list. `variant="sidebar"` is the full desktop list;
+ * `variant="drawer"` is the mobile "More" list, which skips tab-bar pages.
+ */
+export function NavLinks({
+  role,
+  variant = "sidebar",
+  onNavigate,
+}: {
+  role: BusinessRole;
+  variant?: "sidebar" | "drawer";
+  onNavigate?: () => void;
+}) {
   const pathname = usePathname();
-  const visible = links.filter((l) => role === "MERCHANT" || !l.merchantOnly);
+  const items = visibleLinks(role).filter((l) => variant === "sidebar" || !l.tab);
   return (
     <nav
-      aria-label="Dashboard navigation"
-      className="relative flex gap-1 overflow-x-auto px-3 pb-3 lg:flex-col lg:px-3 lg:pb-0"
+      aria-label={variant === "sidebar" ? "Dashboard navigation" : "More pages"}
+      className="relative flex flex-col gap-1 px-3"
     >
-      {visible.map((link) => {
+      {items.map((link) => {
         const Icon = link.icon;
-        const active = link.exact
-          ? pathname === link.href
-          : pathname.startsWith(link.href);
+        const active = isActive(link, pathname);
         return (
           <Link
             key={link.href}
             href={link.href}
+            onClick={onNavigate}
             aria-current={active ? "page" : undefined}
             className={`group flex items-center gap-2.5 whitespace-nowrap rounded-xl px-3.5 py-2.5 text-sm font-medium transition-all ${
               active
@@ -69,9 +94,9 @@ export function NavLinks({ role }: { role: BusinessRole }) {
           >
             <Icon
               aria-hidden="true"
-              className={`h-4 w-4 transition ${active ? "opacity-100" : "opacity-50 group-hover:opacity-90"}`}
+              className={`h-4 w-4 shrink-0 transition ${active ? "opacity-100" : "opacity-50 group-hover:opacity-90"}`}
             />
-            {link.label}
+            <span className="truncate">{link.label}</span>
           </Link>
         );
       })}
