@@ -45,23 +45,18 @@ const MAX_QUANTITY = 10;
 
 type Row = { id: string; title: string; description?: string };
 /**
- * A NavigationList store card: logo + name + category, tapped to open. Each item
- * carries its own data_exchange action with a literal store id. The component's
- * required `name` identifies the list; it is not a selected form-field value.
+ * A store row for the picker: logo image + name + category, chosen via a
+ * RadioButtonsGroup — the same image-list pattern the SHOP catalogue and START
+ * screen already use reliably on-device. (NavigationList's dynamic list-items
+ * validated and previewed but failed to render the live dataset on real phones.)
  */
-type StoreNavItem = {
+type StoreRow = {
   id: string;
-  "main-content": { title: string; description: string; metadata: string };
-  start: { image: string; "alt-text": string };
-  "on-click-action": {
-    name: "data_exchange";
-    payload: { store_id: string };
-  };
+  title: string;
+  description: string;
+  image: string;
+  "alt-text": string;
 };
-
-function storeOnClick(storeId: string): StoreNavItem["on-click-action"] {
-  return { name: "data_exchange", payload: { store_id: storeId } };
-}
 /** A catalogue row may carry a Base64 thumbnail + alt text. */
 type ProductRow = Row & { image?: string; "alt-text"?: string };
 
@@ -141,7 +136,7 @@ export function recoveryScreen(
     default:
       return {
         screen: "SEARCH",
-        data: { store_items: [storeRetryItem(message)] },
+        data: { has_stores: false, stores: [], empty_message: message },
       };
   }
 }
@@ -165,69 +160,33 @@ async function listEligibleStores() {
   });
 }
 
-/** Builds the NavigationList store cards, each with its logo (or generated tile). */
-async function storeNavItems(
+/** Builds the store rows, each with its logo image (or generated tile). */
+async function storeRows(
   stores: Array<{ id: string; name: string; category: string | null; storeCode: string }>
-): Promise<StoreNavItem[]> {
+): Promise<StoreRow[]> {
   const logos = await storeLogos(stores);
   return stores.map((store) => ({
     id: store.id,
-    "main-content": {
-      title: title30(store.name),
-      description: (store.category ?? "Store").slice(0, 20),
-      metadata: store.storeCode.slice(0, 80),
-    },
-    start: {
-      image: logos.get(store.id) || FLOW_FALLBACK_IMAGE_BASE64,
-      "alt-text": `${store.name} logo`,
-    },
-    "on-click-action": storeOnClick(store.id),
+    title: title30(store.name),
+    description: `${store.category ?? "Store"} · ${store.storeCode}`.slice(0, 80),
+    image: logos.get(store.id) || FLOW_FALLBACK_IMAGE_BASE64,
+    "alt-text": `${store.name} logo`,
   }));
-}
-
-/**
- * The NavigationList needs at least one item, so an empty marketplace shows a
- * single non-store card. Tapping it just re-renders the (still empty) list.
- */
-const EMPTY_STORE_ITEM: StoreNavItem = {
-  id: "__none__",
-  "main-content": {
-    title: "No stores available",
-    description: "Check back soon",
-    metadata: "",
-  },
-  start: {
-    image: FLOW_FALLBACK_IMAGE_BASE64,
-    "alt-text": "No stores",
-  },
-  "on-click-action": { name: "data_exchange", payload: { store_id: "__none__" } },
-};
-
-/** NavigationList must stand alone, so show errors as a tappable retry card. */
-function storeRetryItem(message: string): StoreNavItem {
-  return {
-    ...EMPTY_STORE_ITEM,
-    id: "__retry__",
-    "main-content": {
-      title: "Please try again",
-      description: "Tap to retry",
-      metadata: message.slice(0, 80),
-    },
-    "on-click-action": storeOnClick("__retry__"),
-  };
 }
 
 async function buildSearchScreen(
   params: { error?: string } = {}
 ): Promise<FlowScreenResponse> {
   const stores = await listEligibleStores();
-  const items = stores.length ? await storeNavItems(stores) : [EMPTY_STORE_ITEM];
+  const rows = await storeRows(stores);
   return {
     screen: "SEARCH",
     data: {
-      store_items: params.error
-        ? [storeRetryItem(params.error), ...items].slice(0, MAX_STORE_ROWS)
-        : items,
+      has_stores: rows.length > 0,
+      stores: rows,
+      empty_message:
+        params.error ??
+        "No stores are open right now. Please check back in a little while.",
     },
   };
 }

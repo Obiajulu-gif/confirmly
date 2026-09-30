@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { formatNaira } from "@/lib/money";
 import { Badge, Card, StatCard } from "@/components/ui";
@@ -5,85 +6,176 @@ import { Badge, Card, StatCard } from "@/components/ui";
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Admin overview" };
 
+/** Conversation states that count as an open/active WhatsApp chat. */
+const ACTIVE_STATES = [
+  "NEW",
+  "COLLECTING_ORDER",
+  "NEEDS_CLARIFICATION",
+  "AWAITING_CONFIRMATION",
+  "PAYMENT_PENDING",
+  "FULFILLING",
+  "HUMAN_REQUIRED",
+  "HUMAN_ACTIVE",
+] as const;
+
+function stateLabel(state: string): string {
+  const map: Record<string, string> = {
+    NEW: "New",
+    COLLECTING_ORDER: "Ordering",
+    NEEDS_CLARIFICATION: "Clarifying",
+    AWAITING_CONFIRMATION: "Confirming",
+    PAYMENT_PENDING: "Payment",
+    PAID: "Paid",
+    FULFILLING: "Fulfilling",
+    COMPLETED: "Completed",
+    CANCELLED: "Cancelled",
+    HUMAN_REQUIRED: "Needs human",
+    HUMAN_ACTIVE: "With agent",
+  };
+  return map[state] ?? state;
+}
+
+function stateTone(state: string): "neutral" | "success" | "warning" | "danger" | "info" {
+  if (state === "HUMAN_REQUIRED") return "danger";
+  if (state === "PAID" || state === "COMPLETED") return "success";
+  if (["NEEDS_CLARIFICATION", "AWAITING_CONFIRMATION", "PAYMENT_PENDING"].includes(state))
+    return "warning";
+  if (["NEW", "COLLECTING_ORDER", "FULFILLING", "HUMAN_ACTIVE"].includes(state)) return "info";
+  return "neutral";
+}
+
+function timeAgo(date: Date | null): string {
+  if (!date) return "—";
+  const mins = Math.floor((Date.now() - date.getTime()) / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
+}
+
+/** Full WhatsApp number in international format for admin display: +2348012345678. */
+function formatFullNumber(value: string): string {
+  const digits = value.replace(/\D/g, "");
+  return digits ? `+${digits}` : value;
+}
+
 export default async function AdminOverviewPage() {
   const since30d = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
   const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
   const [
-    registrations,
-    registrations30d,
-    customers,
-    distinctOrderers,
-    totalOrders,
-    orders30d,
-    ordersByState,
-    gmv,
+    users,
+    newUsers30d,
+    customersOrdered,
     merchantsTotal,
     merchantsActive,
-    settlementAgg,
-    recentEvents,
-    failedWebhooks24h,
-    failedOutbound24h,
+    totalOrders,
+    orders30d,
+    gmv,
+    convByState,
+    humanMode,
+    inbound24h,
+    outbound24h,
+    liveChats,
+    topMerchantGroups,
+    recentSessions,
   ] = await Promise.all([
     prisma.waSession.count(),
     prisma.waSession.count({ where: { createdAt: { gte: since30d } } }),
-    prisma.customer.count(),
     prisma.order.findMany({ distinct: ["customerId"], select: { customerId: true } }),
+    prisma.merchant.count(),
+    prisma.merchant.count({ where: { active: true } }),
     prisma.order.count(),
     prisma.order.count({ where: { createdAt: { gte: since30d } } }),
-    prisma.order.groupBy({ by: ["state"], _count: { _all: true } }),
     prisma.order.aggregate({
       _sum: { totalKobo: true },
       where: { state: { in: ["PAID", "COMPLETED"] } },
     }),
-    prisma.merchant.count(),
-    prisma.merchant.count({ where: { active: true } }),
-    prisma.settlement.groupBy({
-      by: ["state"],
-      _count: { _all: true },
-      _sum: { netAmountKobo: true },
-    }),
-    prisma.auditEvent.findMany({
-      orderBy: { createdAt: "desc" },
-      take: 8,
-      include: { merchant: { select: { name: true } } },
-    }),
-    prisma.webhookEvent.count({
-      where: { state: "FAILED", createdAt: { gte: since24h } },
+    prisma.conversation.groupBy({ by: ["state"], _count: { _all: true } }),
+    prisma.conversation.count({ where: { automationMode: "HUMAN" } }),
+    prisma.whatsAppMessage.count({
+      where: { direction: "INBOUND", createdAt: { gte: since24h } },
     }),
     prisma.whatsAppMessage.count({
-      where: {
-        direction: "OUTBOUND",
-        status: "FAILED",
-        createdAt: { gte: since24h },
+      where: { direction: "OUTBOUND", createdAt: { gte: since24h } },
+    }),
+    prisma.conversation.findMany({
+      where: { lastInboundAt: { not: null } },
+      orderBy: { lastInboundAt: "desc" },
+      take: 8,
+      include: {
+        merchant: { select: { name: true } },
+        customer: { select: { name: true, waId: true } },
       },
     }),
+    prisma.order.groupBy({
+      by: ["merchantId"],
+      _count: { _all: true },
+      orderBy: { _count: { merchantId: "desc" } },
+      take: 5,
+    }),
+    prisma.waSession.findMany({ orderBy: { createdAt: "desc" }, take: 8 }),
   ]);
 
-  const settled = settlementAgg.find((s) => s.state === "SETTLED");
-  const pendingSettle = settlementAgg.find((s) => s.state === "PENDING");
+  const stateCount = (s: string) => convByState.find((r) => r.state === s)?._count._all ?? 0;
+  const totalChats = convByState.reduce((a, r) => a + r._count._all, 0);
+  const activeChats = convByState
+    .filter((r) => (ACTIVE_STATES as readonly string[]).includes(r.state))
+    .reduce((a, r) => a + r._count._all, 0);
+  const needsHuman = stateCount("HUMAN_REQUIRED");
+
+  const topMerchants = topMerchantGroups.length
+    ? await prisma.merchant.findMany({
+        where: { id: { in: topMerchantGroups.map((g) => g.merchantId) } },
+        select: { id: true, name: true, active: true },
+      })
+    : [];
+  const topMerchantRows = topMerchantGroups
+    .map((g) => ({
+      count: g._count._all,
+      merchant: topMerchants.find((m) => m.id === g.merchantId),
+    }))
+    .filter((r) => r.merchant);
+
+  // Enrich recent WhatsApp users with their onboarding details (name/email).
+  const userLeads = recentSessions.length
+    ? await prisma.lead.findMany({
+        where: { waId: { in: recentSessions.map((s) => s.waId) } },
+        select: { waId: true, name: true, email: true },
+      })
+    : [];
+  const recentUsers = recentSessions.map((s) => {
+    const lead = userLeads.find((l) => l.waId === s.waId);
+    return {
+      id: s.id,
+      name: lead?.name ?? s.profileName ?? null,
+      number: formatFullNumber(s.waId),
+      email: lead?.email ?? null,
+      joined: s.createdAt,
+    };
+  });
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight text-ink-900">
-          Platform overview
-        </h1>
+        <h1 className="text-2xl font-bold tracking-tight text-ink-900">Platform overview</h1>
         <p className="mt-1 text-sm text-ink-500">
-          Every merchant, customer and order across Confirmly.
+          Users, WhatsApp chats and stores across Confirmly.
         </p>
       </div>
 
+      {/* Headline numbers */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <StatCard
-          label="WhatsApp numbers registered"
-          value={registrations.toLocaleString()}
-          sub={`+${registrations30d.toLocaleString()} in last 30 days`}
+          label="Users"
+          value={users.toLocaleString()}
+          sub={`+${newUsers30d.toLocaleString()} in last 30 days`}
         />
         <StatCard
-          label="Customers who ordered"
-          value={distinctOrderers.length.toLocaleString()}
-          sub={`${customers.toLocaleString()} customer profiles total`}
+          label="Stores"
+          value={merchantsActive.toLocaleString()}
+          sub={`active of ${merchantsTotal.toLocaleString()} total`}
         />
         <StatCard
           label="Orders"
@@ -91,116 +183,167 @@ export default async function AdminOverviewPage() {
           sub={`+${orders30d.toLocaleString()} in last 30 days`}
         />
         <StatCard
-          label="Gross merchandise value"
+          label="Revenue"
           value={formatNaira(gmv._sum.totalKobo ?? 0)}
-          sub="Paid & completed orders"
+          sub={`${customersOrdered.length.toLocaleString()} customers ordered`}
         />
       </div>
 
-      <Card title="Reliability (last 24h)">
-        <div className="flex flex-wrap gap-8 text-sm">
+      {/* WhatsApp chat status */}
+      <Card
+        title="WhatsApp chats"
+        action={
+          <Link href="/admin/sessions" className="text-sm font-medium text-brand-700 hover:underline">
+            WhatsApp numbers →
+          </Link>
+        }
+      >
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
           <div>
-            <span className="text-ink-500">Failed inbound processing: </span>
-            <span
-              className={`font-semibold ${failedWebhooks24h ? "text-red-700" : "text-ink-900"}`}
-            >
-              {failedWebhooks24h}
-            </span>
+            <p className="text-2xl font-bold tabular-nums text-ink-900">
+              {activeChats.toLocaleString()}
+            </p>
+            <p className="text-xs text-ink-500">Active chats</p>
           </div>
           <div>
-            <span className="text-ink-500">Failed outbound sends: </span>
-            <span
-              className={`font-semibold ${failedOutbound24h ? "text-red-700" : "text-ink-900"}`}
+            <p
+              className={`text-2xl font-bold tabular-nums ${needsHuman ? "text-red-700" : "text-ink-900"}`}
             >
-              {failedOutbound24h}
-            </span>
+              {needsHuman.toLocaleString()}
+            </p>
+            <p className="text-xs text-ink-500">Waiting for a human</p>
+          </div>
+          <div>
+            <p className="text-2xl font-bold tabular-nums text-ink-900">
+              {humanMode.toLocaleString()}
+            </p>
+            <p className="text-xs text-ink-500">Handled by an agent</p>
+          </div>
+          <div>
+            <p className="text-2xl font-bold tabular-nums text-ink-900">
+              {(inbound24h + outbound24h).toLocaleString()}
+            </p>
+            <p className="text-xs text-ink-500">
+              Messages / 24h ({inbound24h.toLocaleString()} in · {outbound24h.toLocaleString()} out)
+            </p>
           </div>
         </div>
-        <p className="mt-2 text-xs text-ink-500">
-          Failed outbound text messages are auto-retried by the daily job (after
-          the client&apos;s inline 5xx/429 retries). Inbound-processing failures
-          are logged for investigation — raw message content is never stored.
-        </p>
-      </Card>
-
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Card title="Merchants">
-          <div className="flex items-baseline gap-3">
-            <span className="text-3xl font-bold tabular-nums text-ink-900">
-              {merchantsActive}
-            </span>
-            <span className="text-sm text-ink-500">
-              active of {merchantsTotal} total
-            </span>
-          </div>
-        </Card>
-
-        <Card title="Settlements">
-          <div className="grid grid-cols-2 gap-4 text-sm">
-            <div>
-              <p className="text-ink-500">Settled</p>
-              <p className="text-lg font-semibold tabular-nums text-ink-900">
-                {formatNaira(settled?._sum.netAmountKobo ?? 0)}
-              </p>
-              <p className="text-xs text-ink-500">
-                {settled?._count._all ?? 0} settlement(s)
-              </p>
-            </div>
-            <div>
-              <p className="text-ink-500">Pending</p>
-              <p className="text-lg font-semibold tabular-nums text-amber-700">
-                {formatNaira(pendingSettle?._sum.netAmountKobo ?? 0)}
-              </p>
-              <p className="text-xs text-ink-500">
-                {pendingSettle?._count._all ?? 0} pending
-              </p>
-            </div>
-          </div>
-        </Card>
-      </div>
-
-      <Card title="Orders by state">
-        <div className="flex flex-wrap gap-2">
-          {ordersByState.length === 0 ? (
-            <span className="text-sm text-ink-500">No orders yet.</span>
+        <div className="mt-5 flex flex-wrap gap-2 border-t border-ink-900/5 pt-4">
+          {totalChats === 0 ? (
+            <span className="text-sm text-ink-500">No conversations yet.</span>
           ) : (
-            ordersByState
+            convByState
+              .slice()
               .sort((a, b) => b._count._all - a._count._all)
               .map((row) => (
-                <span
-                  key={row.state}
-                  className="inline-flex items-center gap-2 rounded-lg bg-ink-900/5 px-3 py-1.5 text-sm"
-                >
-                  <span className="font-medium text-ink-700">{row.state}</span>
-                  <span className="tabular-nums font-semibold text-ink-900">
-                    {row._count._all}
-                  </span>
-                </span>
+                <Badge key={row.state} tone={stateTone(row.state)}>
+                  {stateLabel(row.state)} · {row._count._all}
+                </Badge>
               ))
           )}
         </div>
       </Card>
 
-      <Card title="Recent activity">
-        {recentEvents.length === 0 ? (
-          <p className="text-sm text-ink-500">No activity yet.</p>
-        ) : (
-          <ul className="divide-y divide-ink-900/5 text-sm">
-            {recentEvents.map((event) => (
-              <li key={event.id} className="flex items-center justify-between py-2">
-                <span className="text-ink-700">{event.event}</span>
-                <span className="flex items-center gap-3">
-                  <Badge tone="neutral">{event.merchant.name}</Badge>
-                  <span className="text-xs tabular-nums text-ink-500">
-                    {event.createdAt.toLocaleString("en-NG", {
-                      dateStyle: "short",
-                      timeStyle: "short",
-                    })}
+      <div className="grid gap-4 lg:grid-cols-3">
+        {/* Live conversations */}
+        <Card title="Recent conversations" className="lg:col-span-2">
+          {liveChats.length === 0 ? (
+            <p className="text-sm text-ink-500">No conversations yet.</p>
+          ) : (
+            <ul className="divide-y divide-ink-900/5 text-sm">
+              {liveChats.map((chat) => (
+                <li key={chat.id} className="flex items-center justify-between gap-3 py-2.5">
+                  <div className="min-w-0">
+                    <p className="truncate font-medium text-ink-900">
+                      {chat.customer.name ?? chat.customer.waId}
+                    </p>
+                    <p className="truncate text-xs text-ink-500">{chat.merchant.name}</p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-3">
+                    <Badge tone={stateTone(chat.state)}>{stateLabel(chat.state)}</Badge>
+                    <span className="w-16 text-right text-xs tabular-nums text-ink-500">
+                      {timeAgo(chat.lastInboundAt)}
+                    </span>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+
+        {/* Top stores */}
+        <Card
+          title="Top stores"
+          action={
+            <Link href="/admin/merchants" className="text-sm font-medium text-brand-700 hover:underline">
+              All stores →
+            </Link>
+          }
+        >
+          {topMerchantRows.length === 0 ? (
+            <p className="text-sm text-ink-500">No orders yet.</p>
+          ) : (
+            <ul className="space-y-2.5 text-sm">
+              {topMerchantRows.map((row) => (
+                <li key={row.merchant!.id} className="flex items-center justify-between gap-3">
+                  <span className="flex min-w-0 items-center gap-2">
+                    <span className="truncate font-medium text-ink-900">{row.merchant!.name}</span>
+                    {!row.merchant!.active ? <Badge tone="neutral">off</Badge> : null}
                   </span>
-                </span>
-              </li>
-            ))}
-          </ul>
+                  <span className="shrink-0 tabular-nums text-ink-500">
+                    {row.count.toLocaleString()} orders
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+      </div>
+
+      {/* User details */}
+      <Card
+        title="Recent users"
+        action={
+          <Link href="/admin/sessions" className="text-sm font-medium text-brand-700 hover:underline">
+            All users →
+          </Link>
+        }
+      >
+        {recentUsers.length === 0 ? (
+          <p className="text-sm text-ink-500">No users yet.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[560px] text-left text-sm">
+              <thead>
+                <tr className="border-b border-ink-900/10 text-xs uppercase tracking-wide text-ink-500">
+                  <th className="py-2 pr-4 font-semibold">Name</th>
+                  <th className="py-2 pr-4 font-semibold">Number</th>
+                  <th className="py-2 pr-4 font-semibold">Email</th>
+                  <th className="py-2 font-semibold">Joined</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-ink-900/5">
+                {recentUsers.map((u) => (
+                  <tr key={u.id} className="hover:bg-brand-50/40">
+                    <td className="py-3 pr-4 font-medium text-ink-900">
+                      {u.name ?? <span className="text-ink-500">Unknown</span>}
+                    </td>
+                    <td className="py-3 pr-4 font-mono text-xs text-ink-700">{u.number}</td>
+                    <td className="py-3 pr-4 text-ink-700">
+                      {u.email ?? <span className="text-ink-500">—</span>}
+                    </td>
+                    <td className="py-3 text-xs tabular-nums text-ink-500">
+                      {u.joined.toLocaleDateString("en-NG", {
+                        day: "numeric",
+                        month: "short",
+                        year: "numeric",
+                      })}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </Card>
     </div>

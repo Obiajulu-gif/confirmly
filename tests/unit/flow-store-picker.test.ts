@@ -44,11 +44,12 @@ async function resolve(screen: string, data: Record<string, unknown> = {}) {
   });
 }
 
-type StoreItem = {
+type StoreRow = {
   id: string;
-  start: { image: string };
-  "main-content": { title: string; description: string; metadata: string };
-  "on-click-action": { name: string; payload: { store_id: string } };
+  title: string;
+  description: string;
+  image: string;
+  "alt-text": string;
 };
 
 async function expectDecodableImage(base64: string) {
@@ -74,25 +75,20 @@ afterEach(() => vi.restoreAllMocks());
 afterAll(() => vi.resetModules());
 
 describe("native WhatsApp store picker", () => {
-  it("serves a decodable image when no stores are available", async () => {
+  it("returns an empty store list with a message when no stores are available", async () => {
     const response = await resolve("START");
     expect(response.screen).toBe("SEARCH");
-    const items = response.data.store_items as StoreItem[];
-    expect(items).toHaveLength(1);
-    expect(items[0]!["main-content"].title).toBe("No stores available");
-    await expectDecodableImage(items[0]!.start.image);
+    expect(response.data.has_stores).toBe(false);
+    expect(response.data.stores).toEqual([]);
+    expect(typeof response.data.empty_message).toBe("string");
+    expect((response.data.empty_message as string).length).toBeGreaterThan(0);
   });
 
-  it("keeps a usable retry card when store loading fails", async () => {
+  it("recovers SEARCH with an empty list and the error message", async () => {
     const response = recoveryScreen("SEARCH", "Sorry, something went wrong. Please try again.");
-    const item = (response.data.store_items as StoreItem[])[0]!;
-    expect(item["main-content"].description).toBe("Tap to retry");
-    expect(item["main-content"].metadata).toContain("Please try again");
-    await expectDecodableImage(item.start.image);
-
-    await resolve("SEARCH", item["on-click-action"].payload);
-    expect(prisma.merchant.findMany).toHaveBeenCalled();
-    expect(prisma.merchant.findFirst).not.toHaveBeenCalled();
+    expect(response.data.has_stores).toBe(false);
+    expect(response.data.stores).toEqual([]);
+    expect(response.data.empty_message).toBe("Sorry, something went wrong. Please try again.");
   });
 
   it("renders store cards and opens the selected store's catalogue", async () => {
@@ -100,19 +96,18 @@ describe("native WhatsApp store picker", () => {
       { id: "store-ada", name: "Ada Kitchen", category: "Food", storeCode: "ADA" },
     ]);
     const picker = await resolve("START");
-    const item = (picker.data.store_items as StoreItem[])[0]!;
-    expect(item["on-click-action"]).toEqual({
-      name: "data_exchange",
-      payload: { store_id: "store-ada" },
-    });
-    await expectDecodableImage(item.start.image);
+    expect(picker.data.has_stores).toBe(true);
+    const row = (picker.data.stores as StoreRow[])[0]!;
+    expect(row.id).toBe("store-ada");
+    expect(row.title).toBe("Ada Kitchen");
+    await expectDecodableImage(row.image);
 
     prisma.merchant.findFirst.mockResolvedValue({ id: "store-ada", name: "Ada Kitchen" });
     prisma.product.count.mockResolvedValue(1);
     prisma.product.findMany.mockResolvedValue([
       { id: "p-rice", name: "Jollof rice", category: "Meals", priceKobo: 150000 },
     ]);
-    const catalogue = await resolve("SEARCH", item["on-click-action"].payload);
+    const catalogue = await resolve("SEARCH", { store_id: row.id });
     expect(catalogue.screen).toBe("SHOP");
     expect(catalogue.data.store_name).toBe("Ada Kitchen");
     expect(catalogue.data.products).toEqual([
@@ -138,8 +133,8 @@ describe("native WhatsApp store picker", () => {
 
   it("ships a decodable example image in the generated Flow JSON", async () => {
     const picker = flowJson.screens.find((screen) => screen.id === "SEARCH")!;
-    const item = picker.data!.store_items!.__example__[0]!;
-    await expectDecodableImage(item.start.image);
+    const example = picker.data!.stores!.__example__[0]!;
+    await expectDecodableImage(example.image);
   });
 
   it("falls back even when the native image module cannot be imported", async () => {
