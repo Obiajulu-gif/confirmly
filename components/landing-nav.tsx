@@ -30,10 +30,11 @@ export function LandingNav() {
   }, [mobileMenuOpen]);
 
   const navLinks = [
-    { href: "#how-it-works", label: "How it works" },
-    { href: "#for-merchants", label: "For merchants" },
-    { href: "#security", label: "Security" },
-    { href: "#faq", label: "FAQ" },
+    { href: "/#how-it-works", label: "How it works" },
+    { href: "/#for-merchants", label: "For merchants" },
+    { href: "/stores", label: "Stores" },
+    { href: "/#security", label: "Security" },
+    { href: "/#faq", label: "FAQ" },
   ];
 
   return (
