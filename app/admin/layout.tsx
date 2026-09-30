@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getAdminSession } from "@/lib/auth";
 import { logoutAction } from "@/app/(auth)/login/actions";
-import { AdminNav } from "./admin-nav";
+import { AdminMobileNav, AdminNav } from "./admin-nav";
 import { ConfirmlyMark } from "@/components/logo";
 
 export const metadata = { title: "Admin · Confirmly" };
@@ -20,49 +20,67 @@ export default async function AdminLayout({
   const session = await getAdminSession();
   if (!session) redirect("/dashboard");
 
+  const identity = (
+    <>
+      <Link href="/admin" aria-label="Admin home" className="flex items-center gap-2.5">
+        <ConfirmlyMark className="h-7 w-7" />
+        <span className="text-sm font-bold tracking-tight">Platform Admin</span>
+      </Link>
+      <p className="mt-3 flex items-center gap-1.5 text-xs text-white/50">
+        <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
+        Cross-tenant view
+      </p>
+    </>
+  );
+
+  const account = (
+    <>
+      <Link
+        href="/dashboard"
+        className="block w-full rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-center text-sm font-medium text-white/70 transition hover:border-white/25 hover:text-white"
+      >
+        ← Back to my dashboard
+      </Link>
+      <form action={logoutAction}>
+        <button
+          type="submit"
+          className="w-full rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2.5 text-left text-sm font-medium text-white/70 transition hover:border-white/25 hover:text-white"
+        >
+          Sign out
+          <span className="block truncate text-[11px] font-normal text-white/40">
+            {session.email}
+          </span>
+        </button>
+      </form>
+    </>
+  );
+
   return (
     <div className="flex min-h-screen flex-col lg:flex-row">
-      <aside className="relative border-b border-white/5 bg-gradient-to-b from-night-900 via-night-900 to-black text-white lg:sticky lg:top-0 lg:flex lg:h-screen lg:w-64 lg:shrink-0 lg:flex-col lg:border-b-0 lg:border-r">
-        <div className="relative flex items-center justify-between p-4 lg:block lg:p-5">
-          <Link href="/admin" aria-label="Admin home" className="flex items-center gap-2.5">
-            <ConfirmlyMark className="h-7 w-7" />
-            <span className="text-sm font-bold tracking-tight">
-              Platform Admin
-            </span>
-          </Link>
-          <p className="mt-0 flex items-center gap-1.5 text-xs text-white/50 lg:mt-3">
-            <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
-            Cross-tenant view
-          </p>
+      {/* ------------------------------------------ desktop sidebar (lg+) */}
+      <aside className="relative hidden border-r border-white/5 bg-gradient-to-b from-night-900 via-night-900 to-black text-white lg:sticky lg:top-0 lg:flex lg:h-screen lg:w-64 lg:shrink-0 lg:flex-col">
+        <div className="relative p-5">{identity}</div>
+        <div className="relative min-h-0 flex-1 overflow-y-auto pb-2">
+          <AdminNav />
         </div>
-        <AdminNav />
-        <div className="relative mt-auto hidden p-4 lg:block">
-          <Link
-            href="/dashboard"
-            className="mb-2 block w-full rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-center text-sm font-medium text-white/70 transition hover:border-white/25 hover:text-white"
-          >
-            ← Back to my dashboard
-          </Link>
-          <form action={logoutAction}>
-            <button
-              type="submit"
-              className="w-full truncate rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2.5 text-left text-sm font-medium text-white/70 transition hover:border-white/25 hover:text-white"
-            >
-              Sign out
-              <span className="block truncate text-[11px] font-normal text-white/40">
-                {session.email}
-              </span>
-            </button>
-          </form>
-        </div>
+        <div className="relative space-y-2 p-4">{account}</div>
       </aside>
 
-      <div className="flex-1 bg-surface">
+      {/* ------------------------------------------ mobile top bar (< lg) */}
+      <header className="sticky top-0 z-30 flex items-center justify-between gap-3 border-b border-white/5 bg-night-900/95 px-4 py-3 text-white backdrop-blur-md lg:hidden">
+        <Link href="/admin" aria-label="Admin home" className="flex min-w-0 items-center gap-2.5">
+          <ConfirmlyMark className="h-7 w-7 shrink-0" />
+          <span className="truncate text-sm font-bold tracking-tight">Platform Admin</span>
+        </Link>
+        <AdminMobileNav header={identity} footer={account} />
+      </header>
+
+      <div className="min-w-0 flex-1 bg-surface">
         <div className="border-b border-amber-300 bg-amber-100 px-4 py-2 text-center text-xs font-semibold text-amber-900">
           PLATFORM ADMIN — actions here affect every merchant. Every change is
           recorded in the audit log.
         </div>
-        <main className="mx-auto w-full max-w-6xl p-4 sm:p-6 lg:p-8">
+        <main className="app-shell mx-auto w-full max-w-6xl p-4 sm:p-6 lg:p-8">
           {children}
         </main>
       </div>

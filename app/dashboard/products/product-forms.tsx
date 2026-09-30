@@ -158,7 +158,7 @@ export function ProductForm({ product }: { product?: ProductInput }) {
           Product saved successfully. You can attach its product image below.
         </p>
       ) : null}
-      <div className="flex gap-2 sm:col-span-2">
+      <div className="flex flex-wrap gap-2 sm:col-span-2">
         <Button type="submit" disabled={pending}>
           {pending ? "Saving..." : product ? "Save changes" : "Create product"}
         </Button>
@@ -229,7 +229,7 @@ export function ZoneForm() {
           Delivery zone added.
         </p>
       ) : null}
-      <div className="flex gap-2 sm:col-span-3">
+      <div className="flex flex-wrap gap-2 sm:col-span-3">
         <Button type="submit" disabled={pending}>
           {pending ? "Adding..." : "Add zone"}
         </Button>

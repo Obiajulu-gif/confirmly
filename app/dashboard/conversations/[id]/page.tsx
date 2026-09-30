@@ -57,18 +57,18 @@ export default async function ConversationDetailPage({
     <div className="space-y-6">
       <AutoRefresh intervalMs={5000} />
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
+        <div className="min-w-0">
           <Link
             href="/dashboard/conversations"
             className="text-sm font-medium text-ink-500 hover:text-brand-700"
           >
             ← Conversations
           </Link>
-          <h1 className="text-2xl font-bold tracking-tight text-ink-900">
+          <h1 className="break-words text-2xl font-bold tracking-tight text-ink-900">
             {conversation.customer.name ?? conversation.customer.phoneNumber}
           </h1>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Badge tone={conversation.automationMode === "HUMAN" ? "info" : "neutral"}>
             {conversation.automationMode === "HUMAN" ? "Human mode" : "Bot mode"}
           </Badge>
@@ -89,7 +89,7 @@ export default async function ConversationDetailPage({
                     className={`flex ${message.direction === "OUTBOUND" ? "justify-end" : "justify-start"}`}
                   >
                     <div
-                      className={`max-w-[80%] whitespace-pre-line rounded-2xl px-4 py-2.5 text-sm ${
+                      className={`max-w-[85%] whitespace-pre-line break-words [overflow-wrap:anywhere] rounded-2xl px-4 py-2.5 text-sm ${
                         message.direction === "OUTBOUND"
                           ? "rounded-tr-sm bg-brand-50 text-ink-900 ring-1 ring-brand-200"
                           : "rounded-tl-sm bg-ink-900/5 text-ink-900"

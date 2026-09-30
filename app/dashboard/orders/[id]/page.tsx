@@ -48,14 +48,14 @@ export default async function OrderDetailsPage({
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
+        <div className="min-w-0">
           <Link
             href="/dashboard/orders"
             className="text-sm font-medium text-ink-500 hover:text-brand-700"
           >
             ← Orders
           </Link>
-          <h1 className="font-mono text-2xl font-bold tracking-tight text-ink-900">
+          <h1 className="break-all font-mono text-xl font-bold tracking-tight text-ink-900 sm:text-2xl">
             {order.reference}
           </h1>
         </div>
@@ -78,7 +78,7 @@ export default async function OrderDetailsPage({
             <ul className="divide-y divide-ink-900/5">
               {order.items.map((item) => (
                 <li key={item.id} className="flex justify-between gap-3 py-3 text-sm">
-                  <span className="text-ink-700">
+                  <span className="min-w-0 break-words text-ink-700">
                     {item.quantity} × {item.productNameSnapshot}
                     {item.variantSnapshot ? (
                       <span className="text-ink-500"> ({item.variantSnapshot})</span>
@@ -88,7 +88,7 @@ export default async function OrderDetailsPage({
                       confirmation)
                     </span>
                   </span>
-                  <span className="font-medium tabular-nums">
+                  <span className="shrink-0 font-medium tabular-nums">
                     {formatNaira(item.lineTotalKobo)}
                   </span>
                 </li>

@@ -221,6 +221,12 @@ h1, h2, h3, h4, h5, h6, .font-heading {
     0 30px 60px -30px rgba(0, 0, 0, 0.9);
 }
 
+/* Dashboard/admin shells: let grid columns shrink below their content's
+   width so wide tables scroll inside their card instead of widening the page. */
+.app-shell .grid > * {
+  min-width: 0;
+}
+
 /* Accessibility: honour reduced-motion everywhere */
 @media (prefers-reduced-motion: reduce) {
   .anim-fade-up,

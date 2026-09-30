@@ -90,7 +90,7 @@ export function ReplaceAccountForm({
           {state.error}
         </p>
       ) : null}
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         <Button type="submit" disabled={pending}>
           {pending ? "Replacing" : "Validate and replace"}
         </Button>

@@ -102,7 +102,7 @@ export function StoreLogoWidget({
         }}
         className="block w-full text-sm text-ink-700 file:mr-3 file:rounded-lg file:border-0 file:bg-ink-900/5 file:px-3 file:py-2 file:text-sm file:font-medium"
       />
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         <Button disabled={busy} onClick={upload}>
           {busy ? "Saving…" : "Upload logo"}
         </Button>
@@ -169,7 +169,7 @@ export function TestSendWidget() {
         value={to}
         onChange={(e) => setTo(e.target.value)}
       />
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         <Button disabled={busy || !to} onClick={() => send("template")}>
           Send hello_world template
         </Button>

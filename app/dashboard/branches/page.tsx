@@ -34,8 +34,8 @@ export default async function BranchesPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
           <h1 className="text-2xl font-bold tracking-tight text-ink-900">Branches</h1>
           <p className="mt-1 text-sm text-ink-500">
             Every branch under your business. One shared WhatsApp number serves them all.

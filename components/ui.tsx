@@ -71,10 +71,10 @@ export function Card({
 }) {
   return (
     <section
-      className={`rounded-card border border-ink-900/5 bg-surface-raised p-5 shadow-sm ${className}`}
+      className={`min-w-0 rounded-card border border-ink-900/5 bg-surface-raised p-4 shadow-sm sm:p-5 ${className}`}
     >
       {(title || action) && (
-        <div className="mb-4 flex items-center justify-between gap-3">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
           {title ? (
             <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-500">
               {title}
@@ -181,11 +181,11 @@ export function StatCard({
   sub?: string;
 }) {
   return (
-    <div className="rounded-card border border-ink-900/5 bg-surface-raised p-5 shadow-sm">
+    <div className="min-w-0 rounded-card border border-ink-900/5 bg-surface-raised p-4 shadow-sm sm:p-5">
       <p className="text-xs font-semibold uppercase tracking-wide text-ink-500">
         {label}
       </p>
-      <p className="mt-2 text-2xl font-bold tabular-nums text-ink-900">
+      <p className="mt-2 break-words text-xl font-bold tabular-nums text-ink-900 sm:text-2xl">
         {value}
       </p>
       {sub ? <p className="mt-1 text-xs text-ink-500">{sub}</p> : null}
