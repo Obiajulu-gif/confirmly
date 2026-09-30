@@ -7,6 +7,7 @@ import { prisma } from "@/lib/db";
 import { defer } from "@/lib/defer";
 import { prewarmProductImages } from "@/lib/ai/product-image-prewarm";
 import { nairaAmountToKobo } from "@/lib/money";
+import { parseCoordinates } from "@/lib/orders/distance-delivery";
 
 const productSchema = z.object({
   name: z.string().trim().min(1).max(120),
@@ -314,4 +315,65 @@ export async function toggleZoneActiveAction(formData: FormData): Promise<void> 
     data: { active: !zone.active },
   });
   revalidatePath("/dashboard/products");
+}
+
+// ---- Distance-based delivery -------------------------------------------------
+
+export interface DistanceDeliveryState {
+  error: string | null;
+  ok: boolean;
+}
+
+const distanceSchema = z.object({
+  location: z.string().trim().max(500),
+  baseFeeNaira: z.coerce.number().min(0).max(1_000_000),
+  perKmNaira: z.coerce.number().min(0).max(100_000),
+  maxKm: z.union([z.literal(""), z.coerce.number().min(0.5).max(500)]),
+});
+
+/** Saves (or, with `intent=disable`, clears) the branch's distance pricing. */
+export async function saveDistanceDeliveryAction(
+  _prev: DistanceDeliveryState,
+  formData: FormData
+): Promise<DistanceDeliveryState> {
+  const session = await getBranchContext();
+  if (!session) return { error: "Sign in again to change delivery settings.", ok: false };
+
+  if (formData.get("intent") === "disable") {
+    await prisma.merchant.update({
+      where: { id: session.branchId },
+      data: { deliveryBaseFeeKobo: null, deliveryPerKmKobo: null },
+    });
+    revalidatePath("/dashboard/products");
+    return { error: null, ok: true };
+  }
+
+  const parsed = distanceSchema.safeParse({
+    location: formData.get("location") ?? "",
+    baseFeeNaira: formData.get("baseFeeNaira") ?? "",
+    perKmNaira: formData.get("perKmNaira") ?? "",
+    maxKm: formData.get("maxKm") ?? "",
+  });
+  if (!parsed.success) {
+    return { error: "Enter a base fee, a per-km rate and (optionally) a maximum distance.", ok: false };
+  }
+  const point = parseCoordinates(parsed.data.location);
+  if (!point) {
+    return {
+      error: "Set the store location: use your current location, or paste coordinates like 6.5244, 3.3792 or a Google Maps link.",
+      ok: false,
+    };
+  }
+  await prisma.merchant.update({
+    where: { id: session.branchId },
+    data: {
+      storeLatitude: point.latitude,
+      storeLongitude: point.longitude,
+      deliveryBaseFeeKobo: nairaAmountToKobo(parsed.data.baseFeeNaira),
+      deliveryPerKmKobo: nairaAmountToKobo(parsed.data.perKmNaira),
+      deliveryMaxKm: parsed.data.maxKm === "" ? null : parsed.data.maxKm,
+    },
+  });
+  revalidatePath("/dashboard/products");
+  return { error: null, ok: true };
 }

@@ -43,6 +43,10 @@ export interface FlowOrderState {
   items?: FlowCartItem[];
   deliveryZoneId?: string | null;
   deliveryZoneName?: string | null;
+  /** Set when delivery was priced by distance from the customer's pin. */
+  deliveryLatitude?: number | null;
+  deliveryLongitude?: number | null;
+  deliveryDistanceKm?: number | null;
   address?: string | null;
   subtotalKobo?: number;
   deliveryFeeKobo?: number;

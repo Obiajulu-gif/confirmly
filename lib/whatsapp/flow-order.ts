@@ -99,6 +99,9 @@ export async function finalizeFlowOrder(
       deliveryMethod: isPickup ? "PICKUP" : "DELIVERY",
       deliveryAddress: isPickup ? null : (state.address ?? null),
       deliveryZone: state.deliveryZoneName ?? null,
+      deliveryLatitude: isPickup ? null : (state.deliveryLatitude ?? null),
+      deliveryLongitude: isPickup ? null : (state.deliveryLongitude ?? null),
+      deliveryDistanceKm: isPickup ? null : (state.deliveryDistanceKm ?? null),
       notes: null,
       confirmedAt: new Date(),
       items: {

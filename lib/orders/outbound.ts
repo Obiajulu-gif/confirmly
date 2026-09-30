@@ -7,6 +7,7 @@ import {
   sendText,
   sendButtons,
   sendList,
+  sendLocationRequest,
   type InteractiveButton,
   type ListRow,
 } from "@/lib/whatsapp/client";
@@ -16,7 +17,7 @@ export interface OutboundInput {
   merchantId: string;
   customer: Pick<Customer, "id" | "waId">;
   conversationId: string | null;
-  kind: "text" | "buttons" | "list";
+  kind: "text" | "buttons" | "list" | "location_request";
   text: string;
   buttons?: InteractiveButton[];
   listButtonLabel?: string;
@@ -35,7 +36,9 @@ export async function sendToCustomer(input: OutboundInput): Promise<string> {
       ? { buttons: input.buttons?.map((b) => b.id) }
       : input.kind === "list"
         ? { rows: input.rows?.map((r) => r.id) }
-        : undefined;
+        : input.kind === "location_request"
+          ? { locationRequest: true }
+          : undefined;
 
   let providerMessageId: string;
   try {
@@ -54,6 +57,9 @@ export async function sendToCustomer(input: OutboundInput): Promise<string> {
         input.listButtonLabel ?? "Choose",
         input.rows
       );
+      providerMessageId = r.providerMessageId;
+    } else if (input.kind === "location_request") {
+      const r = await sendLocationRequest(input.customer.waId, input.text);
       providerMessageId = r.providerMessageId;
     } else {
       const r = await sendText(input.customer.waId, input.text);

@@ -186,6 +186,26 @@ export async function sendButtons(
   });
 }
 
+/**
+ * Asks the customer to share a location pin. WhatsApp shows a "Send location"
+ * button that opens the native location picker; the reply arrives as a normal
+ * inbound `location` message.
+ */
+export async function sendLocationRequest(
+  to: string,
+  bodyText: string
+): Promise<SendResult> {
+  return post({
+    to,
+    type: "interactive",
+    interactive: {
+      type: "location_request_message",
+      body: { text: bodyText.slice(0, 1024) },
+      action: { name: "send_location" },
+    },
+  });
+}
+
 export interface ListRow {
   id: string;
   title: string;

@@ -2,6 +2,11 @@ import "server-only";
 import { defer } from "@/lib/defer";
 import { prewarmProductImages } from "@/lib/ai/product-image-prewarm";
 import { prisma } from "@/lib/db";
+import {
+  DISTANCE_ZONE_ID,
+  isValidPoint,
+  quoteDistanceDelivery,
+} from "@/lib/orders/distance-delivery";
 import { env, isDemoMode } from "@/lib/env";
 import { logger } from "@/lib/logger";
 import { formatNaira } from "@/lib/money";
@@ -491,26 +496,54 @@ async function sendLocationOptions(
   context: StoreContext,
   message: ParsedInboundMessage
 ): Promise<void> {
-  const zones = await prisma.deliveryZone.findMany({
-    where: { merchantId: context.merchant.id, active: true },
-    orderBy: { feeKobo: "asc" },
-  });
+  const pin = message.location;
+  const label = [pin?.name, pin?.address].filter(Boolean).join(", ").trim();
+
+  // Remember the pin: distance pricing (chat and order form) reads it back
+  // server-side, so the fee never comes from the chat itself.
+  if (pin && isValidPoint(pin)) {
+    await prisma.customer
+      .update({
+        where: { id: context.customerId },
+        data: {
+          lastLatitude: pin.latitude,
+          lastLongitude: pin.longitude,
+          lastLocationLabel: label ? label.slice(0, 200) : null,
+          lastLocationAt: new Date(),
+        },
+      })
+      .catch(() => {});
+  }
+
+  const [zones, pricing] = await Promise.all([
+    prisma.deliveryZone.findMany({
+      where: { merchantId: context.merchant.id, active: true },
+      orderBy: { feeKobo: "asc" },
+    }),
+    prisma.merchant.findUnique({
+      where: { id: context.merchant.id },
+      select: {
+        storeLatitude: true,
+        storeLongitude: true,
+        deliveryBaseFeeKobo: true,
+        deliveryPerKmKobo: true,
+        deliveryMaxKm: true,
+      },
+    }),
+  ]);
+  const quote = pricing ? quoteDistanceDelivery(pricing, pin ?? null) : null;
+
   const pickup = zones.find((zone) => zone.name.toLowerCase() === "pickup");
   const deliveryZones = zones.filter(
     (zone) => zone.name.toLowerCase() !== "pickup"
   );
-  const hint = [message.location?.name, message.location?.address]
-    .filter(Boolean)
-    .join(" ")
-    .trim();
-
   const ranked = deliveryZones
     .map((zone) => ({
       zone,
-      score: hint
+      score: label
         ? Math.max(
-            scoreMatch(hint, zone.name),
-            ...zone.aliases.map((alias) => scoreMatch(hint, alias))
+            scoreMatch(label, zone.name),
+            ...zone.aliases.map((alias) => scoreMatch(label, alias))
           )
         : 0,
     }))
@@ -520,36 +553,50 @@ async function sendLocationOptions(
     (entry) => entry.zone
   );
 
-  if (!suggestions.length && !pickup) {
+  const distanceRow = quote?.ok
+    ? [
+        {
+          id: `zone:${DISTANCE_ZONE_ID}`,
+          title: "📍 This location",
+          description: `${quote.km.toFixed(1)} km · ${formatNaira(quote.feeKobo)} delivery`,
+        },
+      ]
+    : [];
+
+  if (!distanceRow.length && !suggestions.length && !pickup) {
     await sendText(
       waId,
-      "This store has not configured delivery areas yet. Send AGENT to talk to the merchant."
+      quote && !quote.ok && quote.reason === "out_of_range"
+        ? `That location is ${quote.km?.toFixed(1)} km away, outside this store's delivery range. Send AGENT to talk to the merchant.`
+        : "This store has not configured delivery areas yet. Send AGENT to talk to the merchant."
     );
     return;
   }
 
-  await sendList(
-    waId,
-    "Location received. Choose the closest supported option. Fees come only from the merchant's configured delivery areas.",
-    "Choose area",
-    [
-      ...suggestions.map((zone) => ({
-        id: `zone:${zone.id}`,
-        title: zone.name,
-        description: formatNaira(zone.feeKobo),
-      })),
-      ...(pickup
-        ? [
-            {
-              id: "delivery:PICKUP",
-              title: "Store pickup",
-              description: formatNaira(pickup.feeKobo),
-            },
-          ]
-        : []),
-      { id: "talk_merchant", title: "Talk to merchant" },
-    ].slice(0, 10)
-  );
+  const intro = quote?.ok
+    ? `Location received — about ${quote.km.toFixed(1)} km from the store, so delivery is ${formatNaira(quote.feeKobo)}. Tap *This location* to use it, or pick an area instead.`
+    : quote && !quote.ok && quote.reason === "out_of_range"
+      ? `Location received — it's ${quote.km?.toFixed(1)} km away, outside this store's delivery range. Choose an area or pickup instead.`
+      : "Location received. Choose the closest supported option. Fees come only from the merchant's configured delivery areas.";
+
+  await sendList(waId, intro, "Choose delivery", [
+    ...distanceRow,
+    ...suggestions.map((zone) => ({
+      id: `zone:${zone.id}`,
+      title: zone.name,
+      description: formatNaira(zone.feeKobo),
+    })),
+    ...(pickup
+      ? [
+          {
+            id: "delivery:PICKUP",
+            title: "Store pickup",
+            description: formatNaira(pickup.feeKobo),
+          },
+        ]
+      : []),
+    { id: "talk_merchant", title: "Talk to merchant" },
+  ].slice(0, 10));
 }
 
 async function productForSelection(productId: string, context: StoreContext) {

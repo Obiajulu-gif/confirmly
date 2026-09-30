@@ -19,7 +19,9 @@ const nextConfig: NextConfig = {
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
           {
             key: "Permissions-Policy",
-            value: "camera=(), microphone=(), geolocation=()",
+            // geolocation=(self): merchants can set their store location from
+            // the dashboard; third-party frames still get no access.
+            value: "camera=(), microphone=(), geolocation=(self)",
           },
         ],
       },
