@@ -1,10 +1,13 @@
+import { ShoppingBag } from "lucide-react";
 import type { PublicStore } from "@/lib/stores";
 
 /**
- * Card artwork for a store. Stores with product photos get an editorial
- * collage; stores without get a typographic poster tinted by their niche, so
- * a brand-new store still looks deliberate rather than empty.
+ * Card artwork for a store: a grid of the vendor's logo and their product
+ * photos. A store with neither gets a tinted placeholder carrying its
+ * initials, so a brand-new store still looks deliberate rather than empty.
  */
+
+const MAX_TILES = 4;
 
 /** Stable hue per category, so a niche keeps its colour everywhere. */
 function hueFor(category: string): number {
@@ -12,6 +15,13 @@ function hueFor(category: string): number {
   for (const ch of category.toLowerCase()) h = (h * 31 + ch.charCodeAt(0)) % 360;
   return h;
 }
+
+function initials(name: string): string {
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  return (words.length > 1 ? words[0]![0]! + words[1]![0]! : name.slice(0, 2)).toUpperCase();
+}
+
+type Tile = { kind: "logo" | "photo"; src: string };
 
 export function StoreArtwork({
   store,
@@ -22,73 +32,80 @@ export function StoreArtwork({
   className?: string;
   eager?: boolean;
 }) {
-  const imgs = store.images;
   const loading = eager ? "eager" : "lazy";
+  const hue = hueFor(store.category);
+  const tint = `linear-gradient(135deg, hsl(${hue} 45% 95%), hsl(${(hue + 35) % 360} 40% 88%))`;
 
-  if (imgs.length === 0) {
-    const hue = hueFor(store.category);
+  const tiles: Tile[] = [
+    ...(store.logoUrl ? [{ kind: "logo" as const, src: store.logoUrl }] : []),
+    ...store.images.map((src) => ({ kind: "photo" as const, src })),
+  ].slice(0, MAX_TILES);
+
+  if (tiles.length === 0) {
     return (
       <div
-        className={`relative h-full w-full overflow-hidden ${className}`}
-        style={{
-          background: `radial-gradient(120% 90% at 85% 10%, hsl(${hue} 70% 62% / 0.55), transparent 60%), linear-gradient(135deg, hsl(${hue} 30% 94%), hsl(${(hue + 40) % 360} 25% 86%))`,
-        }}
+        className={`relative flex h-full w-full flex-col items-center justify-center overflow-hidden ${className}`}
+        style={{ background: tint }}
       >
-        <div className="absolute inset-0 opacity-[0.35] [background-image:radial-gradient(rgba(17,24,39,0.35)_1px,transparent_1px)] [background-size:14px_14px]" />
-        <div className="absolute inset-x-[7%] top-[12%] text-[#111827]">
-          <p className="font-mono text-[0.62em] font-semibold uppercase tracking-[0.2em] opacity-60">
-            ({store.storeCode})
-          </p>
-          <p className="mt-[0.25em] line-clamp-2 break-words text-[2.1em] font-extrabold uppercase leading-[0.92] tracking-[-0.03em]">
-            {store.name}
-          </p>
-          <p className="mt-[0.5em] text-[0.7em] font-semibold uppercase tracking-[0.14em] opacity-60">
-            {store.category}
-          </p>
-        </div>
-        {store.logoUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={store.logoUrl}
-            alt=""
-            loading={loading}
-            draggable={false}
-            className="absolute bottom-[14%] right-[7%] h-[28%] w-auto rounded-[0.6em] object-contain shadow-lg"
-          />
-        ) : null}
+        <div className="absolute inset-0 opacity-40 [background-image:radial-gradient(rgba(17,24,39,0.25)_1px,transparent_1px)] [background-size:14px_14px]" />
+        <span
+          className="relative flex h-[3.6em] w-[3.6em] items-center justify-center rounded-[1em] bg-white text-[1.35em] font-extrabold tracking-tight shadow-md"
+          style={{ color: `hsl(${hue} 55% 32%)` }}
+        >
+          {initials(store.name)}
+        </span>
+        <span className="relative mt-[0.8em] inline-flex items-center gap-[0.35em] text-[0.7em] font-semibold uppercase tracking-[0.14em] text-[#111827]/50">
+          <ShoppingBag className="h-[1.1em] w-[1.1em]" aria-hidden />
+          Photos coming soon
+        </span>
       </div>
     );
   }
 
-  // 1 photo fills the card; 2 split it; 3–4 become a lead image plus a stack.
-  const [lead, ...rest] = imgs;
-  const tile = (src: string, key: string | number, cls = "") => (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img
-      key={key}
-      src={src}
-      alt=""
-      loading={loading}
-      decoding="async"
-      draggable={false}
-      className={`h-full w-full min-h-0 object-cover ${cls}`}
-    />
-  );
+  const tile = (t: Tile, i: number) =>
+    t.kind === "logo" ? (
+      <div
+        key={`logo-${i}`}
+        className={`flex min-h-0 items-center justify-center ${
+          tiles.length === 1 ? "p-[16%_30%]" : "bg-white p-[18%]"
+        }`}
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={t.src}
+          alt=""
+          loading={loading}
+          decoding="async"
+          draggable={false}
+          className={`max-h-full max-w-full object-contain ${tiles.length === 1 ? "rounded-[1em] bg-white p-[0.8em] shadow-md" : ""}`}
+        />
+      </div>
+    ) : (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        key={`photo-${i}`}
+        src={t.src}
+        alt=""
+        loading={loading}
+        decoding="async"
+        draggable={false}
+        className="h-full min-h-0 w-full object-cover"
+      />
+    );
+
+  // 1 tile fills the card; 2 split it; 3 are a lead plus a stack; 4 a 2×2 grid.
+  const layout =
+    tiles.length === 1
+      ? "grid-cols-1"
+      : tiles.length === 2
+        ? "grid-cols-2"
+        : tiles.length === 3
+          ? "grid-cols-[1.35fr_1fr] grid-rows-2 [&>*:first-child]:row-span-2"
+          : "grid-cols-2 grid-rows-2";
 
   return (
-    <div className={`relative h-full w-full overflow-hidden bg-[#e9edf0] ${className}`}>
-      {imgs.length === 1 ? (
-        tile(lead!, 0)
-      ) : imgs.length === 2 ? (
-        <div className="grid h-full grid-cols-2 gap-[3px]">{imgs.map((s, i) => tile(s, i))}</div>
-      ) : (
-        <div className="grid h-full grid-cols-[1.35fr_1fr] gap-[3px]">
-          {tile(lead!, "lead")}
-          <div className="grid min-h-0 gap-[3px]" style={{ gridTemplateRows: `repeat(${rest.length}, minmax(0, 1fr))` }}>
-            {rest.map((s, i) => tile(s, i))}
-          </div>
-        </div>
-      )}
+    <div className={`relative h-full w-full overflow-hidden ${className}`} style={{ background: tint }}>
+      <div className={`grid h-full gap-[3px] ${layout}`}>{tiles.map(tile)}</div>
     </div>
   );
 }
