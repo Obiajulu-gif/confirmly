@@ -305,8 +305,26 @@ model Merchant {
   ledgerEntries     WalletLedgerEntry[]
   issues            OrderIssue[]
   reviews           Review[]
+  logoAsset         MerchantImageAsset?
 
   @@index([businessId, active])
+}
+
+/**
+ * A merchant's store logo, stored inline in Postgres (like ProductImageAsset).
+ * Displayed on the WhatsApp store-picker cards; when absent, a branded
+ * initials tile is generated on the fly (see lib/store-logo.ts).
+ */
+model MerchantImageAsset {
+  id          String   @id @default(cuid())
+  merchantId  String   @unique
+  merchant    Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  bytes       Bytes
+  contentType String
+  sizeBytes   Int
+  sha256      String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
 model MerchantPaymentProfile {

@@ -3,12 +3,25 @@
   "version": "7.1",
   "data_api_version": "3.0",
   "routing_model": {
-    "START": ["ONBOARDING", "SEARCH"],
-    "ONBOARDING": ["SEARCH"],
-    "SEARCH": ["SHOP"],
-    "SHOP": ["DELIVERY"],
-    "DELIVERY": ["REVIEW"],
-    "REVIEW": ["PAYMENT"],
+    "START": [
+      "ONBOARDING",
+      "SEARCH"
+    ],
+    "ONBOARDING": [
+      "SEARCH"
+    ],
+    "SEARCH": [
+      "SHOP"
+    ],
+    "SHOP": [
+      "DELIVERY"
+    ],
+    "DELIVERY": [
+      "REVIEW"
+    ],
+    "REVIEW": [
+      "PAYMENT"
+    ],
     "PAYMENT": []
   },
   "screens": [
@@ -17,13 +30,22 @@
       "title": "Set up your account",
       "terminal": false,
       "data": {
-        "has_error": { "type": "boolean", "__example__": false },
-        "error_message": { "type": "string", "__example__": "" }
+        "has_error": {
+          "type": "boolean",
+          "__example__": false
+        },
+        "error_message": {
+          "type": "string",
+          "__example__": ""
+        }
       },
       "layout": {
         "type": "SingleColumnLayout",
         "children": [
-          { "type": "TextHeading", "text": "Welcome to Confirmly 👋" },
+          {
+            "type": "TextHeading",
+            "text": "Welcome to Confirmly 👋"
+          },
           {
             "type": "TextBody",
             "text": "Tell us a little about yourself and you're ready to order."
@@ -31,7 +53,12 @@
           {
             "type": "If",
             "condition": "${data.has_error}",
-            "then": [{ "type": "TextCaption", "text": "${data.error_message}" }]
+            "then": [
+              {
+                "type": "TextCaption",
+                "text": "${data.error_message}"
+              }
+            ]
           },
           {
             "type": "TextInput",
@@ -93,36 +120,12 @@
             "text": "Find a store and check out without leaving WhatsApp. Payments settle securely through Monnify."
           },
           {
-            "type": "RadioButtonsGroup",
-            "name": "entry_point",
-            "label": "Select an option",
-            "required": true,
-            "media-size": "regular",
-            "data-source": [
-              {
-                "id": "search",
-                "title": "Search",
-                "description": "Find a store by name or code",
-                "image": "__ASSET_ICON_SEARCH__",
-                "alt-text": "Search"
-              },
-              {
-                "id": "marketplace",
-                "title": "Marketplace",
-                "description": "Browse nearby stores",
-                "image": "__ASSET_ICON_MARKETPLACE__",
-                "alt-text": "Marketplace"
-              }
-            ]
-          },
-          {
             "type": "Footer",
-            "label": "Continue",
-            "enabled": "${form.entry_point}",
+            "label": "Browse stores",
             "on-click-action": {
               "name": "data_exchange",
               "payload": {
-                "entry_point": "${form.entry_point}"
+                "entry_point": "marketplace"
               }
             }
           }
@@ -134,28 +137,75 @@
       "title": "Choose a store",
       "terminal": false,
       "data": {
-        "search_hint": {
-          "type": "string",
-          "__example__": "Type a store name or code, then tap Continue."
-        },
-        "has_stores": { "type": "boolean", "__example__": true },
-        "has_error": { "type": "boolean", "__example__": false },
-        "error_message": { "type": "string", "__example__": "" },
-        "stores": {
+        "store_items": {
           "type": "array",
           "items": {
             "type": "object",
             "properties": {
-              "id": { "type": "string" },
-              "title": { "type": "string" },
-              "description": { "type": "string" }
+              "id": {
+                "type": "string"
+              },
+              "main-content": {
+                "type": "object",
+                "properties": {
+                  "title": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "metadata": {
+                    "type": "string"
+                  }
+                }
+              },
+              "start": {
+                "type": "object",
+                "properties": {
+                  "image": {
+                    "type": "string"
+                  },
+                  "alt-text": {
+                    "type": "string"
+                  }
+                }
+              },
+              "on-click-action": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "payload": {
+                    "type": "object",
+                    "properties": {
+                      "store_id": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
             }
           },
           "__example__": [
             {
               "id": "store_example",
-              "title": "Ada Styles",
-              "description": "Fashion · ADASTYLES"
+              "main-content": {
+                "title": "Ada Styles",
+                "description": "Fashion",
+                "metadata": "ADASTYLES"
+              },
+              "start": {
+                "image": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQImWNgYGBgAAAABQABh6FO1AAAAABJRU5ErkJggg==",
+                "alt-text": "Ada Styles logo"
+              },
+              "on-click-action": {
+                "name": "data_exchange",
+                "payload": {
+                  "store_id": "store_example"
+                }
+              }
             }
           ]
         }
@@ -164,44 +214,9 @@
         "type": "SingleColumnLayout",
         "children": [
           {
-            "type": "If",
-            "condition": "${data.has_error}",
-            "then": [{ "type": "TextCaption", "text": "${data.error_message}" }]
-          },
-          {
-            "type": "TextBody",
-            "text": "${data.search_hint}"
-          },
-          {
-            "type": "TextInput",
-            "name": "store_query",
-            "label": "Store name or code",
-            "input-type": "text",
-            "required": false
-          },
-          {
-            "type": "If",
-            "condition": "${data.has_stores}",
-            "then": [
-              {
-                "type": "RadioButtonsGroup",
-                "name": "store_id",
-                "label": "Stores",
-                "required": false,
-                "data-source": "${data.stores}"
-              }
-            ]
-          },
-          {
-            "type": "Footer",
-            "label": "Continue",
-            "on-click-action": {
-              "name": "data_exchange",
-              "payload": {
-                "store_query": "${form.store_query}",
-                "store_id": "${form.store_id}"
-              }
-            }
+            "type": "NavigationList",
+            "name": "store_nav",
+            "list-items": "${data.store_items}"
           }
         ]
       }
@@ -211,30 +226,82 @@
       "title": "Shop",
       "terminal": false,
       "data": {
-        "store_name": { "type": "string", "__example__": "Ada Kitchen" },
-        "footer_label": { "type": "string", "__example__": "Continue" },
-        "show_product": { "type": "boolean", "__example__": false },
-        "show_cart": { "type": "boolean", "__example__": false },
-        "show_cart_hint": { "type": "boolean", "__example__": false },
-        "show_products": { "type": "boolean", "__example__": true },
-        "show_product_image": { "type": "boolean", "__example__": false },
-        "show_sizes": { "type": "boolean", "__example__": false },
-        "show_colours": { "type": "boolean", "__example__": false },
-        "has_error": { "type": "boolean", "__example__": false },
-        "error_message": { "type": "string", "__example__": "" },
-        "has_cart": { "type": "boolean", "__example__": false },
-        "cart_hint": { "type": "string", "__example__": "" },
-        "has_products": { "type": "boolean", "__example__": true },
+        "store_name": {
+          "type": "string",
+          "__example__": "Ada Kitchen"
+        },
+        "footer_label": {
+          "type": "string",
+          "__example__": "Continue"
+        },
+        "show_product": {
+          "type": "boolean",
+          "__example__": false
+        },
+        "show_cart": {
+          "type": "boolean",
+          "__example__": false
+        },
+        "show_cart_hint": {
+          "type": "boolean",
+          "__example__": false
+        },
+        "show_products": {
+          "type": "boolean",
+          "__example__": true
+        },
+        "show_product_image": {
+          "type": "boolean",
+          "__example__": false
+        },
+        "show_sizes": {
+          "type": "boolean",
+          "__example__": false
+        },
+        "show_colours": {
+          "type": "boolean",
+          "__example__": false
+        },
+        "has_error": {
+          "type": "boolean",
+          "__example__": false
+        },
+        "error_message": {
+          "type": "string",
+          "__example__": ""
+        },
+        "has_cart": {
+          "type": "boolean",
+          "__example__": false
+        },
+        "cart_hint": {
+          "type": "string",
+          "__example__": ""
+        },
+        "has_products": {
+          "type": "boolean",
+          "__example__": true
+        },
         "products": {
           "type": "array",
           "items": {
             "type": "object",
             "properties": {
-              "id": { "type": "string" },
-              "title": { "type": "string" },
-              "description": { "type": "string" },
-              "image": { "type": "string" },
-              "alt-text": { "type": "string" }
+              "id": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "image": {
+                "type": "string"
+              },
+              "alt-text": {
+                "type": "string"
+              }
             }
           },
           "__example__": [
@@ -247,22 +314,44 @@
             }
           ]
         },
-        "product_name": { "type": "string", "__example__": "Stew" },
-        "product_price": { "type": "string", "__example__": "₦820" },
-        "product_description": { "type": "string", "__example__": "Rich tomato stew." },
-        "product_image": { "type": "string", "__example__": "" },
+        "product_name": {
+          "type": "string",
+          "__example__": "Stew"
+        },
+        "product_price": {
+          "type": "string",
+          "__example__": "₦820"
+        },
+        "product_description": {
+          "type": "string",
+          "__example__": "Rich tomato stew."
+        },
+        "product_image": {
+          "type": "string",
+          "__example__": ""
+        },
         "quantities": {
           "type": "array",
           "items": {
             "type": "object",
             "properties": {
-              "id": { "type": "string" },
-              "title": { "type": "string" }
+              "id": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              }
             }
           },
           "__example__": [
-            { "id": "1", "title": "1" },
-            { "id": "2", "title": "2" }
+            {
+              "id": "1",
+              "title": "1"
+            },
+            {
+              "id": "2",
+              "title": "2"
+            }
           ]
         },
         "sizes": {
@@ -270,8 +359,12 @@
           "items": {
             "type": "object",
             "properties": {
-              "id": { "type": "string" },
-              "title": { "type": "string" }
+              "id": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              }
             }
           },
           "__example__": []
@@ -281,28 +374,51 @@
           "items": {
             "type": "object",
             "properties": {
-              "id": { "type": "string" },
-              "title": { "type": "string" }
+              "id": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              }
             }
           },
           "__example__": []
         },
-        "cart_lines": { "type": "string", "__example__": "" },
-        "cart_total": { "type": "string", "__example__": "" }
+        "cart_lines": {
+          "type": "string",
+          "__example__": ""
+        },
+        "cart_total": {
+          "type": "string",
+          "__example__": ""
+        }
       },
       "layout": {
         "type": "SingleColumnLayout",
         "children": [
-          { "type": "TextHeading", "text": "${data.store_name}" },
+          {
+            "type": "TextHeading",
+            "text": "${data.store_name}"
+          },
           {
             "type": "If",
             "condition": "${data.has_error}",
-            "then": [{ "type": "TextCaption", "text": "${data.error_message}" }]
+            "then": [
+              {
+                "type": "TextCaption",
+                "text": "${data.error_message}"
+              }
+            ]
           },
           {
             "type": "If",
             "condition": "${data.show_cart_hint}",
-            "then": [{ "type": "TextBody", "text": "${data.cart_hint}" }]
+            "then": [
+              {
+                "type": "TextBody",
+                "text": "${data.cart_hint}"
+              }
+            ]
           },
           {
             "type": "If",
@@ -335,9 +451,18 @@
             "type": "If",
             "condition": "${data.show_product}",
             "then": [
-              { "type": "TextHeading", "text": "${data.product_name}" },
-              { "type": "TextSubheading", "text": "${data.product_price}" },
-              { "type": "TextBody", "text": "${data.product_description}" },
+              {
+                "type": "TextHeading",
+                "text": "${data.product_name}"
+              },
+              {
+                "type": "TextSubheading",
+                "text": "${data.product_price}"
+              },
+              {
+                "type": "TextBody",
+                "text": "${data.product_description}"
+              },
               {
                 "type": "Dropdown",
                 "name": "quantity",
@@ -377,17 +502,32 @@
             "type": "If",
             "condition": "${data.show_cart}",
             "then": [
-              { "type": "TextBody", "text": "${data.cart_lines}" },
-              { "type": "TextSubheading", "text": "${data.cart_total}" },
+              {
+                "type": "TextBody",
+                "text": "${data.cart_lines}"
+              },
+              {
+                "type": "TextSubheading",
+                "text": "${data.cart_total}"
+              },
               {
                 "type": "RadioButtonsGroup",
                 "name": "cart_action",
                 "label": "What next?",
                 "required": true,
                 "data-source": [
-                  { "id": "continue", "title": "Continue shopping" },
-                  { "id": "checkout", "title": "Checkout" },
-                  { "id": "remove", "title": "Remove last item" }
+                  {
+                    "id": "continue",
+                    "title": "Continue shopping"
+                  },
+                  {
+                    "id": "checkout",
+                    "title": "Checkout"
+                  },
+                  {
+                    "id": "remove",
+                    "title": "Remove last item"
+                  }
                 ]
               }
             ]
@@ -414,22 +554,45 @@
       "title": "Delivery",
       "terminal": false,
       "data": {
-        "has_zones": { "type": "boolean", "__example__": true },
-        "has_error": { "type": "boolean", "__example__": false },
-        "error_message": { "type": "string", "__example__": "" },
+        "has_zones": {
+          "type": "boolean",
+          "__example__": true
+        },
+        "has_error": {
+          "type": "boolean",
+          "__example__": false
+        },
+        "error_message": {
+          "type": "string",
+          "__example__": ""
+        },
         "zones": {
           "type": "array",
           "items": {
             "type": "object",
             "properties": {
-              "id": { "type": "string" },
-              "title": { "type": "string" },
-              "description": { "type": "string" }
+              "id": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              }
             }
           },
           "__example__": [
-            { "id": "zone_example", "title": "Lekki", "description": "₦1,500 delivery" },
-            { "id": "PICKUP", "title": "Store pickup", "description": "Free" }
+            {
+              "id": "zone_example",
+              "title": "Lekki",
+              "description": "₦1,500 delivery"
+            },
+            {
+              "id": "PICKUP",
+              "title": "Store pickup",
+              "description": "Free"
+            }
           ]
         }
       },
@@ -443,7 +606,12 @@
           {
             "type": "If",
             "condition": "${data.has_error}",
-            "then": [{ "type": "TextCaption", "text": "${data.error_message}" }]
+            "then": [
+              {
+                "type": "TextCaption",
+                "text": "${data.error_message}"
+              }
+            ]
           },
           {
             "type": "If",

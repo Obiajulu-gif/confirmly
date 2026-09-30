@@ -17,11 +17,16 @@ import {
   Store,
   Users,
 } from "lucide-react";
-import { ConfirmlyLogo, ConfirmlyMark } from "@/components/logo";
+import { ConfirmlyMark } from "@/components/logo";
 import { Reveal } from "@/components/reveal";
 import { WhatsAppQr } from "@/components/whatsapp-qr";
 import { Hero3DCarousel } from "@/components/hero-3d-carousel";
+import { HowItWorksPhone } from "@/components/how-it-works-phone";
 import { LandingNav } from "@/components/landing-nav";
+import { LandingFooter } from "@/components/landing-footer";
+import { StoreShowcase } from "@/components/store-showcase";
+import { getPublicStoresSafe } from "@/lib/stores";
+import { ScrollMotion } from "@/components/scroll-motion";
 
 const problems = [
   {
@@ -211,11 +216,17 @@ const faqs = [
   },
 ];
 
-export default function LandingPage() {
+/** Refresh the store showcase every few minutes rather than per request. */
+export const revalidate = 300;
+
+export default async function LandingPage() {
+  const stores = await getPublicStoresSafe({ limit: 12 });
+
   return (
     <div className="flex min-h-screen flex-col bg-[#fcfcfc] text-[#111827]">
       {/* ------------------------------------------------ header: separate rounded containers with mobile support */}
       <LandingNav />
+      <ScrollMotion />
 
       <main className="flex-1">
         {/* ------------------------------------------------ hero section */}
@@ -225,13 +236,13 @@ export default function LandingPage() {
 
           <div className="relative mx-auto flex w-full max-w-7xl flex-col items-center px-4 text-center sm:px-6 lg:px-8">
             {/* BIG EMOTIONAL STATEMENT - responsive font scaling */}
-            <h1 className="mt-2 sm:mt-4 max-w-4xl text-4xl sm:text-6xl md:text-7xl lg:text-8xl font-extrabold tracking-tight text-[#111827] leading-[1.08] sm:leading-[1.05] font-heading">
+            <h1 data-scroll="hero" className="mt-2 sm:mt-4 max-w-4xl text-4xl sm:text-6xl md:text-7xl lg:text-8xl font-extrabold tracking-tight text-[#111827] leading-[1.08] sm:leading-[1.05] font-heading">
               Your next sale <br />
               should feel <span className="text-[#17c19a]">this easy.</span>
             </h1>
 
             {/* Smaller type underneath headline */}
-            <p className="mt-2.5 sm:mt-3 text-xs sm:text-sm md:text-base font-bold tracking-widest text-[#17c19a] uppercase">
+            <p data-scroll="hero" className="mt-2.5 sm:mt-3 text-xs sm:text-sm md:text-base font-bold tracking-widest text-[#17c19a] uppercase">
               Chat. Order. Pay. Confirm.
             </p>
 
@@ -264,8 +275,8 @@ export default function LandingPage() {
         <section className="border-y border-gray-200 bg-white py-12">
           <div className="mx-auto grid w-full max-w-7xl grid-cols-2 gap-8 px-4 sm:px-6 lg:grid-cols-4 lg:px-8">
             {metrics.map((m) => (
-              <div key={m.label} className="text-center">
-                <p className="text-4xl font-extrabold text-[#17c19a] sm:text-5xl">
+              <div key={m.label} data-scroll="rise" className="text-center">
+                <p {...(/^\d+%?$/.test(m.value) ? { "data-count": "" } : {})} className="text-4xl font-extrabold text-[#17c19a] sm:text-5xl">
                   {m.value}
                 </p>
                 <p className="mx-auto mt-2 max-w-[15rem] text-sm font-medium leading-relaxed text-gray-600">
@@ -280,7 +291,7 @@ export default function LandingPage() {
         <section className="py-20 bg-[#f8faf9] border-b border-gray-200/80">
           <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
             <Reveal>
-              <div className="text-center max-w-3xl mx-auto">
+              <div data-speed="0.12" className="text-center max-w-3xl mx-auto">
                 <span className="rounded-full bg-[#a9000c]/10 px-4 py-1.5 text-xs font-bold uppercase tracking-wider text-[#a9000c]">
                   The Problem
                 </span>
@@ -312,9 +323,9 @@ export default function LandingPage() {
 
         {/* ------------------- how it works — stacked scroll cards */}
         <section id="how-it-works" className="relative py-24 bg-[#fcfcfc]">
-          <div className="mx-auto w-full max-w-4xl px-4 sm:px-6">
+          <div className="mx-auto w-full max-w-6xl px-4 sm:px-6">
             <Reveal>
-              <div className="text-center">
+              <div data-speed="0.12" className="mx-auto max-w-3xl text-center">
                 <span className="rounded-full bg-[#17c19a]/10 px-4 py-1.5 text-xs font-bold uppercase tracking-wider text-[#17c19a]">
                   How it works
                 </span>
@@ -327,29 +338,42 @@ export default function LandingPage() {
               </div>
             </Reveal>
 
-            <div className="mt-16 space-y-8">
-              {steps.map((step) => (
-                <div key={step.n} className="sticky top-28">
-                  <article className="rounded-3xl border border-gray-200 bg-white p-8 shadow-xl shadow-gray-200/50 sm:p-10">
-                    <div className="grid items-center gap-8 sm:grid-cols-[1.1fr_0.9fr]">
-                      <div>
-                        <div className="flex items-baseline gap-4">
-                          <span className="font-mono text-4xl font-extrabold text-[#17c19a]/40 sm:text-5xl">
-                            {step.n}
-                          </span>
-                          <h3 className="text-2xl font-extrabold text-[#111827]">
-                            {step.title}
-                          </h3>
-                        </div>
-                        <p className="mt-4 text-base leading-relaxed text-gray-600">
-                          {step.body}
-                        </p>
-                      </div>
-                      <div className="sm:justify-self-end">{step.visual}</div>
-                    </div>
-                  </article>
+            <div className="mt-16 grid gap-12 lg:grid-cols-[minmax(0,300px)_minmax(0,1fr)] lg:gap-14">
+              {/* silent walkthrough, pinned beside the steps on desktop */}
+              <div>
+                <div className="lg:sticky lg:top-28">
+                  <HowItWorksPhone
+                    src="/video/how-it-works.mp4"
+                    poster="/video/how-it-works-poster.jpg"
+                    label="A customer ordering from a Confirmly store inside WhatsApp, from the first message through to a verified receipt"
+                  />
                 </div>
-              ))}
+              </div>
+
+              <div className="space-y-8">
+                {steps.map((step) => (
+                  <div key={step.n} className="sticky top-28">
+                    <article data-scroll="stack" className="origin-top rounded-3xl border border-gray-200 bg-white p-8 shadow-xl shadow-gray-200/50 sm:p-10">
+                      <div className="grid items-center gap-8 sm:grid-cols-[1.1fr_0.9fr]">
+                        <div>
+                          <div className="flex items-baseline gap-4">
+                            <span className="font-mono text-4xl font-extrabold text-[#17c19a]/40 sm:text-5xl">
+                              {step.n}
+                            </span>
+                            <h3 className="text-2xl font-extrabold text-[#111827]">
+                              {step.title}
+                            </h3>
+                          </div>
+                          <p className="mt-4 text-base leading-relaxed text-gray-600">
+                            {step.body}
+                          </p>
+                        </div>
+                        <div className="sm:justify-self-end">{step.visual}</div>
+                      </div>
+                    </article>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </section>
@@ -371,7 +395,7 @@ export default function LandingPage() {
               </div>
             </Reveal>
 
-            <div className="mt-12 grid gap-6 lg:grid-cols-2">
+            <div data-scroll="zoom" className="mt-12 grid gap-6 lg:grid-cols-2">
               <Reveal>
                 <div className="h-full rounded-2xl border border-[#17c19a]/30 bg-white p-8 shadow-sm">
                   <span className="inline-flex items-center gap-2 rounded-full bg-[#e8f9f5] px-3.5 py-1 text-xs font-bold uppercase tracking-wider text-[#0d8067]">
@@ -408,7 +432,7 @@ export default function LandingPage() {
         <section id="for-merchants" className="py-24 bg-white border-t border-gray-200">
           <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
             <Reveal>
-              <div className="text-center max-w-3xl mx-auto">
+              <div data-speed="0.12" className="text-center max-w-3xl mx-auto">
                 <span className="rounded-full bg-[#17c19a]/10 px-4 py-1.5 text-xs font-bold uppercase tracking-wider text-[#17c19a]">
                   For Merchants
                 </span>
@@ -463,7 +487,7 @@ export default function LandingPage() {
         <section id="security" className="py-24 bg-[#f8faf9] border-t border-gray-200">
           <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
             <Reveal>
-              <div className="text-center max-w-3xl mx-auto">
+              <div data-speed="0.12" className="text-center max-w-3xl mx-auto">
                 <span className="rounded-full bg-[#17c19a]/10 px-4 py-1.5 text-xs font-bold uppercase tracking-wider text-[#17c19a]">
                   Security
                 </span>
@@ -493,43 +517,16 @@ export default function LandingPage() {
           </div>
         </section>
 
-        {/* ------------------------------------------------ FAQ */}
-        <section id="faq" className="py-24 bg-white border-t border-gray-200">
-          <div className="mx-auto w-full max-w-4xl px-4 sm:px-6">
-            <Reveal>
-              <div className="text-center">
-                <span className="rounded-full bg-[#17c19a]/10 px-4 py-1.5 text-xs font-bold uppercase tracking-wider text-[#17c19a]">
-                  FAQ
-                </span>
-                <h2 className="mt-4 text-3xl font-extrabold tracking-tight text-[#111827] sm:text-4xl">
-                  Frequently Asked Questions
-                </h2>
-              </div>
-            </Reveal>
-            <div className="mt-12 divide-y divide-gray-200 border-y border-gray-200">
-              {faqs.map((f) => (
-                <details key={f.q} className="group">
-                  <summary className="flex cursor-pointer list-none items-center justify-between gap-4 py-6 font-bold text-gray-900 transition hover:text-[#17c19a] text-lg">
-                    {f.q}
-                    <ChevronDown
-                      className="h-5 w-5 shrink-0 text-[#17c19a] transition-transform duration-300 group-open:rotate-180"
-                      aria-hidden
-                    />
-                  </summary>
-                  <p className="pb-6 pr-8 text-base leading-relaxed text-gray-600">{f.a}</p>
-                </details>
-              ))}
-            </div>
-          </div>
-        </section>
-
         {/* ------------------------------------- WhatsApp QR */}
         <WhatsAppQr />
+
+        {/* ------------------------------------- store showcase (curved wall) */}
+        <StoreShowcase stores={stores} />
 
         {/* ------------------------------------------------ final CTA */}
         <section className="mx-auto w-full max-w-7xl px-4 py-20 sm:px-6 lg:px-8">
           <Reveal>
-            <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#17c19a] via-[#0fa17f] to-[#0d8067] px-6 py-16 text-center text-white shadow-2xl sm:px-12">
+            <div data-scroll="zoom" className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#17c19a] via-[#0fa17f] to-[#0d8067] px-6 py-16 text-center text-white shadow-2xl sm:px-12">
               <div className="relative">
                 <ConfirmlyMark className="mx-auto h-16 w-16 drop-shadow-md" />
                 <h2 className="mx-auto mt-6 max-w-2xl text-3xl font-extrabold tracking-tight sm:text-5xl">
@@ -553,80 +550,38 @@ export default function LandingPage() {
             </div>
           </Reveal>
         </section>
+        {/* ------------------------------------------------ FAQ */}
+        <section id="faq" className="py-24 bg-white border-t border-gray-200">
+          <div className="mx-auto w-full max-w-4xl px-4 sm:px-6">
+            <Reveal>
+              <div className="text-center">
+                <span className="rounded-full bg-[#17c19a]/10 px-4 py-1.5 text-xs font-bold uppercase tracking-wider text-[#17c19a]">
+                  FAQ
+                </span>
+                <h2 className="mt-4 text-3xl font-extrabold tracking-tight text-[#111827] sm:text-4xl">
+                  Frequently Asked Questions
+                </h2>
+              </div>
+            </Reveal>
+            <div data-scroll="rise" className="mt-12 divide-y divide-gray-200 border-y border-gray-200">
+              {faqs.map((f) => (
+                <details key={f.q} className="group">
+                  <summary className="flex cursor-pointer list-none items-center justify-between gap-4 py-6 font-bold text-gray-900 transition hover:text-[#17c19a] text-lg">
+                    {f.q}
+                    <ChevronDown
+                      className="h-5 w-5 shrink-0 text-[#17c19a] transition-transform duration-300 group-open:rotate-180"
+                      aria-hidden
+                    />
+                  </summary>
+                  <p className="pb-6 pr-8 text-base leading-relaxed text-gray-600">{f.a}</p>
+                </details>
+              ))}
+            </div>
+          </div>
+        </section>
       </main>
 
-      {/* ------------------------------------------------ footer */}
-      <footer className="border-t border-gray-200 bg-white text-gray-600">
-        <div className="mx-auto w-full max-w-7xl px-4 py-14 sm:px-6 lg:px-8">
-          <div className="grid gap-10 md:grid-cols-[1.6fr_1fr_1fr_1fr]">
-            <div>
-              <ConfirmlyLogo tone="light" />
-              <p className="mt-4 max-w-xs text-sm leading-relaxed text-gray-600">
-                From chat to confirmed payment. WhatsApp-native ordering with Monnify-verified settlement.
-              </p>
-            </div>
-
-            <div>
-              <p className="text-xs font-bold uppercase tracking-widest text-gray-900">
-                Product
-              </p>
-              <ul className="mt-4 space-y-2.5 text-sm">
-                {(
-                  [
-                    ["#how-it-works", "How it works"],
-                    ["#for-merchants", "For merchants"],
-                    ["#security", "Security"],
-                    ["#faq", "FAQ"],
-                  ] as const
-                ).map(([href, label]) => (
-                  <li key={label}>
-                    <Link href={href} className="text-gray-600 transition hover:text-[#17c19a]">
-                      {label}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            <div>
-              <p className="text-xs font-bold uppercase tracking-widest text-gray-900">
-                Get started
-              </p>
-              <ul className="mt-4 space-y-2.5 text-sm">
-                {(
-                  [
-                    ["/signup", "Create business account"],
-                    ["/start", "Order from a store"],
-                    ["/login", "Log in"],
-                  ] as const
-                ).map(([href, label]) => (
-                  <li key={label}>
-                    <Link href={href} className="text-gray-600 transition hover:text-[#17c19a]">
-                      {label}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            <div>
-              <p className="text-xs font-bold uppercase tracking-widest text-gray-900">
-                Powered by
-              </p>
-              <ul className="mt-4 space-y-2.5 text-sm text-gray-600">
-                <li>Monnify · payments &amp; settlement</li>
-                <li>NVIDIA NIM · order understanding</li>
-                <li>WhatsApp Cloud API</li>
-              </ul>
-            </div>
-          </div>
-
-          <div className="mt-12 flex flex-col items-center justify-between gap-4 border-t border-gray-200 pt-6 text-sm text-gray-500 sm:flex-row">
-            <span>© {new Date().getFullYear()} Confirmly. All rights reserved.</span>
-            <span>Payments by Monnify · Orders understood by NVIDIA NIM</span>
-          </div>
-        </div>
-      </footer>
+      <LandingFooter />
     </div>
   );
 }

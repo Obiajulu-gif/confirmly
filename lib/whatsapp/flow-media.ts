@@ -14,8 +14,9 @@ import { logger } from "@/lib/logger";
 // Warm-function cache: `${productId}:${kind}` -> base64 (or null = no image).
 const cache = new Map<string, string | null>();
 
-// A single row image must stay well under Meta's 1MB per-image ceiling.
-const MAX_IMAGE_BYTES = 900_000;
+// List thumbnails have a smaller limit than the standalone Image component.
+const MAX_THUMB_BYTES = 100_000;
+const MAX_DETAIL_BYTES = 900_000;
 
 async function resizeJpeg(bytes: Buffer, width: number): Promise<Buffer | null> {
   try {
@@ -54,8 +55,10 @@ export async function productImageBase64(
       const source = Buffer.from(asset.bytes);
       const width = kind === "thumb" ? 200 : 600;
       const resized = await resizeJpeg(source, width);
-      const buf = resized ?? source;
-      if (buf.length <= MAX_IMAGE_BYTES) result = buf.toString("base64");
+      const limit = kind === "thumb" ? MAX_THUMB_BYTES : MAX_DETAIL_BYTES;
+      // A failed decode/resize must not send the original invalid or oversized
+      // asset into WhatsApp, which can reject the entire screen for one image.
+      if (resized && resized.length <= limit) result = resized.toString("base64");
     }
   } catch (err) {
     logger.warn("flow image load failed", {
