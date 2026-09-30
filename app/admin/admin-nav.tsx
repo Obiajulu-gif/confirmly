@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  Activity,
   Menu,
   LayoutDashboard,
   Store,
@@ -23,6 +24,7 @@ const links = [
   { href: "/admin/leads", label: "Leads", icon: UserPlus },
   { href: "/admin/sessions", label: "WhatsApp numbers", icon: Smartphone },
   { href: "/admin/orders", label: "Orders", icon: Receipt },
+  { href: "/admin/integrations", label: "Integrations", icon: Activity },
 ];
 
 export function AdminNav({ onNavigate }: { onNavigate?: () => void } = {}) {

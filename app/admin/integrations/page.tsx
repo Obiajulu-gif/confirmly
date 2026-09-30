@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { getMerchantSession } from "@/lib/auth";
+import { getAdminSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { env, integrationStatus } from "@/lib/env";
 import { nvidiaHealthCheck } from "@/lib/ai/nvidia";
@@ -8,6 +8,7 @@ import { validateBankAccount } from "@/lib/monnify/account-validation";
 import { authedRequest, isFeatureUnavailable } from "@/lib/monnify/auth";
 import { settlementCapabilityProbe } from "@/lib/monnify/settlements";
 import { Badge, Card } from "@/components/ui";
+import { TestSendWidget } from "./test-send-widget";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Integration health" };
@@ -35,8 +36,10 @@ function tone(status: Status): "success" | "warning" | "danger" | "neutral" {
 }
 
 export default async function HealthPage() {
-  const session = await getMerchantSession();
-  if (!session) redirect("/login");
+  // The admin layout gates this route too; checked here as defence in depth.
+  const session = await getAdminSession();
+  if (!session) redirect("/dashboard");
+  const appUrl = env().APP_URL;
   const now = new Date();
   const config = integrationStatus();
   const rows: Row[] = [];
@@ -157,7 +160,7 @@ export default async function HealthPage() {
 
     // Payment initialization + verification (config + last real evidence)
     const lastPayment = await prisma.payment.findFirst({
-      where: { order: { merchantId: session.merchantId }, provider: "MONNIFY" },
+      where: { provider: "MONNIFY" },
       orderBy: { createdAt: "desc" },
     });
     rows.push({
@@ -165,14 +168,11 @@ export default async function HealthPage() {
       status: "Configured",
       detail: lastPayment
         ? `Last invoice ${lastPayment.invoiceReference}`
-        : "No live initialization for this merchant yet",
+        : "No live initialization on the platform yet",
       lastCheck: lastPayment?.createdAt ?? null,
     });
     const lastVerified = await prisma.payment.findFirst({
-      where: {
-        order: { merchantId: session.merchantId },
-        verifiedAt: { not: null },
-      },
+      where: { verifiedAt: { not: null } },
       orderBy: { verifiedAt: "desc" },
     });
     rows.push({
@@ -215,8 +215,8 @@ export default async function HealthPage() {
           Integration health
         </h1>
         <p className="mt-1 text-sm text-ink-500">
-          Live diagnostics. Statuses only — key values and full account numbers
-          are never shown.
+          Platform-wide live diagnostics. Statuses only — key values and full
+          account numbers are never shown.
         </p>
       </div>
 
@@ -248,6 +248,38 @@ export default async function HealthPage() {
             </li>
           ))}
         </ul>
+      </Card>
+
+      <Card title="Webhook callback URLs">
+        <p className="text-sm text-ink-500">
+          Configure these in the provider dashboards. They validate signatures
+          and are never behind login.
+        </p>
+        <dl className="mt-3 space-y-3 text-sm">
+          <div>
+            <dt className="font-medium text-ink-700">
+              Meta (WhatsApp) — subscribe to <code>messages</code>
+            </dt>
+            <dd className="mt-1 break-all rounded-lg bg-ink-900/5 px-3 py-2 font-mono text-xs">
+              {appUrl}/api/webhooks/whatsapp
+            </dd>
+            <p className="mt-1 text-xs text-ink-500">
+              Verify token: the value of{" "}
+              <code className="font-mono">WHATSAPP_VERIFY_TOKEN</code> (shown
+              only in your environment configuration, never here).
+            </p>
+          </div>
+          <div>
+            <dt className="font-medium text-ink-700">Monnify transaction webhook</dt>
+            <dd className="mt-1 break-all rounded-lg bg-ink-900/5 px-3 py-2 font-mono text-xs">
+              {appUrl}/api/webhooks/monnify
+            </dd>
+          </div>
+        </dl>
+      </Card>
+
+      <Card title="WhatsApp test message">
+        <TestSendWidget />
       </Card>
     </div>
   );
