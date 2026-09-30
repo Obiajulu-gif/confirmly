@@ -170,9 +170,24 @@ export default async function OrderDetailsPage({
                 <dt className="text-xs uppercase tracking-wide text-ink-500">
                   Delivery address
                 </dt>
-                <dd className="font-medium text-ink-900">
+                <dd className="break-words font-medium text-ink-900">
                   {order.deliveryAddress ?? "—"}
                 </dd>
+                {order.deliveryLatitude != null && order.deliveryLongitude != null ? (
+                  <dd className="mt-1">
+                    <a
+                      href={`https://www.google.com/maps?q=${order.deliveryLatitude},${order.deliveryLongitude}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-sm font-medium text-brand-700 hover:underline"
+                    >
+                      Open customer&apos;s pin in Google Maps
+                      {order.deliveryDistanceKm != null
+                        ? ` (${order.deliveryDistanceKm.toFixed(1)} km)`
+                        : ""}
+                    </a>
+                  </dd>
+                ) : null}
               </div>
             </dl>
             {order.conversation ? (

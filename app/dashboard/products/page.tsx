@@ -7,6 +7,8 @@ import { formatNaira } from "@/lib/money";
 import { Badge, Card, EmptyState } from "@/components/ui";
 import { ProductForm, ZoneForm } from "./product-forms";
 import { ProductFilters, type ProductFilterValues } from "./product-filters";
+import { DistanceDeliveryForm } from "./distance-delivery-form";
+import { isDistancePricingEnabled } from "@/lib/orders/distance-delivery";
 import {
   duplicateProductAction,
   toggleProductActiveAction,
@@ -113,7 +115,15 @@ export default async function ProductsPage({
   const [merchant, totalProducts, matching, categoryRows, zones] = await Promise.all([
     prisma.merchant.findUnique({
       where: { id: branchId },
-      select: { name: true, storeCode: true },
+      select: {
+        name: true,
+        storeCode: true,
+        storeLatitude: true,
+        storeLongitude: true,
+        deliveryBaseFeeKobo: true,
+        deliveryPerKmKobo: true,
+        deliveryMaxKm: true,
+      },
     }),
     prisma.product.count({ where: { merchantId: branchId } }),
     prisma.product.count({ where }),
@@ -328,6 +338,24 @@ export default async function ProductsPage({
             )}
           </nav>
         ) : null}
+      </Card>
+
+      <Card title="Delivery by distance">
+        <p className="mb-4 text-sm text-ink-500">
+          Let customers share their exact location on WhatsApp instead of picking a fixed area.
+          Delivery is priced from your store to their pin automatically. Your delivery zones below
+          stay available as well.
+        </p>
+        <DistanceDeliveryForm
+          current={{
+            latitude: merchant?.storeLatitude ?? null,
+            longitude: merchant?.storeLongitude ?? null,
+            baseFeeNaira: merchant?.deliveryBaseFeeKobo != null ? merchant.deliveryBaseFeeKobo / 100 : null,
+            perKmNaira: merchant?.deliveryPerKmKobo != null ? merchant.deliveryPerKmKobo / 100 : null,
+            maxKm: merchant?.deliveryMaxKm ?? null,
+            enabled: merchant ? isDistancePricingEnabled(merchant) : false,
+          }}
+        />
       </Card>
 
       <Card title="Delivery zones">

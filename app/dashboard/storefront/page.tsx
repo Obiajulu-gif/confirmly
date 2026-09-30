@@ -9,6 +9,7 @@ import {
   StorefrontCard,
   type StorefrontLink,
 } from "@/components/storefront-card";
+import { StoreFlyerCard } from "@/components/store-flyer-card";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "WhatsApp store" };
@@ -79,6 +80,27 @@ export default async function StorefrontPage() {
           ))}
         </div>
       )}
+
+      {branches.length ? (
+        <section className="space-y-4" aria-labelledby="flyers-heading">
+          <div>
+            <h2 id="flyers-heading" className="text-lg font-bold tracking-tight text-ink-900">
+              Announce that you&apos;ve joined Confirmly
+            </h2>
+            <p className="mt-1 text-sm text-ink-500">
+              A ready-made flyer for each store: share it with customers so they know where to order.
+            </p>
+          </div>
+          {branches.map((branch) => (
+            <StoreFlyerCard
+              key={branch.id}
+              branchId={branch.id}
+              storeName={branch.name}
+              storeCode={branch.storeCode}
+            />
+          ))}
+        </section>
+      ) : null}
     </div>
   );
 }

@@ -17,6 +17,13 @@ import {
   productThumbnails,
 } from "@/lib/whatsapp/flow-media";
 import { finalizeFlowOrder } from "@/lib/whatsapp/flow-order";
+import {
+  DISTANCE_ZONE_ID,
+  distanceZoneLabel,
+  isDistancePricingEnabled,
+  quoteDistanceDelivery,
+  recentPin,
+} from "@/lib/orders/distance-delivery";
 
 /**
  * Server-side resolver for the native ordering Flow. Given the decrypted
@@ -418,24 +425,75 @@ function distinctOptions(values: Array<string | null>): Row[] {
 
 // ---- Delivery --------------------------------------------------------------
 
+/**
+ * Prices delivery to the customer's last shared pin for this store. The pin is
+ * shared in the chat (a Flow can't request one) and read back server-side.
+ */
+async function distanceOption(merchantId: string, waId: string) {
+  const [pricing, customer] = await Promise.all([
+    prisma.merchant.findUnique({
+      where: { id: merchantId },
+      select: {
+        storeLatitude: true,
+        storeLongitude: true,
+        deliveryBaseFeeKobo: true,
+        deliveryPerKmKobo: true,
+        deliveryMaxKm: true,
+      },
+    }),
+    prisma.customer.findUnique({
+      where: { merchantId_waId: { merchantId, waId } },
+      select: { lastLatitude: true, lastLongitude: true, lastLocationLabel: true, lastLocationAt: true },
+    }),
+  ]);
+  if (!pricing || !isDistancePricingEnabled(pricing)) return { enabled: false as const };
+  const pin = recentPin(customer);
+  if (!pin) return { enabled: true as const, quote: null, pin: null };
+  return { enabled: true as const, quote: quoteDistanceDelivery(pricing, pin), pin };
+}
+
 async function buildDeliveryScreen(
   merchantId: string,
+  waId: string,
   error?: string
 ): Promise<FlowScreenResponse> {
-  const zones = await prisma.deliveryZone.findMany({
-    where: { merchantId, active: true },
-    orderBy: { feeKobo: "asc" },
-    select: { id: true, name: true, feeKobo: true },
-  });
-  const rows: Row[] = zones.map((zone) => ({
-    id: zone.id,
-    title: title30(zone.name),
-    description: zone.feeKobo > 0 ? `${formatNaira(zone.feeKobo)} delivery` : "Free",
-  }));
+  const [zones, distance] = await Promise.all([
+    prisma.deliveryZone.findMany({
+      where: { merchantId, active: true },
+      orderBy: { feeKobo: "asc" },
+      select: { id: true, name: true, feeKobo: true },
+    }),
+    distanceOption(merchantId, waId),
+  ]);
+  const distanceRows: Row[] =
+    distance.enabled && distance.quote?.ok
+      ? [
+          {
+            id: DISTANCE_ZONE_ID,
+            title: "📍 My shared location",
+            description: `${distance.quote.km.toFixed(1)} km · ${formatNaira(distance.quote.feeKobo)} delivery`,
+          },
+        ]
+      : [];
+  const rows: Row[] = [
+    ...distanceRows,
+    ...zones.map((zone) => ({
+      id: zone.id,
+      title: title30(zone.name),
+      description: zone.feeKobo > 0 ? `${formatNaira(zone.feeKobo)} delivery` : "Free",
+    })),
+  ];
+  const hint = !distance.enabled
+    ? undefined
+    : distance.quote && !distance.quote.ok && distance.quote.reason === "out_of_range"
+      ? `Your shared location is ${distance.quote.km?.toFixed(1)} km away, outside this store's delivery range.`
+      : !distance.pin
+        ? "Tip: share your location in the chat before checking out to get delivery priced to your exact spot."
+        : undefined;
   const message =
     error ??
     (rows.length
-      ? undefined
+      ? hint
       : "This store hasn't set delivery or pickup areas yet. Please message the store to order.");
   return {
     screen: "DELIVERY",
@@ -758,7 +816,7 @@ async function handleShop(
       }
       const nextState = { ...state, items, subtotalKobo: cartSubtotalKobo(items) };
       await updateFlowSession(session.id, { state: nextState, currentScreen: "DELIVERY" });
-      return buildDeliveryScreen(merchantId);
+      return buildDeliveryScreen(merchantId, session.waId);
     }
     // Continue shopping (default) — back to the catalogue view.
     const back: FlowOrderState = { ...state, shopMode: "catalogue", selectedProductId: undefined };
@@ -882,22 +940,58 @@ async function handleDelivery(
       "Your order session expired. Close this and start a new order."
     );
   }
+  const choice = str(payload, "delivery_zone");
+  if (choice === DISTANCE_ZONE_ID) {
+    const distance = await distanceOption(state.merchantId, session.waId);
+    if (!distance.enabled || !distance.pin || !distance.quote?.ok) {
+      return buildDeliveryScreen(
+        state.merchantId,
+        session.waId,
+        "Delivery by distance isn't available for your location. Choose an area instead."
+      );
+    }
+    const address = str(payload, "address").trim() || distance.pin.label || "";
+    if (address.length < 5) {
+      return buildDeliveryScreen(
+        state.merchantId,
+        session.waId,
+        "Add your house number, street and a landmark so the rider can find you."
+      );
+    }
+    const subtotalKobo = cartSubtotalKobo(state.items);
+    const nextState: FlowOrderState = {
+      ...state,
+      deliveryZoneId: DISTANCE_ZONE_ID,
+      deliveryZoneName: distanceZoneLabel(distance.quote.km),
+      deliveryLatitude: distance.pin.latitude,
+      deliveryLongitude: distance.pin.longitude,
+      deliveryDistanceKm: distance.quote.km,
+      address,
+      subtotalKobo,
+      deliveryFeeKobo: distance.quote.feeKobo,
+      totalKobo: subtotalKobo + distance.quote.feeKobo,
+    };
+    await updateFlowSession(session.id, { state: nextState, currentScreen: "REVIEW" });
+    return buildReviewScreen(nextState, flowToken);
+  }
+
   const zone = await prisma.deliveryZone.findFirst({
     where: {
-      id: str(payload, "delivery_zone"),
+      id: choice,
       merchantId: state.merchantId,
       active: true,
     },
     select: { id: true, name: true, feeKobo: true },
   });
   if (!zone) {
-    return buildDeliveryScreen(state.merchantId, "Choose a delivery area.");
+    return buildDeliveryScreen(state.merchantId, session.waId, "Choose a delivery area.");
   }
   const isPickup = isPickupZone(zone.name);
   const address = str(payload, "address").trim();
   if (!isPickup && address.length < 5) {
     return buildDeliveryScreen(
       state.merchantId,
+      session.waId,
       "Enter the delivery address (house number, street, landmark)."
     );
   }
@@ -908,6 +1002,9 @@ async function handleDelivery(
     ...state,
     deliveryZoneId: zone.id,
     deliveryZoneName: zone.name,
+    deliveryLatitude: null,
+    deliveryLongitude: null,
+    deliveryDistanceKm: null,
     address: isPickup ? address || "Store pickup" : address,
     subtotalKobo,
     deliveryFeeKobo: zone.feeKobo,

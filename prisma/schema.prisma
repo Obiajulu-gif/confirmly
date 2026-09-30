@@ -287,6 +287,16 @@ model Merchant {
    */
   status       BranchStatus @default(ACTIVE)
   onboardedAt  DateTime?
+  /**
+   * Distance-based delivery (optional). When the store location, base fee and
+   * per-km rate are all set, customers can share a WhatsApp location pin and
+   * are charged base + perKm * ceil(straight-line km), up to deliveryMaxKm.
+   */
+  storeLatitude       Float?
+  storeLongitude      Float?
+  deliveryBaseFeeKobo Int?
+  deliveryPerKmKobo   Int?
+  deliveryMaxKm       Float?
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
 
@@ -478,6 +488,11 @@ model Customer {
    */
   referralCode   String?
   defaultAddress String?
+  /** Last WhatsApp location pin the customer shared (for distance pricing). */
+  lastLatitude      Float?
+  lastLongitude     Float?
+  lastLocationLabel String?
+  lastLocationAt    DateTime?
   optedIn        Boolean  @default(true)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
@@ -591,6 +606,10 @@ model Order {
   deliveryMethod   String?
   deliveryAddress  String?
   deliveryZone     String?
+  /** Set when delivery was priced by distance from a shared location pin. */
+  deliveryLatitude   Float?
+  deliveryLongitude  Float?
+  deliveryDistanceKm Float?
   notes            String?
   confirmedAt      DateTime?
   paidAt           DateTime?

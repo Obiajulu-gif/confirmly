@@ -15,6 +15,13 @@ import {
 } from "@/lib/orders/matching";
 import { parseDraft, EMPTY_DRAFT, type Draft, type DraftItem } from "@/lib/orders/draft";
 import { AUDIT, recordAudit } from "@/lib/orders/audit";
+import {
+  DISTANCE_ZONE_ID,
+  distanceZoneLabel,
+  isDistancePricingEnabled,
+  quoteDistanceDelivery,
+  recentPin,
+} from "@/lib/orders/distance-delivery";
 import { sendToCustomer } from "@/lib/orders/outbound";
 import {
   buildOrderSummaryText,
@@ -1045,7 +1052,7 @@ async function recalcAndRespond(
     draft.deliveryZoneId = pickup?.id ?? null;
     draft.deliveryZoneName = "Pickup";
     draft.deliveryFeeKobo = pickup?.feeKobo ?? 0;
-  } else if (draft.deliveryArea) {
+  } else if (draft.deliveryArea && draft.deliveryZoneId !== DISTANCE_ZONE_ID) {
     const zoneResult = matchAgainst(draft.deliveryArea, zones, (z) => [
       z.name,
       ...z.aliases,
@@ -1149,11 +1156,12 @@ async function recalcAndRespond(
 
   if (draft.deliveryMethod === "DELIVERY" && !draft.deliveryZoneId) {
     const hasPickup = zones.some((z) => z.name.toLowerCase() === "pickup");
+    const byDistance = await distancePricingEnabled(ctx.merchantId);
     // Leave room (10-row list cap) for a Pickup escape and a human escape so a
     // customer in an unserved area is never trapped re-guessing area names.
     const zoneRows = zones
       .filter((z) => z.name.toLowerCase() !== "pickup")
-      .slice(0, hasPickup ? 8 : 9)
+      .slice(0, (hasPickup ? 8 : 9) - (byDistance ? 1 : 0))
       .map((z) => ({
         id: `zone:${z.id}`,
         title: z.name.slice(0, 24),
@@ -1175,7 +1183,13 @@ async function recalcAndRespond(
         ? `I don't deliver to "${draft.deliveryArea}" yet. Pick a listed area, choose pickup, or ask the merchant.`
         : "Which area should we deliver to?",
       listButtonLabel: "Choose area",
-      rows: [...zoneRows, ...escapeRows].slice(0, 10),
+      rows: [
+        ...(byDistance
+          ? [{ id: "loc:request", title: "📍 Share my location", description: "Delivery priced by distance" }]
+          : []),
+        ...zoneRows,
+        ...escapeRows,
+      ].slice(0, 10),
     });
     return;
   }
@@ -1194,7 +1208,9 @@ async function recalcAndRespond(
     });
     await reply(
       ctx,
-      `📍 What's the delivery address in *${draft.deliveryZoneName}*?\nPlease send the street, house number and a landmark so the rider can find you.`
+      draft.deliveryZoneId === DISTANCE_ZONE_ID
+        ? "📍 Got your location. Please send the house number, street and a landmark so the rider can find you."
+        : `📍 What's the delivery address in *${draft.deliveryZoneName}*?\nPlease send the street, house number and a landmark so the rider can find you.`
     );
     return;
   }
@@ -1368,6 +1384,16 @@ async function handleInteractiveReply(
     );
     return;
   }
+  if (interactiveId === "loc:request") {
+    await sendToCustomer({
+      merchantId: ctx.merchantId,
+      customer: ctx.customer,
+      conversationId: ctx.conversation.id,
+      kind: "location_request",
+      text: "Tap *Send location* and choose where we should deliver. Delivery is priced by distance from the store.",
+    });
+    return;
+  }
   if (interactiveId === "talk_merchant") {
     await reply(
       ctx,
@@ -1411,6 +1437,20 @@ async function handleInteractiveReply(
   }
   if (interactiveId.startsWith("zone:")) {
     const zoneId = interactiveId.split(":")[1];
+    if (zoneId === DISTANCE_ZONE_ID) {
+      const priced = await priceDistanceForCustomer(ctx);
+      if (!priced.ok) {
+        await reply(ctx, priced.message);
+        return;
+      }
+      draft.deliveryMethod = "DELIVERY";
+      draft.deliveryArea = null;
+      draft.deliveryZoneId = DISTANCE_ZONE_ID;
+      draft.deliveryZoneName = distanceZoneLabel(priced.km);
+      draft.deliveryFeeKobo = priced.feeKobo;
+      await recalcAndRespond(ctx, draft, products, zones);
+      return;
+    }
     const zone = zones.find((z) => z.id === zoneId);
     if (zone) {
       draft.deliveryMethod = "DELIVERY";
@@ -1485,6 +1525,61 @@ async function handleInteractiveReply(
 // Order confirmation → payment
 // ---------------------------------------------------------------------------
 
+const DISTANCE_PRICING_SELECT = {
+  storeLatitude: true,
+  storeLongitude: true,
+  deliveryBaseFeeKobo: true,
+  deliveryPerKmKobo: true,
+  deliveryMaxKm: true,
+} as const;
+
+async function distancePricingEnabled(merchantId: string): Promise<boolean> {
+  const pricing = await prisma.merchant.findUnique({
+    where: { id: merchantId },
+    select: DISTANCE_PRICING_SELECT,
+  });
+  return pricing ? isDistancePricingEnabled(pricing) : false;
+}
+
+/**
+ * Prices delivery to the customer's last shared pin, re-read from the
+ * database (never from the conversation), against the merchant's current
+ * distance rates.
+ */
+async function priceDistanceForCustomer(ctx: EngineContext): Promise<
+  | { ok: true; km: number; feeKobo: number; latitude: number; longitude: number }
+  | { ok: false; message: string }
+> {
+  const [customer, pricing] = await Promise.all([
+    prisma.customer.findUnique({
+      where: { id: ctx.customer.id },
+      select: { lastLatitude: true, lastLongitude: true, lastLocationAt: true },
+    }),
+    prisma.merchant.findUnique({
+      where: { id: ctx.merchantId },
+      select: DISTANCE_PRICING_SELECT,
+    }),
+  ]);
+  const pin = recentPin(customer);
+  if (!pin) {
+    return {
+      ok: false,
+      message: "I don't have a recent location for you — tap 📎 → Location and send your delivery spot.",
+    };
+  }
+  const quote = pricing ? quoteDistanceDelivery(pricing, pin) : null;
+  if (!quote?.ok) {
+    return {
+      ok: false,
+      message:
+        quote?.reason === "out_of_range"
+          ? `That location is ${quote.km?.toFixed(1)} km away — outside this store's delivery range. Choose an area or pickup instead.`
+          : "This store isn't pricing delivery by distance right now. Choose a delivery area instead.",
+    };
+  }
+  return { ok: true, km: quote.km, feeKobo: quote.feeKobo, latitude: pin.latitude, longitude: pin.longitude };
+}
+
 async function confirmDraftOrder(ctx: EngineContext, draft: Draft): Promise<void> {
   if (
     !draft.items.length ||
@@ -1505,11 +1600,25 @@ async function confirmDraftOrder(ctx: EngineContext, draft: Draft): Promise<void
     where: { id: { in: productIds }, merchantId: ctx.merchantId, active: true },
     include: { variants: true },
   });
-  const zone = draft.deliveryZoneId
-    ? await prisma.deliveryZone.findFirst({
-        where: { id: draft.deliveryZoneId, merchantId: ctx.merchantId },
-      })
-    : null;
+  const zone =
+    draft.deliveryZoneId && draft.deliveryZoneId !== DISTANCE_ZONE_ID
+      ? await prisma.deliveryZone.findFirst({
+          where: { id: draft.deliveryZoneId, merchantId: ctx.merchantId },
+        })
+      : null;
+  let distance: { km: number; feeKobo: number; latitude: number; longitude: number } | null = null;
+  if (draft.deliveryMethod === "DELIVERY" && draft.deliveryZoneId === DISTANCE_ZONE_ID) {
+    const priced = await priceDistanceForCustomer(ctx);
+    if (!priced.ok) {
+      draft.deliveryZoneId = null;
+      draft.deliveryZoneName = null;
+      draft.deliveryFeeKobo = null;
+      await setConversation(ctx, { state: "COLLECTING_ORDER", draft });
+      await reply(ctx, priced.message);
+      return;
+    }
+    distance = priced;
+  }
 
   const lines: Array<{
     productId: string;
@@ -1555,8 +1664,11 @@ async function confirmDraftOrder(ctx: EngineContext, draft: Draft): Promise<void
     return;
   }
 
-  const deliveryFeeKobo =
-    draft.deliveryMethod === "PICKUP" ? (zone?.feeKobo ?? 0) : (zone?.feeKobo ?? 0);
+  const deliveryFeeKobo = distance
+    ? distance.feeKobo
+    : draft.deliveryMethod === "PICKUP"
+      ? (zone?.feeKobo ?? 0)
+      : (zone?.feeKobo ?? 0);
   const totals = calculateOrderTotal({
     items: lines.map((l) => ({
       unitPriceKobo: l.unitPriceKobo,
@@ -1578,7 +1690,10 @@ async function confirmDraftOrder(ctx: EngineContext, draft: Draft): Promise<void
       totalKobo: totals.totalKobo,
       deliveryMethod: draft.deliveryMethod,
       deliveryAddress: draft.deliveryAddress,
-      deliveryZone: draft.deliveryZoneName,
+      deliveryZone: distance ? distanceZoneLabel(distance.km) : draft.deliveryZoneName,
+      deliveryLatitude: distance?.latitude ?? null,
+      deliveryLongitude: distance?.longitude ?? null,
+      deliveryDistanceKm: distance?.km ?? null,
       notes: draft.notes,
       confirmedAt: new Date(),
       items: {
@@ -1604,7 +1719,11 @@ async function confirmDraftOrder(ctx: EngineContext, draft: Draft): Promise<void
 
   // Remember delivery details for next time — future orders skip the
   // delivery question automatically.
-  if (draft.deliveryMethod === "DELIVERY" && draft.deliveryZoneName) {
+  if (
+    draft.deliveryMethod === "DELIVERY" &&
+    draft.deliveryZoneName &&
+    draft.deliveryZoneId !== DISTANCE_ZONE_ID
+  ) {
     const zoneName = draft.deliveryZoneName;
     const address = draft.deliveryAddress?.trim();
     const remembered = (

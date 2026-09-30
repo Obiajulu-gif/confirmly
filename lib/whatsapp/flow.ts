@@ -1,7 +1,9 @@
 import "server-only";
 import { env, appUrl } from "@/lib/env";
 import { logger } from "@/lib/logger";
-import { sendFlow } from "@/lib/whatsapp/client";
+import { prisma } from "@/lib/db";
+import { isDistancePricingEnabled, recentPin } from "@/lib/orders/distance-delivery";
+import { sendFlow, sendLocationRequest } from "@/lib/whatsapp/client";
 import { createFlowSession } from "@/lib/whatsapp/flow-session";
 
 /** Public banner shown as the Flow launch card header (see public/whatsapp/). */
@@ -61,11 +63,48 @@ export async function maybeSendOrderFlow(
       flowAction: "data_exchange",
     });
     logger.info("whatsapp order Flow launched", { waId, store: Boolean(store) });
+    if (store) await maybeAskForLocation(waId, store.merchantId);
     return true;
   } catch (error) {
     logger.warn("whatsapp order Flow send failed; using interactive fallback", {
       reason: error instanceof Error ? error.message : "unknown",
     });
     return false;
+  }
+}
+
+/**
+ * The order form can't request a location pin itself, so when the store
+ * prices delivery by distance and we have no recent pin for this customer,
+ * offer WhatsApp's "Send location" button next to the form. A pin shared
+ * before checkout appears in the form's delivery options. Best-effort only.
+ */
+async function maybeAskForLocation(waId: string, merchantId: string): Promise<void> {
+  try {
+    const [pricing, customer] = await Promise.all([
+      prisma.merchant.findUnique({
+        where: { id: merchantId },
+        select: {
+          storeLatitude: true,
+          storeLongitude: true,
+          deliveryBaseFeeKobo: true,
+          deliveryPerKmKobo: true,
+          deliveryMaxKm: true,
+        },
+      }),
+      prisma.customer.findUnique({
+        where: { merchantId_waId: { merchantId, waId } },
+        select: { lastLatitude: true, lastLongitude: true, lastLocationAt: true },
+      }),
+    ]);
+    if (!pricing || !isDistancePricingEnabled(pricing) || recentPin(customer)) return;
+    await sendLocationRequest(
+      waId,
+      "📍 Getting it delivered? Tap *Send location* before you check out, and the order form will offer delivery priced to your exact spot."
+    );
+  } catch (error) {
+    logger.warn("location request send failed", {
+      reason: error instanceof Error ? error.message : "unknown",
+    });
   }
 }

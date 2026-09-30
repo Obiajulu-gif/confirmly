@@ -1,6 +1,6 @@
 import fs from "fs";
 import path from "path";
-import { parse, type Font } from "opentype.js";
+import { parse, type Font, type PathCommand } from "opentype.js";
 
 import { ALONG_SANS_BOLD_BASE64, ALONG_SANS_SEMIBOLD_BASE64 } from "./fontData";
 
@@ -54,6 +54,50 @@ export function getReceiptFonts(): { bold: Font; semiBold: Font } {
 }
 
 /**
+ * Lays text out glyph by glyph: each glyph's own outline and advance, plus
+ * pair kerning when the font provides a finite value.
+ */
+function layoutGlyphs(font: Font, text: string, fontSize: number) {
+  const scale = fontSize / font.unitsPerEm;
+  const glyphs = Array.from(text, (ch) => font.charToGlyph(ch));
+  const offsets: number[] = [];
+  let x = 0;
+  glyphs.forEach((glyph, i) => {
+    if (i > 0) {
+      const kern = font.getKerningValue(glyphs[i - 1]!, glyph);
+      if (Number.isFinite(kern)) x += kern * scale;
+    }
+    offsets.push(x);
+    const advance = glyph.advanceWidth ?? 0;
+    x += (Number.isFinite(advance) ? advance : 0) * scale;
+  });
+  return { glyphs, offsets, width: x };
+}
+
+/**
+ * Serialises path commands to SVG path data. opentype.js's own toPathData()
+ * prints "NaN" for coordinates a hair off a whole number (e.g. 641.9999…),
+ * and librsvg then silently stops drawing the rest of the path, so letters
+ * vanished depending on where they landed. Plain toFixed is always sound.
+ */
+function pathData(commands: PathCommand[]): string {
+  const n = (v: number | undefined) => (Number.isFinite(v) ? (v as number).toFixed(2) : "0");
+  let d = "";
+  for (const c of commands) {
+    if (c.type === "M" || c.type === "L") d += `${c.type}${n(c.x)} ${n(c.y)}`;
+    else if (c.type === "Q") d += `Q${n(c.x1)} ${n(c.y1)} ${n(c.x)} ${n(c.y)}`;
+    else if (c.type === "C") d += `C${n(c.x1)} ${n(c.y1)} ${n(c.x2)} ${n(c.y2)} ${n(c.x)} ${n(c.y)}`;
+    else if (c.type === "Z") d += "Z";
+  }
+  return d;
+}
+
+/** Rendered width of `text`, matching what renderTextPath draws. */
+export function measureText(font: Font, text: string, fontSize: number): number {
+  return layoutGlyphs(font, text, fontSize).width;
+}
+
+/**
  * Converts a text string into an SVG <path> element using the font's actual glyph curves.
  * Guarantees crisp rendering without relying on system fonts or fontconfig.
  */
@@ -67,16 +111,17 @@ export function renderTextPath(
   fill = "#000000"
 ): string {
   if (!text || text.trim().length === 0) return "";
-  const width = font.getAdvanceWidth(text, fontSize);
+  const { glyphs, offsets, width } = layoutGlyphs(font, text, fontSize);
   let startX = x;
   if (anchor === "end") {
     startX = x - width;
   } else if (anchor === "middle") {
     startX = x - width / 2;
   }
-  const pathObj = font.getPath(text, startX, y, fontSize);
-  pathObj.fill = fill;
-  return pathObj.toSVG(2);
+  const d = glyphs
+    .map((glyph, i) => pathData(glyph.getPath(startX + offsets[i]!, y, fontSize).commands))
+    .join("");
+  return d ? `<path d="${d}" fill="${fill}"/>` : "";
 }
 
 /**
@@ -93,7 +138,7 @@ export function fitTextWithFont(
   if (words.length === 0) return { lines: [""], fontSize: initialFontSize };
 
   let fontSize = initialFontSize;
-  const singleLineWidth = font.getAdvanceWidth(text, fontSize);
+  const singleLineWidth = measureText(font, text, fontSize);
 
   // 1. Single line fits
   if (singleLineWidth <= maxWidth) {
@@ -103,7 +148,7 @@ export function fitTextWithFont(
   // 2. Reduce font size
   while (fontSize > minFontSize) {
     fontSize -= 2;
-    if (font.getAdvanceWidth(text, fontSize) <= maxWidth) {
+    if (measureText(font, text, fontSize) <= maxWidth) {
       return { lines: [text], fontSize };
     }
   }
@@ -115,7 +160,7 @@ export function fitTextWithFont(
 
   for (const word of words) {
     const testLine = currentLine ? `${currentLine} ${word}` : word;
-    if (font.getAdvanceWidth(testLine, fontSize) <= maxWidth) {
+    if (measureText(font, testLine, fontSize) <= maxWidth) {
       currentLine = testLine;
     } else {
       if (currentLine) lines.push(currentLine);
