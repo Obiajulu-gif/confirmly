@@ -97,23 +97,25 @@ export default async function ProductsPage() {
           <ul className="divide-y divide-ink-900/5">
             {products.map((product) => (
               <li key={product.id} className="py-5">
-                <div className="flex flex-wrap items-start justify-between gap-4">
-                  <div className="flex min-w-0 flex-1 gap-4">
+                {/* Phones: image, then details, then actions, stacked.
+                    sm+: image beside the details, actions on the right. */}
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="flex min-w-0 flex-1 flex-col gap-4 sm:flex-row">
                     {product.imageUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
                         src={product.imageUrl}
                         alt=""
-                        className="h-20 w-20 shrink-0 rounded-xl border border-ink-900/10 object-contain"
+                        className="h-48 w-full rounded-xl border border-ink-900/10 bg-ink-900/[0.02] object-contain sm:h-20 sm:w-20 sm:shrink-0"
                       />
                     ) : (
-                      <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-xl border border-dashed border-ink-900/15 text-center text-[10px] text-ink-500">
+                      <div className="flex h-32 w-full items-center justify-center rounded-xl border border-dashed border-ink-900/15 text-center text-xs text-ink-500 sm:h-20 sm:w-20 sm:shrink-0 sm:text-[10px]">
                         No image
                       </div>
                     )}
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
-                        <p className="min-w-0 break-words font-semibold text-ink-900">
+                        <p className="break-words font-semibold text-ink-900">
                           {product.name}
                         </p>
                         <Badge tone={product.active ? "success" : "neutral"}>
@@ -156,7 +158,7 @@ export default async function ProductsPage() {
                       ) : null}
                     </div>
                   </div>
-                  <div className="flex flex-wrap items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2 border-t border-ink-900/5 pt-4 sm:shrink-0 sm:justify-end sm:border-0 sm:pt-0">
                     <form action={toggleProductActiveAction}>
                       <input type="hidden" name="id" value={product.id} />
                       <button
