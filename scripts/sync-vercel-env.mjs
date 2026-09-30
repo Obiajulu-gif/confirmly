@@ -59,6 +59,8 @@ const PUSH_KEYS = [
   "CRON_SECRET",
   "DEMO_MODE",
   "ADMIN_EMAILS",
+  "RESEND_API_KEY",
+  "EMAIL_FROM",
   "NUDGE_ENABLED",
 ];
 

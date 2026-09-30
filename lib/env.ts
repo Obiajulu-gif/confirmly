@@ -109,6 +109,15 @@ const envSchema = z.object({
     .transform((value) => value === "true" || value === "1")
     .default("false"),
 
+  /**
+   * Transactional email via Resend (https://resend.com). Optional: without a
+   * key, invitations still work and the merchant copies the link manually.
+   * EMAIL_FROM must use a domain verified in Resend, e.g.
+   * "Confirmly <invites@yourdomain.com>".
+   */
+  RESEND_API_KEY: z.string().min(1).optional(),
+  EMAIL_FROM: z.string().min(3).optional(),
+
   /** Comma-separated allowlist of emails granted the platform admin console. */
   ADMIN_EMAILS: z.string().optional(),
 
@@ -208,7 +217,7 @@ export function requireEnv<K extends keyof Env>(
   return current as { [P in K]-?: NonNullable<Env[P]> } & Env;
 }
 
-export type IntegrationName = "database" | "whatsapp" | "nvidia" | "monnify";
+export type IntegrationName = "database" | "whatsapp" | "nvidia" | "monnify" | "email";
 
 const INTEGRATION_KEYS: Record<IntegrationName, (keyof Env)[]> = {
   database: ["DATABASE_URL"],
@@ -220,6 +229,7 @@ const INTEGRATION_KEYS: Record<IntegrationName, (keyof Env)[]> = {
   ],
   nvidia: ["NVIDIA_API_KEY"],
   monnify: ["MONNIFY_API_KEY", "MONNIFY_SECRET_KEY", "MONNIFY_CONTRACT_CODE"],
+  email: ["RESEND_API_KEY", "EMAIL_FROM"],
 };
 
 /** Safe diagnostics: variable names only, never values. */
