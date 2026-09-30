@@ -139,11 +139,11 @@ export default async function ConversationsPage({
             defaultValue={query}
             placeholder="Search name, number, order ref or message…"
             aria-label="Search conversations"
-            className="flex-1 rounded-lg border border-ink-900/10 bg-surface px-3 py-2 text-sm"
+            className="min-w-0 flex-1 rounded-lg border border-ink-900/10 bg-surface px-3 py-2 text-sm"
           />
           <button
             type="submit"
-            className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
+            className="shrink-0 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
           >
             Search
           </button>

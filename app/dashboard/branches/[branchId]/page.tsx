@@ -56,8 +56,8 @@ export default async function BranchDetailPage({
         <Link href="/dashboard/branches" className="text-sm text-brand-700 hover:underline">
           ← Branches
         </Link>
-        <div className="mt-2 flex items-center gap-3">
-          <h1 className="text-2xl font-bold tracking-tight text-ink-900">{branch.name}</h1>
+        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+          <h1 className="min-w-0 break-words text-2xl font-bold tracking-tight text-ink-900">{branch.name}</h1>
           <Badge
             tone={
               branch.status === "ACTIVE"
@@ -102,8 +102,8 @@ export default async function BranchDetailPage({
         ) : (
           <ul className="divide-y divide-ink-900/5 text-sm">
             {branch.branchAssignments.map((a) => (
-              <li key={a.id} className="flex items-center justify-between py-2">
-                <span>
+              <li key={a.id} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 py-2">
+                <span className="min-w-0 break-words">
                   <span className="font-medium text-ink-900">
                     {a.membership.user.name}
                   </span>{" "}

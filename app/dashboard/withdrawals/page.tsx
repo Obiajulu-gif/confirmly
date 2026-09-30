@@ -51,8 +51,8 @@ export default async function WithdrawalsPage() {
           ) : (
             <ul className="divide-y divide-ink-900/5 text-sm">
               {wallet.perBranch.map((b) => (
-                <li key={b.branchId} className="flex items-center justify-between py-2">
-                  <span className="text-ink-700">{b.name}</span>
+                <li key={b.branchId} className="flex items-center justify-between gap-3 py-2">
+                  <span className="min-w-0 truncate text-ink-700">{b.name}</span>
                   <span className="font-medium tabular-nums">{formatNaira(b.amountKobo)}</span>
                 </li>
               ))}

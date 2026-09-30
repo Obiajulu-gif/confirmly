@@ -8,18 +8,21 @@ import type { ScopeBranch } from "@/lib/business/scope";
 export function BranchSwitcher({
   branches,
   activeBranchId,
+  id = "branch-switch",
 }: {
   branches: ScopeBranch[];
   activeBranchId: string | null;
+  /** Unique per instance — the desktop sidebar and mobile drawer both render one. */
+  id?: string;
 }) {
   const formRef = useRef<HTMLFormElement>(null);
   return (
     <form ref={formRef} action={setActiveBranchAction} className="mt-3">
-      <label htmlFor="branch-switch" className="sr-only">
+      <label htmlFor={id} className="sr-only">
         Active branch
       </label>
       <select
-        id="branch-switch"
+        id={id}
         name="branchId"
         defaultValue={activeBranchId ?? "all"}
         onChange={() => formRef.current?.requestSubmit()}

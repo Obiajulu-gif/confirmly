@@ -105,11 +105,11 @@ export default async function SettingsPage() {
           <ul className="space-y-4">
             {rows.map((row) => (
               <li key={row.name}>
-                <div className="flex items-center justify-between">
+                <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
                   <span className="text-sm font-medium text-ink-700">
                     {row.name}
                   </span>
-                  <span className="flex gap-2">
+                  <span className="flex flex-wrap gap-2">
                     <Badge tone={row.configured ? "success" : "danger"}>
                       {row.configured ? "configured" : "missing config"}
                     </Badge>
