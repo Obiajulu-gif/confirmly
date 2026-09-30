@@ -1,15 +1,21 @@
 import { NextResponse } from "next/server";
-import { getMerchantSession } from "@/lib/auth";
+import { getAdminSession } from "@/lib/auth";
 import { resetDemoData } from "@/lib/demo";
 import { recordAudit } from "@/lib/orders/audit";
 
 export const runtime = "nodejs";
 
-/** Protected demo reset: wipes tagged demo orders and seeds fresh fixtures. */
+/**
+ * Platform-admin-only demo reset: wipes tagged demo orders and seeds fresh
+ * fixtures for the admin's own store. Not exposed to merchants.
+ */
 export async function POST() {
-  const session = await getMerchantSession();
+  const session = await getAdminSession();
   if (!session) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+  if (!session.merchantId) {
+    return NextResponse.json({ error: "no store selected" }, { status: 400 });
   }
   try {
     const result = await resetDemoData(session.merchantId);

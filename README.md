@@ -179,12 +179,12 @@ app/
     health/              liveness + safe integration diagnostics
     webhooks/whatsapp/   GET challenge, POST signed inbound events
     webhooks/monnify/    POST signed payment events
-    whatsapp/test/       merchant-only test send
+    whatsapp/test/       admin-only test send
     orders/[id]/confirm  fulfilment progression
     orders/[id]/invoice  fresh invoice (new unique reference)
     payments/[id]/verify merchant-triggered live verification
     payments/reconcile   stale-payment reconciliation (cron/manual)
-    demo/reset           protected demo fixtures reset
+    demo/reset           admin-only demo fixtures reset
 components/              UI primitives + logo
 lib/
   ai/                    NIM client, strict Zod schema, fallback parser
@@ -341,8 +341,8 @@ callbacks above.
    explains screenshots are never accepted and checks Monnify directly.
 6. Open the receipt link → scan the QR → **VALID CONFIRMLY RECEIPT**. Change
    one character of the token → **RECEIPT NOT VALID**.
-7. Dashboard → the order's timeline shows every step, and Settings →
-   integration health shows live provider connectivity.
+7. Dashboard → the order's timeline shows every step, and (as a platform
+   admin) Admin → Integrations shows live provider connectivity.
 
 ## Limitations
 

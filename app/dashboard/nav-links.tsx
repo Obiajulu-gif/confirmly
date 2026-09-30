@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  Activity,
   Banknote,
   Boxes,
   CreditCard,
@@ -45,7 +44,6 @@ export const dashboardLinks: NavItem[] = [
   { href: "/dashboard/withdrawals", label: "Withdrawals", icon: Wallet, merchantOnly: true },
   { href: "/dashboard/agents", label: "Agents", icon: UserCog, merchantOnly: true },
   { href: "/dashboard/reports", label: "Reports", icon: Banknote },
-  { href: "/dashboard/health", label: "Integrations", icon: Activity, merchantOnly: true },
   { href: "/dashboard/settings", label: "Settings", icon: Settings, merchantOnly: true },
 ];
 
