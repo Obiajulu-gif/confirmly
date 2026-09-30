@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db";
 import { formatNaira } from "@/lib/money";
 import { branchCloseBlockers } from "@/lib/business/service";
 import { Badge, Card, StatCard } from "@/components/ui";
+import { StoreLogoWidget } from "../../settings/settings-widgets";
 import {
   activateBranchAction,
   closeBranchAction,
@@ -30,6 +31,7 @@ export default async function BranchDetailPage({
     where: { id: branchId, businessId: session.businessId },
     include: {
       _count: { select: { products: true, orders: true, conversations: true } },
+      logoAsset: { select: { id: true } },
       branchAssignments: {
         where: { active: true },
         include: {
@@ -79,6 +81,14 @@ export default async function BranchDetailPage({
         <StatCard label="Orders" value={String(branch._count.orders)} />
         <StatCard label="Conversations" value={String(branch._count.conversations)} />
       </div>
+
+      <Card title="Store logo">
+        <StoreLogoWidget
+          merchantId={branch.id}
+          targetMerchantId={branch.id}
+          hasLogo={branch.logoAsset !== null}
+        />
+      </Card>
 
       <Card title="Assigned Branch Agents">
         {branch.branchAssignments.length === 0 ? (

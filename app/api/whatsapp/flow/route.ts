@@ -138,6 +138,8 @@ export async function POST(request: NextRequest) {
     if (data.error || data.error_message) {
       logger.warn("flow endpoint received client error", {
         error: String(data.error ?? data.error_message).slice(0, 200),
+        errorMessage: String(data.error_message ?? "").slice(0, 500),
+        screen: typeof decryptedBody.screen === "string" ? decryptedBody.screen : "",
       });
       return encrypt({ data: { acknowledged: true } });
     }
@@ -146,14 +148,16 @@ export async function POST(request: NextRequest) {
   // 7. Validate the flow_token against a stored, unexpired session.
   const flowToken =
     typeof decryptedBody.flow_token === "string" ? decryptedBody.flow_token : "";
-  const session = await getValidFlowSession(flowToken);
-  if (!session) {
-    logger.warn("flow endpoint rejected: unknown or expired flow_token");
-    return new NextResponse("Flow token invalid", { status: 427 });
-  }
-
-  // 8. Resolve the next screen entirely from PostgreSQL.
   try {
+    // Session lookup can fail on a database outage too. Keep it inside the
+    // encrypted recovery boundary instead of leaking a generic HTTP 500.
+    const session = await getValidFlowSession(flowToken);
+    if (!session) {
+      logger.warn("flow endpoint rejected: unknown or expired flow_token");
+      return new NextResponse("Flow token invalid", { status: 427 });
+    }
+
+    // 8. Resolve the next screen entirely from PostgreSQL.
     const response = await resolveFlowScreen({
       action,
       screen: typeof decryptedBody.screen === "string" ? decryptedBody.screen : "",
@@ -166,14 +170,16 @@ export async function POST(request: NextRequest) {
     });
     return encrypt(response);
   } catch (error) {
-    logger.error("flow endpoint screen resolution failed", {
+    logger.error("flow endpoint session or screen resolution failed", {
       reason: error instanceof Error ? error.message : "unknown",
     });
     // Re-render the SAME screen the request came from (Flows forbid backward
     // navigation) with a no-DB error payload, so the client always renders —
     // even when the failure was the database itself.
     const from =
-      typeof decryptedBody.screen === "string" ? decryptedBody.screen : "SEARCH";
+      typeof decryptedBody.screen === "string" && decryptedBody.screen
+        ? decryptedBody.screen
+        : "START";
     return encrypt(
       recoveryScreen(from, "Sorry, something went wrong. Please try again.")
     );
