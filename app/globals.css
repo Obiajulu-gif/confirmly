@@ -50,6 +50,11 @@ body {
 
 h1, h2, h3, h4, h5, h6, .font-heading {
   font-family: var(--font-heading);
+  /* Along Sans ships playful contextual alternates that drop some lowercase
+     letters below the baseline ("anyon_e", "audit_able"). Keep headings on
+     one clean baseline. */
+  font-variant-ligatures: none;
+  font-feature-settings: "calt" 0, "clig" 0, "salt" 0;
 }
 
 .light-dot-grid {

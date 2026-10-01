@@ -63,3 +63,6 @@ prisma/*.db-journal
 !.env.example
 # Local generated receipts
 /public/receipts/generated/
+
+# /brag launch-video output (renders, voice venv, snapshots)
+brag-output/
