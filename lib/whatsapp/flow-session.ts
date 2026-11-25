@@ -10,8 +10,13 @@ import { prisma } from "@/lib/db";
  * (and the expiry) before resolving any screen.
  */
 
-/** Flow sessions live only as long as an order takes to place. */
-export const FLOW_SESSION_TTL_MINUTES = 30;
+/**
+ * How long a launched Flow stays usable. Kept generous (24h) so a customer who
+ * taps the order button a while after receiving the message — or reopens the
+ * Flow bubble later — still gets a live session instead of WhatsApp's
+ * "Server is not available" error (HTTP 427 on an expired token).
+ */
+export const FLOW_SESSION_TTL_MINUTES = 60 * 24;
 
 /** One line in the Flow cart. Every value is resolved from PostgreSQL. */
 export interface FlowCartItem {
